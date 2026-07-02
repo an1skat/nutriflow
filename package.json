@@ -1,0 +1,10 @@
+{
+  "name": "nutriflow",
+  "private": true,
+  "workspaces": ["apps/web", "packages/*"],
+  "scripts": {
+    "dev:web": "bun --cwd apps/web run dev",
+    "lint:web": "bun --cwd apps/web run lint",
+    "build:web": "bun --cwd apps/web run build"
+  }
+}
