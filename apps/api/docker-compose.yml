@@ -1,0 +1,14 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: nutriflow-mongo
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: nutriflow
+      MONGO_INITDB_ROOT_PASSWORD: nutriflow_dev_password
+    volumes:
+      - mongo_data:/data/db
+
+volumes:
+  mongo_data:
