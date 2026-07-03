@@ -1,0 +1,251 @@
+import pytest
+from beanie import PydanticObjectId
+from fastapi.testclient import TestClient
+
+from app.core.config import get_settings
+
+
+def login(
+    client: TestClient,
+    identifier: str,
+    password: str,
+) -> None:
+    response = client.post(
+        "/api/v1/auth/login",
+        json={
+            "identifier": identifier,
+            "password": password,
+        },
+    )
+
+    assert response.status_code == 204
+
+
+def csrf_headers(client: TestClient) -> dict[str, str]:
+    settings = get_settings()
+    csrf_token = client.cookies.get(settings.csrf_cookie_name)
+
+    assert csrf_token is not None
+
+    return {"X-CSRF-Token": csrf_token}
+
+
+def test_admin_can_create_school_and_school_user(seeded_client):
+    client, identities = seeded_client
+    new_user_password = "new-school-password-123"
+
+    login(
+        client,
+        identities.admin.username,
+        identities.admin_password,
+    )
+
+    school_response = client.post(
+        "/api/v1/admin/schools",
+        json={
+            "name": "New School",
+            "code": "new-school",
+        },
+        headers=csrf_headers(client),
+    )
+
+    assert school_response.status_code == 201
+
+    school_data = school_response.json()
+
+    assert school_data["name"] == "New School"
+    assert school_data["code"] == "NEW-SCHOOL"
+    assert school_data["is_active"] is True
+
+    user_response = client.post(
+        f"/api/v1/admin/schools/{school_data['id']}/users",
+        json={
+            "username": "new.school.user",
+            "email": "new.school.user@example.com",
+            "password": new_user_password,
+        },
+        headers=csrf_headers(client),
+    )
+
+    assert user_response.status_code == 201
+
+    user_data = user_response.json()
+
+    assert user_data["username"] == "new.school.user"
+    assert user_data["email"] == "new.school.user@example.com"
+    assert user_data["role"] == "SCHOOL_USER"
+    assert user_data["school_id"] == school_data["id"]
+    assert user_data["is_active"] is True
+    assert "password" not in user_data
+    assert "password_hash" not in user_data
+
+    login(
+        client,
+        "new.school.user",
+        new_user_password,
+    )
+
+    me_response = client.get("/api/v1/auth/me")
+
+    assert me_response.status_code == 200
+    assert me_response.json()["username"] == "new.school.user"
+    assert me_response.json()["school_id"] == school_data["id"]
+
+
+def test_admin_endpoint_requires_authentication(seeded_client):
+    client, _ = seeded_client
+
+    response = client.post(
+        "/api/v1/admin/schools",
+        json={
+            "name": "Forbidden School",
+            "code": "FORBIDDEN",
+        },
+    )
+
+    assert response.status_code == 401
+
+
+def test_admin_endpoint_requires_csrf(seeded_client):
+    client, identities = seeded_client
+
+    login(
+        client,
+        identities.admin.username,
+        identities.admin_password,
+    )
+
+    response = client.post(
+        "/api/v1/admin/schools",
+        json={
+            "name": "Missing CSRF School",
+            "code": "NO-CSRF",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "CSRF validation failed"
+
+
+def test_school_user_cannot_create_school(seeded_client):
+    client, identities = seeded_client
+
+    login(
+        client,
+        identities.school_user.username,
+        identities.school_user_password,
+    )
+
+    response = client.post(
+        "/api/v1/admin/schools",
+        json={
+            "name": "Unauthorized School",
+            "code": "UNAUTHORIZED",
+        },
+        headers=csrf_headers(client),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Insufficient permissions"
+
+
+def test_duplicate_school_code_returns_conflict(seeded_client):
+    client, identities = seeded_client
+
+    login(
+        client,
+        identities.admin.username,
+        identities.admin_password,
+    )
+
+    response = client.post(
+        "/api/v1/admin/schools",
+        json={
+            "name": "Duplicate School",
+            "code": identities.own_school.code.lower(),
+        },
+        headers=csrf_headers(client),
+    )
+
+    assert response.status_code == 409
+
+
+@pytest.mark.parametrize(
+    ("username", "email"),
+    [
+        ("school.user", "unique@example.com"),
+        ("unique.user", "school.user@example.com"),
+    ],
+)
+def test_duplicate_school_user_returns_conflict(
+    seeded_client,
+    username,
+    email,
+):
+    client, identities = seeded_client
+
+    login(
+        client,
+        identities.admin.username,
+        identities.admin_password,
+    )
+
+    response = client.post(
+        f"/api/v1/admin/schools/{identities.other_school.id}/users",
+        json={
+            "username": username,
+            "email": email,
+            "password": "duplicate-password-123",
+        },
+        headers=csrf_headers(client),
+    )
+
+    assert response.status_code == 409
+
+
+def test_missing_school_returns_not_found(seeded_client):
+    client, identities = seeded_client
+    missing_school_id = PydanticObjectId()
+
+    login(
+        client,
+        identities.admin.username,
+        identities.admin_password,
+    )
+
+    response = client.post(
+        f"/api/v1/admin/schools/{missing_school_id}/users",
+        json={
+            "username": "missing.school.user",
+            "email": None,
+            "password": "missing-school-password",
+        },
+        headers=csrf_headers(client),
+    )
+
+    assert response.status_code == 404
+
+
+def test_inactive_school_rejects_new_users(seeded_client):
+    client, identities = seeded_client
+    inactive_school_id = identities.inactive_school_user.school_id
+
+    assert inactive_school_id is not None
+
+    login(
+        client,
+        identities.admin.username,
+        identities.admin_password,
+    )
+
+    response = client.post(
+        f"/api/v1/admin/schools/{inactive_school_id}/users",
+        json={
+            "username": "inactive.school.new-user",
+            "email": None,
+            "password": "inactive-school-password",
+        },
+        headers=csrf_headers(client),
+    )
+
+    assert response.status_code == 409
