@@ -26,6 +26,9 @@ class RefreshRevokeReason(StrEnum):
     REUSE_DETECTED = "reuse_detected"
     EXPIRED = "expired"
     USER_UNAVAILABLE = "user_unavailable"
+    ACCOUNT_DISABLED = "account_disabled"
+    SCHOOL_DISABLED = "school_disabled"
+    PASSWORD_RESET = "password_reset"
 
 
 class School(Document):
@@ -34,6 +37,7 @@ class School(Document):
     is_active: bool = True
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
+    deleted_at: datetime | None = None
 
     @field_validator("code")
     @classmethod
@@ -62,8 +66,10 @@ class User(Document):
     role: UserRole
     school_id: PydanticObjectId | None = None
     is_active: bool = True
+    auth_version: int = Field(default=0, ge=0)
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
+    deleted_at: datetime | None = None
 
     @field_validator("username", mode="before")
     @classmethod

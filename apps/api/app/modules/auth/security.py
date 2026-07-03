@@ -27,6 +27,7 @@ class AccessTokenError(ValueError):
 @dataclass(frozen=True)
 class AccessTokenIdentity:
     user_id: PydanticObjectId
+    auth_version: int
 
 
 def hash_password(password: str) -> str:
@@ -65,6 +66,7 @@ def create_access_token(
         "sub": str(user.id),
         "role": user.role.value,
         "school_id": str(user.school_id) if user.school_id else None,
+        "ver": user.auth_version,
         "typ": "access",
         "jti": str(uuid4()),
         "iat": issued_at,
@@ -93,6 +95,7 @@ def decode_access_token(token: str, *, settings: Settings | None = None) -> Acce
             options={
                 "require": [
                     "sub",
+                    "ver",
                     "typ",
                     "jti",
                     "iat",
@@ -107,10 +110,14 @@ def decode_access_token(token: str, *, settings: Settings | None = None) -> Acce
             raise AccessTokenError("Unexpected token type")
 
         user_id = PydanticObjectId(payload["sub"])
+        auth_version = int(payload["ver"])
     except (jwt.InvalidTokenError, KeyError, TypeError, ValueError) as exc:
         raise AccessTokenError("Invalid or expired access token") from exc
 
-    return AccessTokenIdentity(user_id=user_id)
+    return AccessTokenIdentity(
+        user_id=user_id,
+        auth_version=auth_version,
+    )
 
 
 def generate_refresh_token() -> str:

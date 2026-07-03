@@ -36,7 +36,12 @@ async def get_current_user(
 
     user = await User.get(identity.user_id)
 
-    if user is None or not user.is_active:
+    if (
+        user is None
+        or not user.is_active
+        or user.deleted_at is not None
+        or user.auth_version != identity.auth_version
+    ):
         raise unauthorized()
 
     if user.role == UserRole.ADMIN:
@@ -49,7 +54,7 @@ async def get_current_user(
 
     school = await School.get(user.school_id)
 
-    if school is None or not school.is_active:
+    if school is None or not school.is_active or school.deleted_at is not None:
         raise unauthorized()
 
     return user
