@@ -43,6 +43,24 @@ class UpdateSchoolRequest(BaseModel):
         return self
 
 
+class DeleteSchoolRequest(BaseModel):
+    password: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=128,
+        repr=False,
+    )
+
+    @field_validator("password")
+    @classmethod
+    def reject_blank_password(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if not value.strip():
+            raise ValueError("Password cannot be blank")
+        return value
+
+
 class SchoolResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -52,7 +70,6 @@ class SchoolResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
-    deleted_at: datetime | None
 
     @classmethod
     def from_school(cls, school: School) -> "SchoolResponse":
@@ -160,7 +177,6 @@ class SchoolUserResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
-    deleted_at: datetime | None
 
     @classmethod
     def from_user(cls, user: User) -> "SchoolUserResponse":

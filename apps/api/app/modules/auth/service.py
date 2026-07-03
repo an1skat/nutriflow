@@ -59,7 +59,7 @@ async def authenticate_user(identifier: str, password: str) -> User:
     if not verify_password(password, user.password_hash):
         raise AuthenticationError("Invalid credentials")
 
-    if not user.is_active or user.deleted_at is not None:
+    if not user.is_active:
         raise AuthenticationError("Invalid credentials")
 
     if user.role == UserRole.ADMIN:
@@ -71,7 +71,7 @@ async def authenticate_user(identifier: str, password: str) -> User:
 
         school = await School.get(user.school_id)
 
-        if school is None or not school.is_active or school.deleted_at is not None:
+        if school is None or not school.is_active:
             raise AuthenticationError("Invalid credentials")
 
     if password_needs_rehash(user.password_hash):
@@ -154,7 +154,7 @@ async def rotate_refresh_token(
 
     user = await User.get(session.user_id)
 
-    if user is None or not user.is_active or user.deleted_at is not None:
+    if user is None or not user.is_active:
         await _revoke_active_session_family(
             session.family_id,
             now=now,
@@ -165,7 +165,7 @@ async def rotate_refresh_token(
     if user.role == UserRole.SCHOOL_USER:
         school = await School.get(user.school_id)
 
-        if school is None or not school.is_active or school.deleted_at is not None:
+        if school is None or not school.is_active:
             await _revoke_active_session_family(
                 session.family_id,
                 now=now,

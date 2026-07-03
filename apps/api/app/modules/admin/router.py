@@ -1,11 +1,21 @@
 from typing import Annotated
 
 from beanie import PydanticObjectId
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    status,
+)
 
+from app.core.config import Settings, get_settings
 from app.modules.admin.schemas import (
     CreateSchoolRequest,
     CreateSchoolUserRequest,
+    DeleteSchoolRequest,
     ResetSchoolUserPasswordRequest,
     SchoolListResponse,
     SchoolResponse,
@@ -14,12 +24,20 @@ from app.modules.admin.schemas import (
     UpdateSchoolRequest,
     UpdateSchoolUserRequest,
 )
+from app.modules.admin.security import (
+    DELETE_CONFIRMATION_COOKIE_NAME,
+    DELETE_CONFIRMATION_TTL_SECONDS,
+    create_delete_confirmation_token,
+    delete_confirmation_token_is_valid,
+)
 from app.modules.admin.service import (
+    InvalidAdminPasswordError,
     SchoolAlreadyExistsError,
     SchoolInactiveError,
     SchoolNotFoundError,
     SchoolUserAlreadyExistsError,
     SchoolUserNotFoundError,
+    confirm_admin_password,
 )
 from app.modules.admin.service import (
     create_school as create_school_record,
@@ -62,6 +80,7 @@ from app.modules.identity.models import User, UserRole
 
 router = APIRouter()
 
+AppSettings = Annotated[Settings, Depends(get_settings)]
 AdminUser = Annotated[
     User,
     Depends(require_roles(UserRole.ADMIN)),
@@ -84,6 +103,43 @@ def conflict(exc: ValueError) -> HTTPException:
     )
 
 
+def forbidden(exc: ValueError) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=str(exc),
+    )
+
+
+def admin_path(settings: Settings) -> str:
+    api_path = settings.api_v1_prefix.rstrip("/") or "/"
+    return f"{api_path}/admin"
+
+
+def has_recent_delete_confirmation(
+    request: Request,
+    admin: User,
+    settings: Settings,
+) -> bool:
+    token = request.cookies.get(DELETE_CONFIRMATION_COOKIE_NAME)
+    return delete_confirmation_token_is_valid(token, admin, settings=settings)
+
+
+def set_delete_confirmation_cookie(
+    response: Response,
+    admin: User,
+    settings: Settings,
+) -> None:
+    response.set_cookie(
+        key=DELETE_CONFIRMATION_COOKIE_NAME,
+        value=create_delete_confirmation_token(admin, settings=settings),
+        max_age=DELETE_CONFIRMATION_TTL_SECONDS,
+        path=admin_path(settings),
+        secure=settings.auth_cookie_secure,
+        httponly=True,
+        samesite=settings.auth_cookie_samesite,
+    )
+
+
 @router.get(
     "/schools",
     response_model=SchoolListResponse,
@@ -92,12 +148,10 @@ async def list_schools(
     _admin: AdminUser,
     offset: Offset = 0,
     limit: Limit = 50,
-    include_deleted: bool = False,
 ) -> SchoolListResponse:
     schools, total = await list_school_records(
         offset=offset,
         limit=limit,
-        include_deleted=include_deleted,
     )
     return SchoolListResponse(
         items=[SchoolResponse.from_school(school) for school in schools],
@@ -167,15 +221,34 @@ async def update_school(
 )
 async def delete_school(
     school_id: PydanticObjectId,
-    _admin: AdminUser,
+    request: Request,
+    settings: AppSettings,
+    admin: AdminUser,
     _csrf: CsrfProtection,
+    payload: DeleteSchoolRequest | None = None,
 ) -> Response:
+    password_was_required = not has_recent_delete_confirmation(
+        request,
+        admin,
+        settings,
+    )
+
     try:
+        if password_was_required:
+            confirm_admin_password(admin, payload)
+
         await delete_school_record(school_id)
     except SchoolNotFoundError as exc:
         raise not_found(exc) from exc
+    except InvalidAdminPasswordError as exc:
+        raise forbidden(exc) from exc
 
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    response = Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    if password_was_required:
+        set_delete_confirmation_cookie(response, admin, settings)
+
+    return response
 
 
 @router.get(
@@ -187,14 +260,12 @@ async def list_school_users(
     _admin: AdminUser,
     offset: Offset = 0,
     limit: Limit = 50,
-    include_deleted: bool = False,
 ) -> SchoolUserListResponse:
     try:
         users, total = await list_school_users_records(
             school_id,
             offset=offset,
             limit=limit,
-            include_deleted=include_deleted,
         )
     except SchoolNotFoundError as exc:
         raise not_found(exc) from exc

@@ -1,16 +1,19 @@
 from datetime import UTC, datetime
 
 from beanie import PydanticObjectId
+from pymongo.asynchronous.client_session import AsyncClientSession
 from pymongo.errors import DuplicateKeyError
 
+from app.db.mongo import get_mongo_client
 from app.modules.admin.schemas import (
     CreateSchoolRequest,
     CreateSchoolUserRequest,
+    DeleteSchoolRequest,
     ResetSchoolUserPasswordRequest,
     UpdateSchoolRequest,
     UpdateSchoolUserRequest,
 )
-from app.modules.auth.security import hash_password
+from app.modules.auth.security import hash_password, verify_password
 from app.modules.identity.models import (
     RefreshRevokeReason,
     RefreshSession,
@@ -32,6 +35,10 @@ class SchoolInactiveError(ValueError):
     """The requested school is inactive."""
 
 
+class InvalidAdminPasswordError(ValueError):
+    """The administrator password confirmation is invalid."""
+
+
 class SchoolUserAlreadyExistsError(ValueError):
     """A user with the same username or email already exists."""
 
@@ -44,23 +51,17 @@ async def list_schools(
     *,
     offset: int,
     limit: int,
-    include_deleted: bool,
 ) -> tuple[list[School], int]:
-    filters = {} if include_deleted else {"deleted_at": None}
-    query = School.find(filters)
+    query = School.find({})
     total = await query.count()
     schools = await query.sort("name").skip(offset).limit(limit).to_list()
     return schools, total
 
 
-async def get_school(
-    school_id: PydanticObjectId,
-    *,
-    include_deleted: bool = False,
-) -> School:
+async def get_school(school_id: PydanticObjectId) -> School:
     school = await School.get(school_id)
 
-    if school is None or (school.deleted_at is not None and not include_deleted):
+    if school is None:
         raise SchoolNotFoundError("School not found")
 
     return school
@@ -110,22 +111,55 @@ async def update_school(
     return school
 
 
+def confirm_admin_password(
+    admin: User,
+    data: DeleteSchoolRequest | None,
+) -> None:
+    if data is None or data.password is None:
+        raise InvalidAdminPasswordError("Admin password confirmation required")
+
+    if not verify_password(data.password, admin.password_hash):
+        raise InvalidAdminPasswordError("Invalid admin password")
+
+
 async def delete_school(school_id: PydanticObjectId) -> None:
-    school = await get_school(school_id, include_deleted=True)
+    async def purge_school(session: AsyncClientSession) -> None:
+        school = await School.get_pymongo_collection().find_one(
+            {"_id": school_id},
+            session=session,
+        )
+        if school is None:
+            raise SchoolNotFoundError("School not found")
 
-    if school.deleted_at is not None:
-        return
+        user_documents = (
+            await User.get_pymongo_collection()
+            .find(
+                {"school_id": school_id},
+                {"_id": 1},
+                session=session,
+            )
+            .to_list()
+        )
+        user_ids = [document["_id"] for document in user_documents]
 
-    now = datetime.now(UTC)
-    school.is_active = False
-    school.deleted_at = now
-    school.updated_at = now
-    await school.save()
-    await _revoke_school_sessions(
-        school.id,
-        reason=RefreshRevokeReason.SCHOOL_DISABLED,
-        now=now,
-    )
+        if user_ids:
+            await RefreshSession.get_pymongo_collection().delete_many(
+                {"user_id": {"$in": user_ids}},
+                session=session,
+            )
+
+        # Add every future tenant-owned collection here before users and school.
+        await User.get_pymongo_collection().delete_many(
+            {"school_id": school_id},
+            session=session,
+        )
+        await School.get_pymongo_collection().delete_one(
+            {"_id": school_id},
+            session=session,
+        )
+
+    async with get_mongo_client().start_session() as session:
+        await session.with_transaction(purge_school)
 
 
 async def list_school_users(
@@ -133,16 +167,12 @@ async def list_school_users(
     *,
     offset: int,
     limit: int,
-    include_deleted: bool,
 ) -> tuple[list[User], int]:
     await get_school(school_id)
-    filters: dict = {
+    filters = {
         "school_id": school_id,
         "role": UserRole.SCHOOL_USER.value,
     }
-    if not include_deleted:
-        filters["deleted_at"] = None
-
     query = User.find(filters)
     total = await query.count()
     users = await query.sort("username").skip(offset).limit(limit).to_list()
@@ -152,18 +182,11 @@ async def list_school_users(
 async def get_school_user(
     school_id: PydanticObjectId,
     user_id: PydanticObjectId,
-    *,
-    include_deleted: bool = False,
 ) -> User:
     await get_school(school_id)
     user = await User.get(user_id)
 
-    if (
-        user is None
-        or user.role != UserRole.SCHOOL_USER
-        or user.school_id != school_id
-        or (user.deleted_at is not None and not include_deleted)
-    ):
+    if user is None or user.role != UserRole.SCHOOL_USER or user.school_id != school_id:
         raise SchoolUserNotFoundError("School user not found")
 
     return user
@@ -254,26 +277,38 @@ async def delete_school_user(
     school_id: PydanticObjectId,
     user_id: PydanticObjectId,
 ) -> None:
-    user = await get_school_user(
-        school_id,
-        user_id,
-        include_deleted=True,
-    )
+    async def purge_user(session: AsyncClientSession) -> None:
+        school = await School.get_pymongo_collection().find_one(
+            {"_id": school_id},
+            {"_id": 1},
+            session=session,
+        )
+        if school is None:
+            raise SchoolNotFoundError("School not found")
 
-    if user.deleted_at is not None:
-        return
+        user = await User.get_pymongo_collection().find_one(
+            {
+                "_id": user_id,
+                "school_id": school_id,
+                "role": UserRole.SCHOOL_USER.value,
+            },
+            {"_id": 1},
+            session=session,
+        )
+        if user is None:
+            raise SchoolUserNotFoundError("School user not found")
 
-    now = datetime.now(UTC)
-    user.is_active = False
-    user.auth_version += 1
-    user.deleted_at = now
-    user.updated_at = now
-    await user.save()
-    await _revoke_user_sessions(
-        user.id,
-        reason=RefreshRevokeReason.ACCOUNT_DISABLED,
-        now=now,
-    )
+        await RefreshSession.get_pymongo_collection().delete_many(
+            {"user_id": user_id},
+            session=session,
+        )
+        await User.get_pymongo_collection().delete_one(
+            {"_id": user_id},
+            session=session,
+        )
+
+    async with get_mongo_client().start_session() as session:
+        await session.with_transaction(purge_user)
 
 
 async def _revoke_user_sessions(

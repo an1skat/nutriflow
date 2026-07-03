@@ -8,7 +8,7 @@ from pymongo import ASCENDING, IndexModel
 
 TrimmedName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 
-SchoolCode = Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=50)]
+SchoolCode = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=50)]
 
 
 def utc_now() -> datetime:
@@ -37,7 +37,6 @@ class School(Document):
     is_active: bool = True
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
-    deleted_at: datetime | None = None
 
     @field_validator("code")
     @classmethod
@@ -69,7 +68,6 @@ class User(Document):
     auth_version: int = Field(default=0, ge=0)
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
-    deleted_at: datetime | None = None
 
     @field_validator("username", mode="before")
     @classmethod
