@@ -207,6 +207,7 @@ const detailTranslations: Record<string, string> = {
   "A user with this username or email already exists":
     "Користувач із таким логіном або email уже існує.",
   "School user not found": "Користувача школи не знайдено.",
+  "School group not found": "Групу школи не знайдено.",
 };
 
 export function getApiErrorMessage(

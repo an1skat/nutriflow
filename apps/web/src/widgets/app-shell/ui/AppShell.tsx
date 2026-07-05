@@ -1,10 +1,12 @@
 "use client";
 
 import {
+  BookOpen,
   Building2,
   LayoutDashboard,
   LogOut,
   Menu,
+  UsersRound,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -21,6 +23,7 @@ type NavigationItem = {
   label: string;
   icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
   adminOnly?: boolean;
+  schoolOnly?: boolean;
 };
 
 const navigation: NavigationItem[] = [
@@ -34,6 +37,18 @@ const navigation: NavigationItem[] = [
     label: "Школи",
     icon: Building2,
     adminOnly: true,
+  },
+  {
+    href: "/admin/recipe",
+    label: "Техкарти",
+    icon: BookOpen,
+    adminOnly: true,
+  },
+  {
+    href: "/school/groups",
+    label: "Групи",
+    icon: UsersRound,
+    schoolOnly: true,
   },
 ];
 
@@ -60,7 +75,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   const visibleNavigation = navigation.filter(
-    (item) => !item.adminOnly || user.role === "ADMIN",
+    (item) =>
+      (!item.adminOnly || user.role === "ADMIN") &&
+      (!item.schoolOnly || user.role === "SCHOOL_USER"),
   );
   const roleLabel =
     user.role === "ADMIN" ? "Адміністратор" : "Користувач школи";
