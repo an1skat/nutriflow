@@ -13,6 +13,7 @@ import { formatDate } from "@/shared/lib/FormatDate";
 import { PaginationControls } from "@/shared/ui/PaginationControls";
 import { RequestError } from "@/shared/ui/RequestError";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
+import { SchoolGroupsPanel } from "@/widgets/school-groups/ui/SchoolGroupsPanel";
 
 const PAGE_SIZE = 20;
 
@@ -90,6 +91,8 @@ export function SchoolDetails({ schoolId }: { schoolId: string }) {
           </div>
         </div>
       </section>
+
+      <SchoolGroupsPanel mode="admin" schoolId={schoolId} />
 
       <section className="nf-panel mt-5">
         <div className="nf-panel-header">

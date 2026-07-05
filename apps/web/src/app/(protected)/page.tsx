@@ -65,9 +65,14 @@ export default function HomePage() {
                 </p>
               </div>
             ) : (
-              <p className="text-sm leading-5 text-slate-600">
-                Для вашої ролі зараз доступний огляд облікового запису.
-              </p>
+              <div>
+                <Link href="/school/groups" className="nf-link">
+                  Групи школи
+                </Link>
+                <p className="mt-2 text-xs leading-5 text-slate-600">
+                  Перегляд активних вікових груп для денного обліку.
+                </p>
+              </div>
             )}
           </div>
         </section>
