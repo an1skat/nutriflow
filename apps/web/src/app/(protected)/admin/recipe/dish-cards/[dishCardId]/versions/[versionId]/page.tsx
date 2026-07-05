@@ -1,4 +1,4 @@
-import { DishCardVersionEditorWidget } from "@/widgets/dish-card-version-editor/ui/DishCardVersionEditorWidget";
+import { DishCardVersionDetailsWidget } from "@/widgets/dish-card-version-details/ui/DishCardVersionDetailsWidget";
 
 type VersionPageProps = {
   params: Promise<{
@@ -9,7 +9,5 @@ type VersionPageProps = {
 
 export default async function VersionPage({ params }: VersionPageProps) {
   const { dishCardId, versionId } = await params;
-  return (
-    <DishCardVersionEditorWidget dishCardId={dishCardId} versionId={versionId} mode="edit" />
-  );
+  return <DishCardVersionDetailsWidget dishCardId={dishCardId} versionId={versionId} />;
 }

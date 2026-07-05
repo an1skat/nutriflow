@@ -15,10 +15,18 @@ import { EditIngredientForm } from "@/features/recipe-management/ui/EditIngredie
 import { RequestError } from "@/shared/ui/RequestError";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
 
-type Tab = "dish-cards" | "ingredients" | "allergens";
+export type RecipeCatalogTab = "dish-cards" | "ingredients" | "allergens";
 
-export function RecipeCatalogWidget() {
-  const [tab, setTab] = useState<Tab>("dish-cards");
+type RecipeCatalogWidgetProps = {
+  initialTab?: RecipeCatalogTab;
+  initialQuery?: string;
+};
+
+export function RecipeCatalogWidget({
+  initialTab = "dish-cards",
+  initialQuery = "",
+}: RecipeCatalogWidgetProps) {
+  const [tab, setTab] = useState<RecipeCatalogTab>(initialTab);
   return (
     <main className="nf-page">
       <header className="nf-page-header">
@@ -48,9 +56,15 @@ export function RecipeCatalogWidget() {
         </div>
       </div>
 
-      {tab === "dish-cards" ? <DishCardsTab /> : null}
-      {tab === "ingredients" ? <IngredientsTab /> : null}
-      {tab === "allergens" ? <AllergensTab /> : null}
+      {tab === "dish-cards" ? (
+        <DishCardsTab initialQuery={initialTab === "dish-cards" ? initialQuery : ""} />
+      ) : null}
+      {tab === "ingredients" ? (
+        <IngredientsTab initialQuery={initialTab === "ingredients" ? initialQuery : ""} />
+      ) : null}
+      {tab === "allergens" ? (
+        <AllergensTab initialQuery={initialTab === "allergens" ? initialQuery : ""} />
+      ) : null}
     </main>
   );
 }
@@ -77,8 +91,8 @@ function TabButton({
   );
 }
 
-function DishCardsTab() {
-  const [query, setQuery] = useState("");
+function DishCardsTab({ initialQuery = "" }: { initialQuery?: string }) {
+  const [query, setQuery] = useState(initialQuery);
   const dishCards = useDishCards(query);
   return (
     <section className="nf-panel mt-4">
@@ -141,8 +155,8 @@ function DishCardsTab() {
   );
 }
 
-function IngredientsTab() {
-  const [query, setQuery] = useState("");
+function IngredientsTab({ initialQuery = "" }: { initialQuery?: string }) {
+  const [query, setQuery] = useState(initialQuery);
   const [editingId, setEditingId] = useState<string | null>(null);
   const ingredients = useIngredients(query);
   return (
@@ -210,9 +224,10 @@ function IngredientsTab() {
   );
 }
 
-function AllergensTab() {
+function AllergensTab({ initialQuery = "" }: { initialQuery?: string }) {
+  const [query, setQuery] = useState(initialQuery);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const allergens = useAllergens("");
+  const allergens = useAllergens(query);
   return (
     <div className="mt-4 flex flex-col gap-4">
       <section className="nf-panel">
@@ -231,6 +246,12 @@ function AllergensTab() {
           ) : null}
         </div>
         <div className="nf-panel-body">
+          <input
+            className="nf-input mb-3"
+            placeholder="Пошук за кодом або назвою…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
           {allergens.isPending ? <p className="text-sm text-slate-600">Завантажуємо…</p> : null}
           {allergens.isError ? (
             <RequestError error={allergens.error} onRetry={() => void allergens.refetch()} />
