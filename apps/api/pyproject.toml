@@ -12,6 +12,7 @@ dependencies = [
     "pydantic-settings>=2.14.2",
     "pyjwt>=2.13.0",
     "pymongo>=4.17.0",
+    "pypdf>=6.10.0",
     "python-multipart>=0.0.32",
 ]
 
@@ -32,6 +33,12 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# One-shot import/repair scripts carry wide tabular data rows; line length there
+# is not meaningful and the scripts are not committed.
+"app/scripts/import_tk_pdf.py" = ["E501"]
+"app/scripts/repair_tk.py" = ["E501"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

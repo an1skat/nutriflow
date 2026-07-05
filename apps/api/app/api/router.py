@@ -4,6 +4,8 @@ from app.modules.admin.router import router as admin_router
 from app.modules.auth.router import router as auth_router
 from app.modules.health.router import router as health_router
 from app.modules.imports.router import router as imports_router
+from app.modules.recipe.router import router as recipe_router
+from app.modules.school.router import router as school_router
 
 api_router = APIRouter()
 
@@ -18,4 +20,14 @@ api_router.include_router(
     admin_router,
     prefix="/admin",
     tags=["admin"],
+)
+api_router.include_router(
+    recipe_router,
+    prefix="/recipes",
+    tags=["recipes"],
+)
+api_router.include_router(
+    school_router,
+    prefix="/school",
+    tags=["school"],
 )
