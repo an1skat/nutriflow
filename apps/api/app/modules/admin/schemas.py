@@ -12,8 +12,10 @@ from pydantic import (
 )
 
 from app.modules.identity.models import (
+    AgeGroup,
     School,
     SchoolCode,
+    SchoolGroup,
     TrimmedName,
     User,
     UserRole,
@@ -78,6 +80,59 @@ class SchoolResponse(BaseModel):
 
 class SchoolListResponse(BaseModel):
     items: list[SchoolResponse]
+    total: int
+    offset: int
+    limit: int
+
+
+class UpdateSchoolGroupRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: TrimmedName | None = None
+    is_active: bool | None = None
+
+    @model_validator(mode="after")
+    def validate_patch(self) -> Self:
+        if not self.model_fields_set:
+            raise ValueError("At least one field must be provided")
+        if "name" in self.model_fields_set and self.name is None:
+            raise ValueError("Group name cannot be null")
+        if "is_active" in self.model_fields_set and self.is_active is None:
+            raise ValueError("is_active cannot be null")
+        return self
+
+
+class SchoolGroupResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: PydanticObjectId
+    school_id: PydanticObjectId
+    name: str
+    age_group: AgeGroup
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    @classmethod
+    def from_group(
+        cls,
+        group: SchoolGroup,
+        *,
+        school_id: PydanticObjectId,
+    ) -> "SchoolGroupResponse":
+        return cls(
+            id=group.id,
+            school_id=school_id,
+            name=group.name,
+            age_group=group.age_group,
+            is_active=group.is_active,
+            created_at=group.created_at,
+            updated_at=group.updated_at,
+        )
+
+
+class SchoolGroupListResponse(BaseModel):
+    items: list[SchoolGroupResponse]
     total: int
     offset: int
     limit: int

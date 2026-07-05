@@ -29,12 +29,16 @@ class SeededIdentities:
     other_school: School
 
 
-def pytest_configure() -> None:
+def pytest_configure(config: pytest.Config) -> None:
     os.environ["ENVIRONMENT"] = "test"
     os.environ["MONGO_DB"] = TEST_DATABASE_NAME
     os.environ["JWT_SECRET_KEY"] = "test-jwt-secret-key-test-jwt-secret-key"
     os.environ["REFRESH_TOKEN_PEPPER"] = "test-refresh-pepper-test-refresh-pepper"
     os.environ["AUTH_COOKIE_SECURE"] = "false"
+    config.addinivalue_line(
+        "markers",
+        "no_clean_database: skip MongoDB cleanup for pure unit tests",
+    )
 
     get_settings.cache_clear()
 
@@ -54,6 +58,10 @@ def clean_collections() -> None:
             "refresh_sessions",
             "users",
             "schools",
+            "dish_card_versions",
+            "dish_cards",
+            "allergens",
+            "ingredients",
         ):
             database[collection_name].delete_many({})
     finally:
@@ -61,7 +69,11 @@ def clean_collections() -> None:
 
 
 @pytest.fixture(autouse=True)
-def clean_database() -> Iterator[None]:
+def clean_database(request: pytest.FixtureRequest) -> Iterator[None]:
+    if request.node.get_closest_marker("no_clean_database"):
+        yield
+        return
+
     clean_collections()
 
     try:

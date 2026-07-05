@@ -10,6 +10,7 @@ from app.modules.admin.schemas import (
     CreateSchoolUserRequest,
     DeleteSchoolRequest,
     ResetSchoolUserPasswordRequest,
+    UpdateSchoolGroupRequest,
     UpdateSchoolRequest,
     UpdateSchoolUserRequest,
 )
@@ -18,6 +19,7 @@ from app.modules.identity.models import (
     RefreshRevokeReason,
     RefreshSession,
     School,
+    SchoolGroup,
     User,
     UserRole,
 )
@@ -45,6 +47,10 @@ class SchoolUserAlreadyExistsError(ValueError):
 
 class SchoolUserNotFoundError(ValueError):
     """The requested school user does not exist in the school."""
+
+
+class SchoolGroupNotFoundError(ValueError):
+    """The requested school group does not exist in the school."""
 
 
 async def list_schools(
@@ -148,7 +154,6 @@ async def delete_school(school_id: PydanticObjectId) -> None:
                 session=session,
             )
 
-        # Add every future tenant-owned collection here before users and school.
         await User.get_pymongo_collection().delete_many(
             {"school_id": school_id},
             session=session,
@@ -160,6 +165,58 @@ async def delete_school(school_id: PydanticObjectId) -> None:
 
     async with get_mongo_client().start_session() as session:
         await session.with_transaction(purge_school)
+
+
+async def list_school_groups(
+    school_id: PydanticObjectId,
+    *,
+    offset: int,
+    limit: int,
+) -> tuple[list[SchoolGroup], int]:
+    school = await get_school(school_id)
+    return school.groups[offset : offset + limit], len(school.groups)
+
+
+async def get_school_group(
+    school_id: PydanticObjectId,
+    group_id: PydanticObjectId,
+) -> SchoolGroup:
+    school = await get_school(school_id)
+    group = _find_school_group(school, group_id)
+
+    if group is None:
+        raise SchoolGroupNotFoundError("School group not found")
+
+    return group
+
+
+async def update_school_group(
+    school_id: PydanticObjectId,
+    group_id: PydanticObjectId,
+    data: UpdateSchoolGroupRequest,
+) -> SchoolGroup:
+    school = await get_school(school_id)
+    group = _find_school_group(school, group_id)
+
+    if group is None:
+        raise SchoolGroupNotFoundError("School group not found")
+
+    if "name" in data.model_fields_set:
+        group.name = data.name
+    if "is_active" in data.model_fields_set:
+        group.is_active = bool(data.is_active)
+
+    group.updated_at = datetime.now(UTC)
+    school.updated_at = group.updated_at
+    await school.save()
+    return group
+
+
+def _find_school_group(
+    school: School,
+    group_id: PydanticObjectId,
+) -> SchoolGroup | None:
+    return next((group for group in school.groups if group.id == group_id), None)
 
 
 async def list_school_users(

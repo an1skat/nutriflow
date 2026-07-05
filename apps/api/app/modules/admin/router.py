@@ -17,10 +17,13 @@ from app.modules.admin.schemas import (
     CreateSchoolUserRequest,
     DeleteSchoolRequest,
     ResetSchoolUserPasswordRequest,
+    SchoolGroupListResponse,
+    SchoolGroupResponse,
     SchoolListResponse,
     SchoolResponse,
     SchoolUserListResponse,
     SchoolUserResponse,
+    UpdateSchoolGroupRequest,
     UpdateSchoolRequest,
     UpdateSchoolUserRequest,
 )
@@ -33,6 +36,7 @@ from app.modules.admin.security import (
 from app.modules.admin.service import (
     InvalidAdminPasswordError,
     SchoolAlreadyExistsError,
+    SchoolGroupNotFoundError,
     SchoolInactiveError,
     SchoolNotFoundError,
     SchoolUserAlreadyExistsError,
@@ -55,7 +59,13 @@ from app.modules.admin.service import (
     get_school as get_school_record,
 )
 from app.modules.admin.service import (
+    get_school_group as get_school_group_record,
+)
+from app.modules.admin.service import (
     get_school_user as get_school_user_record,
+)
+from app.modules.admin.service import (
+    list_school_groups as list_school_groups_records,
 )
 from app.modules.admin.service import (
     list_school_users as list_school_users_records,
@@ -68,6 +78,9 @@ from app.modules.admin.service import (
 )
 from app.modules.admin.service import (
     update_school as update_school_record,
+)
+from app.modules.admin.service import (
+    update_school_group as update_school_group_record,
 )
 from app.modules.admin.service import (
     update_school_user as update_school_user_record,
@@ -249,6 +262,73 @@ async def delete_school(
         set_delete_confirmation_cookie(response, admin, settings)
 
     return response
+
+
+@router.get(
+    "/schools/{school_id}/groups",
+    response_model=SchoolGroupListResponse,
+)
+async def list_school_groups(
+    school_id: PydanticObjectId,
+    _admin: AdminUser,
+    offset: Offset = 0,
+    limit: Limit = 50,
+) -> SchoolGroupListResponse:
+    try:
+        groups, total = await list_school_groups_records(
+            school_id,
+            offset=offset,
+            limit=limit,
+        )
+    except SchoolNotFoundError as exc:
+        raise not_found(exc) from exc
+
+    return SchoolGroupListResponse(
+        items=[SchoolGroupResponse.from_group(group, school_id=school_id) for group in groups],
+        total=total,
+        offset=offset,
+        limit=limit,
+    )
+
+
+@router.get(
+    "/schools/{school_id}/groups/{group_id}",
+    response_model=SchoolGroupResponse,
+)
+async def get_school_group(
+    school_id: PydanticObjectId,
+    group_id: PydanticObjectId,
+    _admin: AdminUser,
+) -> SchoolGroupResponse:
+    try:
+        group = await get_school_group_record(school_id, group_id)
+    except (SchoolNotFoundError, SchoolGroupNotFoundError) as exc:
+        raise not_found(exc) from exc
+
+    return SchoolGroupResponse.from_group(group, school_id=school_id)
+
+
+@router.patch(
+    "/schools/{school_id}/groups/{group_id}",
+    response_model=SchoolGroupResponse,
+)
+async def update_school_group(
+    school_id: PydanticObjectId,
+    group_id: PydanticObjectId,
+    payload: UpdateSchoolGroupRequest,
+    _admin: AdminUser,
+    _csrf: CsrfProtection,
+) -> SchoolGroupResponse:
+    try:
+        group = await update_school_group_record(
+            school_id,
+            group_id,
+            payload,
+        )
+    except (SchoolNotFoundError, SchoolGroupNotFoundError) as exc:
+        raise not_found(exc) from exc
+
+    return SchoolGroupResponse.from_group(group, school_id=school_id)
 
 
 @router.get(

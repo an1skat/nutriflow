@@ -116,9 +116,7 @@ def test_school_hard_delete_cascades_users_and_sessions(seeded_client):
     )
 
     assert missing_password_response.status_code == 403
-    assert missing_password_response.json()["detail"] == (
-        "Admin password confirmation required"
-    )
+    assert missing_password_response.json()["detail"] == ("Admin password confirmation required")
     assert client.cookies.get(DELETE_CONFIRMATION_COOKIE_NAME) is None
 
     wrong_password_response = client.request(
@@ -131,9 +129,7 @@ def test_school_hard_delete_cascades_users_and_sessions(seeded_client):
     assert wrong_password_response.status_code == 403
     assert wrong_password_response.json()["detail"] == "Invalid admin password"
     assert client.cookies.get(DELETE_CONFIRMATION_COOKIE_NAME) is None
-    assert (
-        client.get(f"/api/v1/admin/schools/{identities.own_school.id}").status_code == 200
-    )
+    assert client.get(f"/api/v1/admin/schools/{identities.own_school.id}").status_code == 200
 
     delete_response = client.request(
         "DELETE",

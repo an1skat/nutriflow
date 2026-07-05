@@ -3,7 +3,7 @@ from enum import StrEnum
 from typing import Annotated, Self
 
 from beanie import Document, PydanticObjectId
-from pydantic import EmailStr, Field, StringConstraints, field_validator, model_validator
+from pydantic import BaseModel, EmailStr, Field, StringConstraints, field_validator, model_validator
 from pymongo import ASCENDING, IndexModel
 
 TrimmedName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
@@ -20,6 +20,12 @@ class UserRole(StrEnum):
     SCHOOL_USER = "SCHOOL_USER"
 
 
+class AgeGroup(StrEnum):
+    SIX_TO_ELEVEN = "6-11"
+    ELEVEN_TO_FOURTEEN = "11-14"
+    FOURTEEN_TO_EIGHTEEN = "14-18"
+
+
 class RefreshRevokeReason(StrEnum):
     ROTATED = "rotated"
     LOGOUT = "logout"
@@ -31,9 +37,30 @@ class RefreshRevokeReason(StrEnum):
     PASSWORD_RESET = "password_reset"
 
 
+class SchoolGroup(BaseModel):
+    id: PydanticObjectId = Field(default_factory=PydanticObjectId)
+    name: TrimmedName
+    age_group: AgeGroup
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+def default_school_groups() -> list[SchoolGroup]:
+    return [
+        SchoolGroup(name=AgeGroup.SIX_TO_ELEVEN.value, age_group=AgeGroup.SIX_TO_ELEVEN),
+        SchoolGroup(name=AgeGroup.ELEVEN_TO_FOURTEEN.value, age_group=AgeGroup.ELEVEN_TO_FOURTEEN),
+        SchoolGroup(
+            name=AgeGroup.FOURTEEN_TO_EIGHTEEN.value,
+            age_group=AgeGroup.FOURTEEN_TO_EIGHTEEN,
+        ),
+    ]
+
+
 class School(Document):
     name: TrimmedName
     code: SchoolCode
+    groups: list[SchoolGroup] = Field(default_factory=default_school_groups, min_length=1)
     is_active: bool = True
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
