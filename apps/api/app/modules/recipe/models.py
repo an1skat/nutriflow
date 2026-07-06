@@ -44,6 +44,18 @@ def _coerce_decimal(value: Any) -> Any:
 AmountDecimal = Annotated[Decimal, BeforeValidator(_coerce_decimal)]
 
 
+def _coerce_nutrition_decimal(value: Any) -> Any:
+    if value is None or value == "":
+        return Decimal("0")
+    coerced = _coerce_decimal(value)
+    if isinstance(coerced, Decimal):
+        return coerced
+    return coerced
+
+
+NutritionDecimal = Annotated[Decimal, BeforeValidator(_coerce_nutrition_decimal)]
+
+
 def normalize_lookup_text(value: str) -> str:
     return " ".join(value.strip().lower().split())
 
@@ -118,10 +130,10 @@ class Allergen(Document):
 
 
 class Nutrition(BaseModel):
-    kcal: AmountDecimal | None = None
-    proteins: AmountDecimal | None = None
-    fats: AmountDecimal | None = None
-    carbs: AmountDecimal | None = None
+    kcal: NutritionDecimal = Field(default=Decimal("0"), ge=Decimal("0"))
+    proteins: NutritionDecimal = Field(default=Decimal("0"), ge=Decimal("0"))
+    fats: NutritionDecimal = Field(default=Decimal("0"), ge=Decimal("0"))
+    carbs: NutritionDecimal = Field(default=Decimal("0"), ge=Decimal("0"))
 
 
 class PortionVariant(BaseModel):
@@ -130,6 +142,11 @@ class PortionVariant(BaseModel):
     portion_grams: AmountDecimal | None = Field(default=None, ge=Decimal("0"))
     output_grams: AmountDecimal = Field(ge=Decimal("0"))
     nutrition: Nutrition = Field(default_factory=Nutrition)
+
+    @field_validator("nutrition", mode="before")
+    @classmethod
+    def default_nutrition(cls, value: Any) -> Any:
+        return {} if value is None else value
 
     @model_validator(mode="after")
     def validate_variant_identity(self) -> "PortionVariant":
@@ -141,8 +158,6 @@ class PortionVariant(BaseModel):
 class IngredientAmount(BaseModel):
     ingredient_id: PydanticObjectId | None = None
     ingredient_name_snapshot: Name
-    group_key: str | None = Field(default=None, max_length=80)
-    alternative_label: str | None = Field(default=None, max_length=120)
     gross_amount: AmountDecimal = Field(ge=Decimal("0"))
     net_amount: AmountDecimal = Field(ge=Decimal("0"))
     unit: Unit

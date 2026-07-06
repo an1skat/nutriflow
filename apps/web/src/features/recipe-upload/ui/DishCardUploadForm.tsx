@@ -38,10 +38,10 @@ const defaultValues: RecipeUploadFormValues = {
     {
       tempId: newPortionTempId(),
       portion_grams: "120",
-      kcal: "",
-      proteins: "",
-      fats: "",
-      carbs: "",
+      kcal: "0",
+      proteins: "0",
+      fats: "0",
+      carbs: "0",
     },
   ],
   ingredients: [
@@ -104,10 +104,10 @@ export function DishCardUploadForm() {
     portions.append({
       tempId: newPortionTempId(),
       portion_grams: "",
-      kcal: "",
-      proteins: "",
-      fats: "",
-      carbs: "",
+      kcal: "0",
+      proteins: "0",
+      fats: "0",
+      carbs: "0",
     });
   };
 
@@ -460,12 +460,12 @@ function IngredientRow({
             />
           </Field>
           <Field
-            label="Мітка альтернативи"
+            label="Варіант"
             error={(errors as { alternative_label?: { message?: string } })?.alternative_label?.message as string | undefined}
           >
             <input
               className="nf-input"
-              placeholder="before-jan"
+              placeholder="до 01.01"
               {...register(`ingredients.${index}.alternative_label`)}
             />
           </Field>

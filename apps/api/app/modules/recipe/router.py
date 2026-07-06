@@ -3,8 +3,8 @@ from typing import Annotated
 from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 
-from app.modules.auth.dependencies import CsrfProtection, require_roles
-from app.modules.identity.models import User, UserRole
+from app.modules.auth.dependencies import CsrfProtection, require_permissions
+from app.modules.identity.models import AdminPermission, User
 from app.modules.recipe.models import DishCardVersionStatus
 from app.modules.recipe.schemas import (
     AllergenListResponse,
@@ -30,7 +30,6 @@ from app.modules.recipe.schemas import (
     UpdateIngredientRequest,
 )
 from app.modules.recipe.service import (
-    AlternativeChoiceRequiredError,
     DishCardVersionImmutableError,
     DishCardVersionInvalidError,
     DishCardVersionNotConfirmedError,
@@ -100,7 +99,7 @@ router = APIRouter()
 
 AdminUser = Annotated[
     User,
-    Depends(require_roles(UserRole.ADMIN)),
+    Depends(require_permissions(AdminPermission.RECIPES_MANAGE)),
 ]
 Offset = Annotated[int, Query(ge=0)]
 Limit = Annotated[int, Query(ge=1, le=100)]
@@ -528,10 +527,7 @@ async def calculate_ingredients(
         items = await calculate_ingredients_record(version_id, payload)
     except RecipeNotFoundError as exc:
         raise not_found(exc) from exc
-    except (
-        AlternativeChoiceRequiredError,
-        DishCardVersionNotConfirmedError,
-    ) as exc:
+    except DishCardVersionNotConfirmedError as exc:
         raise bad_request(exc) from exc
 
     return CalculateIngredientsResponse(

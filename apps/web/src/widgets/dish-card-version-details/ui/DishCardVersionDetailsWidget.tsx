@@ -28,8 +28,6 @@ type IngredientRow = {
   key: string;
   ingredientId: string | null;
   name: string;
-  groupKey: string | null;
-  alternativeLabel: string | null;
   notes: string | null;
   amountsByPortionId: Record<string, IngredientAmount>;
 };
@@ -178,10 +176,18 @@ export function DishCardVersionDetailsWidget({ dishCardId, versionId }: Props) {
                   <tr key={portion.id}>
                     <td>{formatAmount(portion.portion_grams)} г</td>
                     <td>{formatAmount(portion.output_grams)} г</td>
-                    <td>{formatNullableAmount(portion.nutrition.proteins)}</td>
-                    <td>{formatNullableAmount(portion.nutrition.fats)}</td>
-                    <td>{formatNullableAmount(portion.nutrition.carbs)}</td>
-                    <td>{formatNullableAmount(portion.nutrition.kcal)}</td>
+                    {isNutritionUnknown(portion) ? (
+                      <td colSpan={4} className="text-xs text-slate-600">
+                        КБЖУ не вказано
+                      </td>
+                    ) : (
+                      <>
+                        <td>{formatNutritionAmount(portion.nutrition.proteins)}</td>
+                        <td>{formatNutritionAmount(portion.nutrition.fats)}</td>
+                        <td>{formatNutritionAmount(portion.nutrition.carbs)}</td>
+                        <td>{formatNutritionAmount(portion.nutrition.kcal)}</td>
+                      </>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -197,12 +203,10 @@ export function DishCardVersionDetailsWidget({ dishCardId, versionId }: Props) {
         </div>
         <div className="nf-panel-body">
           <div className="nf-table-wrap">
-            <table className="nf-table min-w-[860px]">
+            <table className="nf-table min-w-[700px]">
               <thead>
                 <tr>
                   <th className="min-w-60">Інгредієнт</th>
-                  <th className="w-36">Група</th>
-                  <th className="w-36">Альтернатива</th>
                   {version.data.portion_variants.map((portion) => (
                     <th key={portion.id} className="w-36">
                       {portionLabel(portion)}
@@ -222,8 +226,6 @@ export function DishCardVersionDetailsWidget({ dishCardId, versionId }: Props) {
                         <span className="ml-2 text-xs text-slate-500">не прив&apos;язано</span>
                       ) : null}
                     </td>
-                    <td className="text-xs text-slate-600">{row.groupKey ?? "—"}</td>
-                    <td className="text-xs text-slate-600">{row.alternativeLabel ?? "—"}</td>
                     {version.data.portion_variants.map((portion) => {
                       const amount = row.amountsByPortionId[portion.id];
                       return (
@@ -345,8 +347,6 @@ function groupIngredientRows(version: DishCardVersion): IngredientRow[] {
     const key = [
       amount.ingredient_id ?? "",
       amount.ingredient_name_snapshot,
-      amount.group_key ?? "",
-      amount.alternative_label ?? "",
       amount.notes ?? "",
     ].join("|");
     const existing = rows.get(key);
@@ -360,8 +360,6 @@ function groupIngredientRows(version: DishCardVersion): IngredientRow[] {
       key,
       ingredientId: amount.ingredient_id,
       name: amount.ingredient_name_snapshot,
-      groupKey: amount.group_key,
-      alternativeLabel: amount.alternative_label,
       notes: amount.notes,
       amountsByPortionId: {
         [amount.portion_variant_id]: amount,
@@ -385,6 +383,18 @@ function formatAmount(value: string | null): string {
   return value ?? "—";
 }
 
-function formatNullableAmount(value: string | null): string {
-  return value ?? "—";
+function isNutritionUnknown(portion: PortionVariant): boolean {
+  return (
+    Number(portion.nutrition.proteins) === 0 &&
+    Number(portion.nutrition.fats) === 0 &&
+    Number(portion.nutrition.carbs) === 0 &&
+    Number(portion.nutrition.kcal) === 0
+  );
+}
+
+function formatNutritionAmount(value: string | null): string {
+  if (value === null) {
+    return "—";
+  }
+  return value;
 }

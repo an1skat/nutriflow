@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 
-import { useDishCardVersion } from "@/entities/recipe/api/RecipeQueries";
+import {
+  useDishCard,
+  useDishCardVersion,
+} from "@/entities/recipe/api/RecipeQueries";
 import { DishCardVersionForm } from "@/features/recipe-management/ui/DishCardVersionForm";
 import { RequestError } from "@/shared/ui/RequestError";
 
@@ -13,7 +16,11 @@ type Props = {
 };
 
 export function DishCardVersionEditorWidget({ dishCardId, versionId, mode }: Props) {
+  const dishCardQuery = useDishCard(dishCardId);
   const versionQuery = useDishCardVersion(versionId ?? "");
+  const sourceVersionId =
+    mode === "create" ? (dishCardQuery.data?.current_version_id ?? "") : "";
+  const sourceVersionQuery = useDishCardVersion(sourceVersionId);
 
   if (mode === "edit") {
     if (versionQuery.isPending) {
@@ -35,6 +42,31 @@ export function DishCardVersionEditorWidget({ dishCardId, versionId, mode }: Pro
     }
   }
 
+  if (mode === "create") {
+    if (dishCardQuery.isPending || (sourceVersionId && sourceVersionQuery.isPending)) {
+      return (
+        <main className="nf-page">
+          <p className="text-sm text-slate-600">Завантажуємо поточну версію…</p>
+        </main>
+      );
+    }
+    if (dishCardQuery.isError || (sourceVersionId && sourceVersionQuery.isError)) {
+      return (
+        <main className="nf-page">
+          <RequestError
+            error={dishCardQuery.error ?? sourceVersionQuery.error ?? null}
+            onRetry={() => {
+              void dishCardQuery.refetch();
+              if (sourceVersionId) {
+                void sourceVersionQuery.refetch();
+              }
+            }}
+          />
+        </main>
+      );
+    }
+  }
+
   return (
     <main className="nf-page">
       <header className="nf-page-header">
@@ -50,14 +82,16 @@ export function DishCardVersionEditorWidget({ dishCardId, versionId, mode }: Pro
         </h1>
         <p className="nf-description">
           {mode === "create"
-            ? "Створіть нову версію (draft). Після перевірки її можна підтвердити."
+            ? sourceVersionQuery.data
+              ? "Нова версія створюється на основі поточної. Внесіть потрібні зміни й збережіть draft."
+              : "Створіть нову версію (draft). Після перевірки її можна підтвердити."
             : "Внесіть зміни до версії. Підтверджені та архівні версії незмінні."}
         </p>
       </header>
 
       <DishCardVersionForm
         dishCardId={dishCardId}
-        version={mode === "edit" ? versionQuery.data : undefined}
+        version={mode === "edit" ? versionQuery.data : sourceVersionQuery.data}
         mode={mode}
       />
     </main>

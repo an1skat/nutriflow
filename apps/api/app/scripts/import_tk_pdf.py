@@ -143,9 +143,7 @@ def split_cards(pages: list[str]) -> list[tuple[str, str, list[str]]]:
             card_number = header_match.group(1).strip()
             lines = [ln.strip() for ln in page_text.splitlines() if ln.strip()]
             try:
-                header_index = next(
-                    i for i, ln in enumerate(lines) if header_re.search(ln)
-                )
+                header_index = next(i for i, ln in enumerate(lines) if header_re.search(ln))
             except StopIteration:
                 header_index = -1
             name = _guess_dish_name(lines, header_index) if header_index >= 0 else ""
@@ -295,9 +293,7 @@ class ParsedAmount:
         self.notes = notes
 
 
-def extract_ingredient_table(
-    text: str, portion_count: int
-) -> tuple[list[ParsedAmount], list[str]]:
+def extract_ingredient_table(text: str, portion_count: int) -> tuple[list[ParsedAmount], list[str]]:
     start_match = re.search(r"Норма вмісту на 1 порцію", text)
     end_match = re.search(r"Вихід готової\s+страви", text)
     if not end_match:
@@ -427,9 +423,7 @@ def _parse_ingredient_line(
     net: list[Decimal | None] = []
     for i in range(0, len(per_portion), 2):
         gross.append(coerce_decimal(per_portion[i]) if i < len(per_portion) else None)
-        net.append(
-            coerce_decimal(per_portion[i + 1]) if i + 1 < len(per_portion) else None
-        )
+        net.append(coerce_decimal(per_portion[i + 1]) if i + 1 < len(per_portion) else None)
 
     notes = None
     if any(g is None for g in gross):
@@ -490,13 +484,17 @@ def build_card_payload(
     ingredient_amounts: list[dict] = []
     for group in groups:
         group_key = None
+        alternative_labels: list[str | None] = [None] * len(group)
         if len(group) > 1:
             group_key = f"grp-{_slug(group[0].name_snapshot)}"
             while group_key in used_keys:
                 group_key = f"{group_key}-{len(used_keys)}"
             used_keys.add(group_key)
+            alternative_labels = _alternative_labels_for_group(
+                [item.name_snapshot for item in group]
+            )
         for index, amount in enumerate(group):
-            alt_label = f"option-{index + 1}" if group_key else None
+            alt_label = alternative_labels[index] if group_key else None
             for portion_index, output in enumerate(portion_outputs):
                 gross = amount.gross[portion_index] if portion_index < len(amount.gross) else None
                 net = amount.net[portion_index] if portion_index < len(amount.net) else None
@@ -563,6 +561,79 @@ def _slug(value: str) -> str:
     return slug or "ingredient"
 
 
+def _alternative_labels_for_group(names: list[str]) -> list[str]:
+    stripped_names = [_clean_alternative_name(name) for name in names]
+    common_words = _common_word_prefix(stripped_names)
+    labels: list[str] = []
+
+    for name in stripped_names:
+        label = _remove_word_prefix(name, common_words)
+        if not label:
+            label = name
+        labels.append(label)
+
+    return _dedupe_labels(labels, stripped_names)
+
+
+def _clean_alternative_name(name: str) -> str:
+    cleaned = re.sub(r"\s+", " ", name).strip()
+    cleaned = re.sub(r"\s+чи$", "", cleaned, flags=re.IGNORECASE)
+    return cleaned.strip(" ,.;")
+
+
+def _common_word_prefix(values: list[str]) -> list[str]:
+    if len(values) < 2:
+        return []
+
+    tokenized = [value.split() for value in values if value]
+    if len(tokenized) < 2:
+        return []
+
+    prefix: list[str] = []
+    for words in zip(*tokenized, strict=False):
+        lowered = {word.lower().strip(".,;") for word in words}
+        if len(lowered) != 1:
+            break
+        if next(iter(lowered)) in {"до", "з", "із", "по", "від"}:
+            break
+        prefix.append(words[0])
+
+    return prefix
+
+
+def _remove_word_prefix(value: str, prefix: list[str]) -> str:
+    if not prefix:
+        return value
+
+    words = value.split()
+    if len(words) <= len(prefix):
+        return value
+
+    for actual, expected in zip(words, prefix, strict=False):
+        if actual.lower().strip(".,;") != expected.lower().strip(".,;"):
+            return value
+
+    return " ".join(words[len(prefix) :]).strip(" ,.;")
+
+
+def _dedupe_labels(labels: list[str], fallback_names: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+
+    for index, label in enumerate(labels):
+        normalized = normalize_lookup_text(label)
+        if not normalized or normalized in seen:
+            label = fallback_names[index]
+            normalized = normalize_lookup_text(label)
+        if normalized in seen:
+            label = f"{label} ({index + 1})"
+            normalized = normalize_lookup_text(label)
+        seen.add(normalized)
+        result.append(label)
+
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Seeding via service layer
 # ---------------------------------------------------------------------------
@@ -576,18 +647,14 @@ def _ingredient_matches(item: Ingredient, name: str, unit: str) -> bool:
 
 
 async def _find_ingredient(name: str, unit: str) -> Ingredient | None:
-    existing, _ = await list_ingredients(
-        offset=0, limit=100, query=name, include_inactive=True
-    )
+    existing, _ = await list_ingredients(offset=0, limit=100, query=name, include_inactive=True)
     for item in existing:
         if _ingredient_matches(item, name, unit):
             return item
     return None
 
 
-async def ensure_ingredient(
-    name: str, unit: str, cache: dict[str, PydanticObjectId]
-) -> Ingredient:
+async def ensure_ingredient(name: str, unit: str, cache: dict[str, PydanticObjectId]) -> Ingredient:
     key = f"{normalize_lookup_text(name)}|{unit.lower()}"
     if key in cache:
         return await Ingredient.get(cache[key])
@@ -777,9 +844,7 @@ async def main_async(pdf_paths: list[Path], dry_run: bool) -> int:
         allergen_cache: dict[str, PydanticObjectId] = {}
         reports: list[dict] = []
         for payload in all_payloads:
-            report = await import_card(
-                payload, ingredient_cache, allergen_cache, dry_run=dry_run
-            )
+            report = await import_card(payload, ingredient_cache, allergen_cache, dry_run=dry_run)
             reports.append(report)
             status_icon = {
                 "confirmed": "✓",

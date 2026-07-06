@@ -113,7 +113,7 @@ export const recipeUploadSchema = z
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["ingredients", "alternative_label"],
-          message: "Для альтернативи вкажіть мітку (напр. before-jan)",
+          message: "Для альтернативи вкажіть варіант (напр. до 01.01)",
         });
       }
     }
@@ -127,4 +127,8 @@ export type IngredientFormValues = z.infer<typeof ingredientFormSchema>;
 // Helpers to convert empty strings to null at submit time.
 export function orNull(value: string): string | null {
   return value.trim().length > 0 ? value.trim() : null;
+}
+
+export function orZero(value: string): string {
+  return value.trim().length > 0 ? value.trim() : "0";
 }

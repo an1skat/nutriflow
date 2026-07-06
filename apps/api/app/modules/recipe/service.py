@@ -1,5 +1,4 @@
 import re
-from collections import defaultdict
 from datetime import UTC, datetime
 from decimal import Decimal
 from io import BytesIO
@@ -50,10 +49,6 @@ class DishCardVersionImmutableError(ValueError):
 
 class DishCardVersionInvalidError(ValueError):
     """Dish card version cannot move to the requested state."""
-
-
-class AlternativeChoiceRequiredError(ValueError):
-    """Calculation requires an explicit alternative ingredient choice."""
 
 
 class DishCardVersionNotConfirmedError(ValueError):
@@ -492,49 +487,11 @@ def calculate_ingredient_lines(
         for amount in version.ingredient_amounts
         if amount.portion_variant_id == data.portion_variant_id
     ]
-    grouped_alternatives: dict[str, list[IngredientAmount]] = defaultdict(list)
-    selected_amounts: list[IngredientAmount] = []
-
-    for amount in amounts:
-        if not amount.group_key:
-            selected_amounts.append(amount)
-            continue
-        grouped_alternatives[normalize_lookup_text(amount.group_key)].append(amount)
-
-    for group_key, group_amounts in grouped_alternatives.items():
-        if len(group_amounts) == 1:
-            selected_amounts.append(group_amounts[0])
-            continue
-
-        selected_label = data.selected_alternatives.get(group_key)
-        if not selected_label:
-            raise AlternativeChoiceRequiredError(
-                f"Alternative choice required for ingredient group '{group_key}'"
-            )
-
-        matched_amount = next(
-            (
-                amount
-                for amount in group_amounts
-                if _alternative_choice_key(amount) == selected_label
-            ),
-            None,
-        )
-
-        if matched_amount is None:
-            raise AlternativeChoiceRequiredError(
-                f"Selected alternative is not valid for ingredient group '{group_key}'"
-            )
-
-        selected_amounts.append(matched_amount)
-
     multiplier = Decimal(data.servings_count)
     return [
         IngredientCalculationLine(
             ingredient_id=amount.ingredient_id,
             ingredient_name_snapshot=amount.ingredient_name_snapshot,
-            group_key=amount.group_key,
-            alternative_label=amount.alternative_label,
             unit=amount.unit,
             gross_per_portion=amount.gross_amount,
             net_per_portion=amount.net_amount,
@@ -542,7 +499,7 @@ def calculate_ingredient_lines(
             net_total=amount.net_amount * multiplier,
             notes=amount.notes,
         )
-        for amount in selected_amounts
+        for amount in amounts
     ]
 
 
@@ -627,8 +584,6 @@ def _to_ingredient_amount(data) -> IngredientAmount:
     return IngredientAmount(
         ingredient_id=data.ingredient_id,
         ingredient_name_snapshot=data.ingredient_name_snapshot,
-        group_key=data.group_key,
-        alternative_label=data.alternative_label,
         gross_amount=data.gross_amount,
         net_amount=data.net_amount,
         unit=data.unit,
@@ -636,11 +591,6 @@ def _to_ingredient_amount(data) -> IngredientAmount:
         portion_variant_id=data.portion_variant_id,
         notes=data.notes,
     )
-
-
-def _alternative_choice_key(amount: IngredientAmount) -> str:
-    label = amount.alternative_label or amount.ingredient_name_snapshot
-    return normalize_lookup_text(label)
 
 
 def _guess_dish_card_identity(text: str) -> tuple[str | None, str | None]:

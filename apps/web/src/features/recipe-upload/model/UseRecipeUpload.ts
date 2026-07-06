@@ -14,7 +14,7 @@ import {
 } from "@/entities/recipe/api/RecipeApi";
 import { getApiErrorMessage } from "@/shared/api/HttpClient";
 
-import { orNull, type RecipeUploadFormValues } from "./RecipeUploadSchema";
+import { orNull, orZero, type RecipeUploadFormValues } from "./RecipeUploadSchema";
 
 export type UploadProgress = {
   step:
@@ -163,10 +163,10 @@ function buildVersionPayload(
       portion_grams: portion.portion_grams,
       output_grams: portion.portion_grams,
       nutrition: {
-        kcal: orNull(portion.kcal),
-        proteins: orNull(portion.proteins),
-        fats: orNull(portion.fats),
-        carbs: orNull(portion.carbs),
+        kcal: orZero(portion.kcal),
+        proteins: orZero(portion.proteins),
+        fats: orZero(portion.fats),
+        carbs: orZero(portion.carbs),
       },
     })),
     ingredient_amounts: values.ingredients.flatMap((ingredient) =>

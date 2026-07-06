@@ -9,10 +9,10 @@ const decimalString = z
   .regex(/^-?\d+(\.\d+)?$/, "Очікуємо десяткове число");
 
 export const nutritionSchema = z.object({
-  kcal: decimalString.nullable(),
-  proteins: decimalString.nullable(),
-  fats: decimalString.nullable(),
-  carbs: decimalString.nullable(),
+  kcal: decimalString,
+  proteins: decimalString,
+  fats: decimalString,
+  carbs: decimalString,
 });
 
 export const portionVariantSchema = z.object({
@@ -26,8 +26,6 @@ export const portionVariantSchema = z.object({
 export const ingredientAmountSchema = z.object({
   ingredient_id: z.string().min(1).nullable(),
   ingredient_name_snapshot: z.string().trim().min(1).max(200),
-  group_key: z.string().trim().max(80).nullable(),
-  alternative_label: z.string().trim().max(120).nullable(),
   gross_amount: decimalString,
   net_amount: decimalString,
   unit: z.string().trim().min(1).max(20),
@@ -209,5 +207,4 @@ export type CreateDishCardVersionPayload = {
 export type CalculateIngredientsPayload = {
   portion_variant_id: string;
   servings_count: number;
-  selected_alternatives?: Record<string, string>;
 };

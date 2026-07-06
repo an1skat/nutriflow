@@ -15,8 +15,8 @@ from app.modules.recipe.models import (
     DishCardVersionStatus,
     Ingredient,
     IngredientAmount,
+    NutritionDecimal,
     PortionVariant,
-    normalize_lookup_text,
 )
 
 
@@ -159,10 +159,10 @@ class AllergenListResponse(BaseModel):
 
 
 class NutritionPayload(DecimalResponseModel):
-    kcal: AmountDecimal | None = None
-    proteins: AmountDecimal | None = None
-    fats: AmountDecimal | None = None
-    carbs: AmountDecimal | None = None
+    kcal: NutritionDecimal = Field(default=Decimal("0"), ge=Decimal("0"))
+    proteins: NutritionDecimal = Field(default=Decimal("0"), ge=Decimal("0"))
+    fats: NutritionDecimal = Field(default=Decimal("0"), ge=Decimal("0"))
+    carbs: NutritionDecimal = Field(default=Decimal("0"), ge=Decimal("0"))
 
 
 class PortionVariantPayload(DecimalResponseModel):
@@ -171,6 +171,11 @@ class PortionVariantPayload(DecimalResponseModel):
     portion_grams: AmountDecimal | None = Field(default=None, ge=Decimal("0"))
     output_grams: AmountDecimal = Field(ge=Decimal("0"))
     nutrition: NutritionPayload = Field(default_factory=NutritionPayload)
+
+    @field_validator("nutrition", mode="before")
+    @classmethod
+    def default_nutrition(cls, value: object) -> object:
+        return {} if value is None else value
 
     @model_validator(mode="after")
     def validate_variant_identity(self) -> Self:
@@ -182,8 +187,6 @@ class PortionVariantPayload(DecimalResponseModel):
 class IngredientAmountPayload(DecimalResponseModel):
     ingredient_id: PydanticObjectId | None = None
     ingredient_name_snapshot: str = Field(min_length=1, max_length=200)
-    group_key: str | None = Field(default=None, max_length=80)
-    alternative_label: str | None = Field(default=None, max_length=120)
     gross_amount: AmountDecimal = Field(ge=Decimal("0"))
     net_amount: AmountDecimal = Field(ge=Decimal("0"))
     unit: str = Field(min_length=1, max_length=20)
@@ -196,7 +199,7 @@ class IngredientAmountPayload(DecimalResponseModel):
     def trim_text(cls, value: str) -> str:
         return value.strip()
 
-    @field_validator("group_key", "alternative_label", "notes")
+    @field_validator("notes")
     @classmethod
     def trim_optional_text(cls, value: str | None) -> str | None:
         if value is None:
@@ -364,8 +367,7 @@ class DishCardVersionResponse(DecimalResponseModel):
             allergen_ids=version.allergen_ids,
             technology_text=version.technology_text,
             portion_variants=[
-                PortionVariantResponse.from_variant(variant)
-                for variant in version.portion_variants
+                PortionVariantResponse.from_variant(variant) for variant in version.portion_variants
             ],
             ingredient_amounts=[
                 IngredientAmountResponse.from_amount(amount)
@@ -399,22 +401,11 @@ class DishCardVersionValidationResponse(BaseModel):
 class CalculateIngredientsRequest(BaseModel):
     portion_variant_id: PydanticObjectId
     servings_count: int = Field(ge=1, le=100_000)
-    selected_alternatives: dict[str, str] = Field(default_factory=dict)
-
-    @field_validator("selected_alternatives")
-    @classmethod
-    def normalize_selected_alternatives(cls, value: dict[str, str]) -> dict[str, str]:
-        return {
-            normalize_lookup_text(key): normalize_lookup_text(item)
-            for key, item in value.items()
-        }
 
 
 class IngredientCalculationLine(DecimalResponseModel):
     ingredient_id: PydanticObjectId | None
     ingredient_name_snapshot: str
-    group_key: str | None
-    alternative_label: str | None
     unit: str
     gross_per_portion: AmountDecimal
     net_per_portion: AmountDecimal
