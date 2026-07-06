@@ -10,7 +10,8 @@ from app.modules.auth.security import (
     csrf_tokens_match,
     decode_access_token,
 )
-from app.modules.identity.models import School, User, UserRole
+from app.modules.auth.service import user_has_permissions
+from app.modules.identity.models import AdminPermission, School, User, UserRole
 
 
 def unauthorized() -> HTTPException:
@@ -39,7 +40,7 @@ async def get_current_user(
     if user is None or not user.is_active or user.auth_version != identity.auth_version:
         raise unauthorized()
 
-    if user.role == UserRole.ADMIN:
+    if user.role in {UserRole.OWNER, UserRole.ADMIN}:
         if user.school_id is not None:
             raise unauthorized()
         return user
@@ -98,12 +99,54 @@ def require_roles(
     return dependency
 
 
-def authorize_school_access(
+def require_owner() -> Callable[..., Awaitable[User]]:
+    async def dependency(current_user: CurrentUser) -> User:
+        if current_user.role != UserRole.OWNER:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions",
+            )
+
+        return current_user
+
+    return dependency
+
+
+def require_permissions(
+    *required_permissions: AdminPermission,
+) -> Callable[..., Awaitable[User]]:
+    if not required_permissions:
+        raise ValueError("At least one permission must be specified")
+
+    async def dependency(current_user: CurrentUser) -> User:
+        if not await user_has_permissions(current_user, *required_permissions):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions",
+            )
+
+        return current_user
+
+    return dependency
+
+
+async def authorize_school_access(
     current_user: User,
     school_id: PydanticObjectId,
 ) -> User:
-    if current_user.role == UserRole.ADMIN:
+    if current_user.role == UserRole.OWNER:
         return current_user
+
+    if current_user.role == UserRole.ADMIN:
+        school = await School.get(school_id)
+
+        if school is not None and school.admin_owner_id == current_user.id:
+            return current_user
+
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="School access denied",
+        )
 
     if current_user.school_id != school_id:
         raise HTTPException(
@@ -118,4 +161,4 @@ async def require_school_access(
     school_id: PydanticObjectId,
     current_user: CurrentUser,
 ) -> User:
-    return authorize_school_access(current_user, school_id)
+    return await authorize_school_access(current_user, school_id)

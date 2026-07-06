@@ -4,6 +4,7 @@ export const schoolSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   code: z.string().min(1),
+  admin_owner_id: z.string().min(1).nullable(),
   is_active: z.boolean(),
   created_at: z.string().min(1),
   updated_at: z.string().min(1),
@@ -22,6 +23,7 @@ export type SchoolList = z.infer<typeof schoolListSchema>;
 export type CreateSchoolPayload = {
   name: string;
   code: string;
+  admin_owner_id?: string | null;
 };
 
 export type UpdateSchoolPayload = CreateSchoolPayload & {

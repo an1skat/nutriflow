@@ -3,6 +3,10 @@
 import Link from "next/link";
 
 import { useCurrentUser } from "@/entities/session/api/SessionQueries";
+import {
+  hasPermission,
+  isBackofficeUser,
+} from "@/features/access/model/AccessPolicy";
 
 export default function HomePage() {
   const currentUser = useCurrentUser();
@@ -13,7 +17,11 @@ export default function HomePage() {
   }
 
   const roleLabel =
-    user.role === "ADMIN" ? "Адміністратор" : "Користувач школи";
+    user.role === "OWNER"
+      ? "Власник"
+      : user.role === "ADMIN"
+        ? "Адміністратор"
+        : "Користувач школи";
 
   return (
     <main className="nf-page">
@@ -55,13 +63,20 @@ export default function HomePage() {
             <h2 className="nf-panel-title">Доступні розділи</h2>
           </div>
           <div className="nf-panel-body">
-            {user.role === "ADMIN" ? (
+            {isBackofficeUser(user) ? (
               <div>
-                <Link href="/admin/schools" className="nf-link">
-                  Школи та користувачі
-                </Link>
+                {hasPermission(user, "schools.manage") ? (
+                  <Link href="/admin/schools" className="nf-link">
+                    Школи та користувачі
+                  </Link>
+                ) : null}
+                {user.role === "OWNER" ? (
+                  <Link href="/admin/access" className="nf-link block">
+                    Доступ адміністраторів
+                  </Link>
+                ) : null}
                 <p className="mt-2 text-xs leading-5 text-slate-600">
-                  Створення шкіл, керування статусами та обліковими записами.
+                  Розділи залежать від прав поточного облікового запису.
                 </p>
               </div>
             ) : (

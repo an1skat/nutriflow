@@ -16,8 +16,17 @@ def utc_now() -> datetime:
 
 
 class UserRole(StrEnum):
+    OWNER = "OWNER"
     ADMIN = "ADMIN"
     SCHOOL_USER = "SCHOOL_USER"
+
+
+class AdminPermission(StrEnum):
+    SCHOOLS_MANAGE = "schools.manage"
+    SCHOOL_USERS_MANAGE = "school_users.manage"
+    SCHOOL_GROUPS_MANAGE = "school_groups.manage"
+    MENUS_MANAGE = "menus.manage"
+    RECIPES_MANAGE = "recipes.manage"
 
 
 class AgeGroup(StrEnum):
@@ -60,6 +69,7 @@ def default_school_groups() -> list[SchoolGroup]:
 class School(Document):
     name: TrimmedName
     code: SchoolCode
+    admin_owner_id: PydanticObjectId | None = None
     groups: list[SchoolGroup] = Field(default_factory=default_school_groups, min_length=1)
     is_active: bool = True
     created_at: datetime = Field(default_factory=utc_now)
@@ -77,7 +87,11 @@ class School(Document):
                 [("code", ASCENDING)],
                 unique=True,
                 name="uq_school_code",
-            )
+            ),
+            IndexModel(
+                [("admin_owner_id", ASCENDING)],
+                name="ix_school_admin_owner",
+            ),
         ]
 
 
@@ -91,6 +105,8 @@ class User(Document):
     password_hash: str = Field(min_length=20)
     role: UserRole
     school_id: PydanticObjectId | None = None
+    permissions: list[AdminPermission] = Field(default_factory=list)
+    created_by_admin_id: PydanticObjectId | None = None
     is_active: bool = True
     auth_version: int = Field(default=0, ge=0)
     created_at: datetime = Field(default_factory=utc_now)
@@ -110,14 +126,20 @@ class User(Document):
 
     @model_validator(mode="after")
     def validate_school_boundary(self) -> Self:
-        if self.role == UserRole.ADMIN:
+        if self.role in {UserRole.OWNER, UserRole.ADMIN}:
             if self.school_id is not None:
-                raise ValueError("Administrator must not have school_id")
+                raise ValueError("Backoffice user must not have school_id")
             if self.email is None:
-                raise ValueError("Administrator must have email")
+                raise ValueError("Backoffice user must have email")
 
-        if self.role == UserRole.SCHOOL_USER and self.school_id is None:
-            raise ValueError("School user must have school_id")
+        if self.role == UserRole.SCHOOL_USER:
+            if self.school_id is None:
+                raise ValueError("School user must have school_id")
+            if self.permissions:
+                raise ValueError("School user must not have admin permissions")
+
+        if self.role == UserRole.OWNER and self.permissions:
+            raise ValueError("Owner permissions are implicit")
 
         return self
 
@@ -138,6 +160,10 @@ class User(Document):
             IndexModel(
                 [("school_id", ASCENDING), ("role", ASCENDING)],
                 name="ix_user_school_role",
+            ),
+            IndexModel(
+                [("role", ASCENDING), ("created_by_admin_id", ASCENDING)],
+                name="ix_user_role_created_by",
             ),
         ]
 

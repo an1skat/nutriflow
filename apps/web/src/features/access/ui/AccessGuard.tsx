@@ -4,7 +4,10 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
 
-import type { UserRole } from "@/entities/session/model/Session";
+import type {
+  AdminPermission,
+  UserRole,
+} from "@/entities/session/model/Session";
 import { useCurrentUser } from "@/entities/session/api/SessionQueries";
 import {
   getHomePath,
@@ -15,12 +18,14 @@ import { getApiErrorMessage } from "@/shared/api/HttpClient";
 type AccessGuardProps = {
   children: ReactNode;
   allowedRoles?: readonly UserRole[];
+  requiredPermissions?: readonly AdminPermission[];
   schoolId?: string;
 };
 
 export function AccessGuard({
   children,
   allowedRoles,
+  requiredPermissions,
   schoolId,
 }: AccessGuardProps) {
   const router = useRouter();
@@ -31,8 +36,9 @@ export function AccessGuard({
   const decision =
     currentUser.isPending || currentUser.isError
       ? null
-      : getRouteAccess(currentUser.data ?? null, {
+        : getRouteAccess(currentUser.data ?? null, {
           allowedRoles,
+          requiredPermissions,
           schoolId,
         });
 

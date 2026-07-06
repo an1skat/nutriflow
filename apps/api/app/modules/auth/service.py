@@ -17,6 +17,7 @@ from app.modules.auth.security import (
     verify_password_for_missing_user,
 )
 from app.modules.identity.models import (
+    AdminPermission,
     RefreshRevokeReason,
     RefreshSession,
     School,
@@ -62,7 +63,7 @@ async def authenticate_user(identifier: str, password: str) -> User:
     if not user.is_active:
         raise AuthenticationError("Invalid credentials")
 
-    if user.role == UserRole.ADMIN:
+    if user.role in {UserRole.OWNER, UserRole.ADMIN}:
         if user.school_id is not None:
             raise AuthenticationError("Invalid credentials")
     else:
@@ -275,16 +276,16 @@ async def create_first_admin(
         password=password,
     )
 
-    existing_admin = await User.find_one(User.role == UserRole.ADMIN)
+    existing_admin = await User.find_one(User.role == UserRole.OWNER)
 
     if existing_admin is not None:
-        raise FirstAdminAlreadyExistsError("An administrator already exists")
+        raise FirstAdminAlreadyExistsError("An owner already exists")
 
     admin = User(
         username=data.username,
         email=data.email,
         password_hash=hash_password(data.password),
-        role=UserRole.ADMIN,
+        role=UserRole.OWNER,
         school_id=None,
     )
 
@@ -296,6 +297,30 @@ async def create_first_admin(
         ) from exc
 
     return admin
+
+
+def all_admin_permissions() -> list[AdminPermission]:
+    return list(AdminPermission)
+
+
+async def get_user_permissions(user: User) -> list[AdminPermission]:
+    if user.role == UserRole.OWNER:
+        return all_admin_permissions()
+    if user.role == UserRole.ADMIN:
+        return list(user.permissions)
+    return []
+
+
+async def user_has_permissions(
+    user: User,
+    *required_permissions: AdminPermission,
+) -> bool:
+    if user.role == UserRole.OWNER:
+        return True
+    if user.role != UserRole.ADMIN:
+        return False
+    granted = set(user.permissions)
+    return all(permission in granted for permission in required_permissions)
 
 
 async def _create_refresh_session(

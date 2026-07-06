@@ -1,3 +1,4 @@
+import { AccessGuard } from "@/features/access/ui/AccessGuard";
 import { RecipeCatalogWidget } from "@/widgets/recipe-catalog/ui/RecipeCatalogWidget";
 
 type RecipeCatalogPageProps = {
@@ -20,9 +21,11 @@ export default async function RecipeCatalogPage({ searchParams }: RecipeCatalogP
       : "dish-cards";
 
   return (
-    <RecipeCatalogWidget
-      initialTab={initialTab}
-      initialQuery={firstParam(params.query) ?? ""}
-    />
+    <AccessGuard requiredPermissions={["recipes.manage"]}>
+      <RecipeCatalogWidget
+        initialTab={initialTab}
+        initialQuery={firstParam(params.query) ?? ""}
+      />
+    </AccessGuard>
   );
 }

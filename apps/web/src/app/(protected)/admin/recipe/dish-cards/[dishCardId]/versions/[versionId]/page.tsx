@@ -1,3 +1,4 @@
+import { AccessGuard } from "@/features/access/ui/AccessGuard";
 import { DishCardVersionDetailsWidget } from "@/widgets/dish-card-version-details/ui/DishCardVersionDetailsWidget";
 
 type VersionPageProps = {
@@ -9,5 +10,12 @@ type VersionPageProps = {
 
 export default async function VersionPage({ params }: VersionPageProps) {
   const { dishCardId, versionId } = await params;
-  return <DishCardVersionDetailsWidget dishCardId={dishCardId} versionId={versionId} />;
+  return (
+    <AccessGuard requiredPermissions={["recipes.manage"]}>
+      <DishCardVersionDetailsWidget
+        dishCardId={dishCardId}
+        versionId={versionId}
+      />
+    </AccessGuard>
+  );
 }

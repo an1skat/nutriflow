@@ -3,9 +3,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.router import api_router
 from app.core.config import get_settings
+from app.core.middleware import RequestHardeningMiddleware
 from app.db.beanie import init_odm
 from app.db.mongo import close_mongo, connect_mongo
 
@@ -27,12 +29,20 @@ def create_app() -> FastAPI:
         title=settings.app_name,
         version="0.1.0",
         debug=settings.debug,
-        docs_url="/docs",
-        redoc_url="/redoc",
-        openapi_url=f"{settings.api_v1_prefix}/openapi.json",
+        docs_url="/docs" if settings.docs_enabled else None,
+        redoc_url="/redoc" if settings.redoc_enabled else None,
+        openapi_url=f"{settings.api_v1_prefix}/openapi.json" if settings.openapi_enabled else None,
         lifespan=lifespan,
     )
 
+    app.add_middleware(
+        RequestHardeningMiddleware,
+        settings=settings,
+    )
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=settings.trusted_hosts,
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.backend_cors_origins,

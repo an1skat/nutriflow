@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  ShieldCheck,
   UsersRound,
   X,
 } from "lucide-react";
@@ -15,6 +16,11 @@ import { useState, type ComponentType, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { useCurrentUser } from "@/entities/session/api/SessionQueries";
+import type { AdminPermission } from "@/entities/session/model/Session";
+import {
+  hasPermission,
+  isBackofficeUser,
+} from "@/features/access/model/AccessPolicy";
 import { useLogout } from "@/features/auth/model/UseSession";
 import { getApiErrorMessage } from "@/shared/api/HttpClient";
 
@@ -22,7 +28,8 @@ type NavigationItem = {
   href: string;
   label: string;
   icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
-  adminOnly?: boolean;
+  ownerOnly?: boolean;
+  requiredPermission?: AdminPermission;
   schoolOnly?: boolean;
 };
 
@@ -36,13 +43,19 @@ const navigation: NavigationItem[] = [
     href: "/admin/schools",
     label: "Школи",
     icon: Building2,
-    adminOnly: true,
+    requiredPermission: "schools.manage",
   },
   {
     href: "/admin/recipe",
     label: "Техкарти",
     icon: BookOpen,
-    adminOnly: true,
+    requiredPermission: "recipes.manage",
+  },
+  {
+    href: "/admin/access",
+    label: "Доступ",
+    icon: ShieldCheck,
+    ownerOnly: true,
   },
   {
     href: "/school/groups",
@@ -76,11 +89,18 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const visibleNavigation = navigation.filter(
     (item) =>
-      (!item.adminOnly || user.role === "ADMIN") &&
+      (!item.ownerOnly || user.role === "OWNER") &&
+      (!item.requiredPermission ||
+        (isBackofficeUser(user) &&
+          hasPermission(user, item.requiredPermission))) &&
       (!item.schoolOnly || user.role === "SCHOOL_USER"),
   );
   const roleLabel =
-    user.role === "ADMIN" ? "Адміністратор" : "Користувач школи";
+    user.role === "OWNER"
+      ? "Власник"
+      : user.role === "ADMIN"
+        ? "Адміністратор"
+        : "Користувач школи";
 
   return (
     <div className="min-h-screen bg-[var(--nf-canvas)]">

@@ -1,13 +1,26 @@
 import { z } from "zod";
 
+export const adminPermissionSchema = z.enum([
+  "schools.manage",
+  "school_users.manage",
+  "school_groups.manage",
+  "menus.manage",
+  "recipes.manage",
+]);
+
 const authUserBaseSchema = z.object({
   id: z.string().min(1),
   username: z.string().min(1),
   email: z.string().email().nullable(),
+  permissions: z.array(adminPermissionSchema),
   is_active: z.boolean(),
 });
 
 export const authUserSchema = z.discriminatedUnion("role", [
+  authUserBaseSchema.extend({
+    role: z.literal("OWNER"),
+    school_id: z.null(),
+  }),
   authUserBaseSchema.extend({
     role: z.literal("ADMIN"),
     school_id: z.null(),
@@ -33,3 +46,4 @@ export const loginSchema = z.object({
 export type AuthUser = z.infer<typeof authUserSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type UserRole = AuthUser["role"];
+export type AdminPermission = AuthUser["permissions"][number];

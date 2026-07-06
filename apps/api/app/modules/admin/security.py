@@ -73,7 +73,8 @@ def delete_confirmation_token_is_valid(
         return (
             payload["typ"] == DELETE_CONFIRMATION_TOKEN_TYPE
             and payload["sub"] == str(admin.id)
-            and payload["role"] == UserRole.ADMIN.value
+            and payload["role"] == admin.role.value
+            and admin.role in {UserRole.OWNER, UserRole.ADMIN}
             and int(payload["ver"]) == admin.auth_version
         )
     except (jwt.InvalidTokenError, KeyError, TypeError, ValueError):

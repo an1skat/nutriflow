@@ -15,6 +15,7 @@ from app.modules.auth.security import generate_csrf_token
 from app.modules.auth.service import (
     AuthenticationError,
     TokenPair,
+    get_user_permissions,
     rotate_refresh_token,
 )
 from app.modules.auth.service import (
@@ -22,6 +23,14 @@ from app.modules.auth.service import (
 )
 from app.modules.auth.service import (
     logout as logout_session,
+)
+from app.modules.auth.throttling import (
+    check_login_throttle,
+    check_refresh_throttle,
+    record_login_failure,
+    record_login_success,
+    record_refresh_failure,
+    record_refresh_success,
 )
 
 router = APIRouter()
@@ -105,9 +114,16 @@ def delete_auth_cookies(response: Response, settings: Settings) -> None:
     status_code=status.HTTP_204_NO_CONTENT,
 )
 async def login(
+    request: Request,
     payload: LoginRequest,
     settings: AppSettings,
 ) -> Response:
+    await check_login_throttle(
+        request,
+        payload.identifier,
+        settings=settings,
+    )
+
     try:
         token_pair = await login_user(
             payload.identifier,
@@ -115,7 +131,14 @@ async def login(
             settings=settings,
         )
     except AuthenticationError as exc:
+        await record_login_failure(
+            request,
+            payload.identifier,
+            settings=settings,
+        )
         raise authentication_error(exc) from exc
+
+    await record_login_success(request, payload.identifier)
 
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
     set_auth_cookies(response, token_pair, settings)
@@ -133,7 +156,18 @@ async def refresh(
 ) -> Response:
     raw_refresh_token = request.cookies.get(settings.refresh_cookie_name)
 
+    await check_refresh_throttle(
+        request,
+        raw_refresh_token,
+        settings=settings,
+    )
+
     if raw_refresh_token is None:
+        await record_refresh_failure(
+            request,
+            raw_refresh_token,
+            settings=settings,
+        )
         raise authentication_error(AuthenticationError("Invalid refresh token"))
 
     try:
@@ -142,7 +176,14 @@ async def refresh(
             settings=settings,
         )
     except AuthenticationError as exc:
+        await record_refresh_failure(
+            request,
+            raw_refresh_token,
+            settings=settings,
+        )
         raise authentication_error(exc) from exc
+
+    await record_refresh_success(request, raw_refresh_token)
 
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
     set_auth_cookies(response, token_pair, settings)
@@ -176,4 +217,7 @@ async def logout(
     response_model=UserResponse,
 )
 async def me(current_user: CurrentUser) -> UserResponse:
-    return UserResponse.from_user(current_user)
+    return UserResponse.from_user(
+        current_user,
+        permissions=await get_user_permissions(current_user),
+    )

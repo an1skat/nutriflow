@@ -6,16 +6,20 @@ from pymongo.errors import DuplicateKeyError
 
 from app.db.mongo import get_mongo_client
 from app.modules.admin.schemas import (
+    CreateAdminUserRequest,
     CreateSchoolRequest,
     CreateSchoolUserRequest,
     DeleteSchoolRequest,
+    ResetAdminUserPasswordRequest,
     ResetSchoolUserPasswordRequest,
+    UpdateAdminUserRequest,
     UpdateSchoolGroupRequest,
     UpdateSchoolRequest,
     UpdateSchoolUserRequest,
 )
 from app.modules.auth.security import hash_password, verify_password
 from app.modules.identity.models import (
+    AdminPermission,
     RefreshRevokeReason,
     RefreshSession,
     School,
@@ -53,12 +57,33 @@ class SchoolGroupNotFoundError(ValueError):
     """The requested school group does not exist in the school."""
 
 
+class AdminAccessDeniedError(ValueError):
+    """The administrator cannot operate on the requested tenant data."""
+
+
+class AdminUserAlreadyExistsError(ValueError):
+    """A lower administrator with the same username or email already exists."""
+
+
+class AdminUserNotFoundError(ValueError):
+    """The requested lower administrator does not exist."""
+
+
+class AdminUserOwnsSchoolsError(ValueError):
+    """The requested lower administrator still owns schools."""
+
+
 async def list_schools(
+    actor: User,
     *,
     offset: int,
     limit: int,
 ) -> tuple[list[School], int]:
-    query = School.find({})
+    filters: dict[str, object] = {}
+    if actor.role == UserRole.ADMIN:
+        filters["admin_owner_id"] = actor.id
+
+    query = School.find(filters)
     total = await query.count()
     schools = await query.sort("name").skip(offset).limit(limit).to_list()
     return schools, total
@@ -73,10 +98,21 @@ async def get_school(school_id: PydanticObjectId) -> School:
     return school
 
 
-async def create_school(data: CreateSchoolRequest) -> School:
+async def get_school_for_actor(
+    actor: User,
+    school_id: PydanticObjectId,
+) -> School:
+    school = await get_school(school_id)
+    _ensure_school_access(actor, school)
+    return school
+
+
+async def create_school(actor: User, data: CreateSchoolRequest) -> School:
+    admin_owner_id = await _resolve_school_owner(actor, data.admin_owner_id)
     school = School(
         name=data.name,
         code=data.code,
+        admin_owner_id=admin_owner_id,
     )
 
     try:
@@ -88,16 +124,21 @@ async def create_school(data: CreateSchoolRequest) -> School:
 
 
 async def update_school(
+    actor: User,
     school_id: PydanticObjectId,
     data: UpdateSchoolRequest,
 ) -> School:
-    school = await get_school(school_id)
+    school = await get_school_for_actor(actor, school_id)
     was_active = school.is_active
 
     if "name" in data.model_fields_set:
         school.name = data.name
     if "code" in data.model_fields_set and data.code is not None:
         school.code = data.code.upper()
+    if "admin_owner_id" in data.model_fields_set:
+        if actor.role != UserRole.OWNER:
+            raise AdminAccessDeniedError("Only owner can reassign schools")
+        school.admin_owner_id = await _resolve_school_owner(actor, data.admin_owner_id)
     if "is_active" in data.model_fields_set:
         school.is_active = bool(data.is_active)
 
@@ -128,7 +169,9 @@ def confirm_admin_password(
         raise InvalidAdminPasswordError("Invalid admin password")
 
 
-async def delete_school(school_id: PydanticObjectId) -> None:
+async def delete_school(actor: User, school_id: PydanticObjectId) -> None:
+    await get_school_for_actor(actor, school_id)
+
     async def purge_school(session: AsyncClientSession) -> None:
         school = await School.get_pymongo_collection().find_one(
             {"_id": school_id},
@@ -172,16 +215,19 @@ async def list_school_groups(
     *,
     offset: int,
     limit: int,
+    actor: User | None = None,
 ) -> tuple[list[SchoolGroup], int]:
-    school = await get_school(school_id)
+    school = await get_school_for_actor(actor, school_id) if actor else await get_school(school_id)
     return school.groups[offset : offset + limit], len(school.groups)
 
 
 async def get_school_group(
     school_id: PydanticObjectId,
     group_id: PydanticObjectId,
+    *,
+    actor: User | None = None,
 ) -> SchoolGroup:
-    school = await get_school(school_id)
+    school = await get_school_for_actor(actor, school_id) if actor else await get_school(school_id)
     group = _find_school_group(school, group_id)
 
     if group is None:
@@ -194,8 +240,10 @@ async def update_school_group(
     school_id: PydanticObjectId,
     group_id: PydanticObjectId,
     data: UpdateSchoolGroupRequest,
+    *,
+    actor: User | None = None,
 ) -> SchoolGroup:
-    school = await get_school(school_id)
+    school = await get_school_for_actor(actor, school_id) if actor else await get_school(school_id)
     group = _find_school_group(school, group_id)
 
     if group is None:
@@ -220,12 +268,13 @@ def _find_school_group(
 
 
 async def list_school_users(
+    actor: User,
     school_id: PydanticObjectId,
     *,
     offset: int,
     limit: int,
 ) -> tuple[list[User], int]:
-    await get_school(school_id)
+    await get_school_for_actor(actor, school_id)
     filters = {
         "school_id": school_id,
         "role": UserRole.SCHOOL_USER.value,
@@ -237,10 +286,11 @@ async def list_school_users(
 
 
 async def get_school_user(
+    actor: User,
     school_id: PydanticObjectId,
     user_id: PydanticObjectId,
 ) -> User:
-    await get_school(school_id)
+    await get_school_for_actor(actor, school_id)
     user = await User.get(user_id)
 
     if user is None or user.role != UserRole.SCHOOL_USER or user.school_id != school_id:
@@ -250,10 +300,11 @@ async def get_school_user(
 
 
 async def create_school_user(
+    actor: User,
     school_id: PydanticObjectId,
     data: CreateSchoolUserRequest,
 ) -> User:
-    school = await get_school(school_id)
+    school = await get_school_for_actor(actor, school_id)
 
     if not school.is_active:
         raise SchoolInactiveError("Cannot create users for an inactive school")
@@ -264,6 +315,7 @@ async def create_school_user(
         password_hash=hash_password(data.password),
         role=UserRole.SCHOOL_USER,
         school_id=school.id,
+        created_by_admin_id=actor.id,
     )
 
     try:
@@ -277,11 +329,12 @@ async def create_school_user(
 
 
 async def update_school_user(
+    actor: User,
     school_id: PydanticObjectId,
     user_id: PydanticObjectId,
     data: UpdateSchoolUserRequest,
 ) -> User:
-    user = await get_school_user(school_id, user_id)
+    user = await get_school_user(actor, school_id, user_id)
     was_active = user.is_active
 
     if "username" in data.model_fields_set:
@@ -313,11 +366,12 @@ async def update_school_user(
 
 
 async def reset_school_user_password(
+    actor: User,
     school_id: PydanticObjectId,
     user_id: PydanticObjectId,
     data: ResetSchoolUserPasswordRequest,
 ) -> None:
-    user = await get_school_user(school_id, user_id)
+    user = await get_school_user(actor, school_id, user_id)
     now = datetime.now(UTC)
     user.password_hash = hash_password(data.password)
     user.auth_version += 1
@@ -331,9 +385,12 @@ async def reset_school_user_password(
 
 
 async def delete_school_user(
+    actor: User,
     school_id: PydanticObjectId,
     user_id: PydanticObjectId,
 ) -> None:
+    await get_school_for_actor(actor, school_id)
+
     async def purge_user(session: AsyncClientSession) -> None:
         school = await School.get_pymongo_collection().find_one(
             {"_id": school_id},
@@ -366,6 +423,170 @@ async def delete_school_user(
 
     async with get_mongo_client().start_session() as session:
         await session.with_transaction(purge_user)
+
+
+async def list_admin_users(
+    *,
+    offset: int,
+    limit: int,
+) -> tuple[list[User], int]:
+    query = User.find(User.role == UserRole.ADMIN)
+    total = await query.count()
+    users = await query.sort("username").skip(offset).limit(limit).to_list()
+    return users, total
+
+
+async def get_admin_user(user_id: PydanticObjectId) -> User:
+    user = await User.get(user_id)
+
+    if user is None or user.role != UserRole.ADMIN:
+        raise AdminUserNotFoundError("Administrator not found")
+
+    return user
+
+
+async def create_admin_user(
+    actor: User,
+    data: CreateAdminUserRequest,
+) -> User:
+    user = User(
+        username=data.username,
+        email=data.email,
+        password_hash=hash_password(data.password),
+        role=UserRole.ADMIN,
+        permissions=_dedupe_permissions(data.permissions),
+        created_by_admin_id=actor.id,
+    )
+
+    try:
+        await user.insert()
+    except DuplicateKeyError as exc:
+        raise AdminUserAlreadyExistsError(
+            "A user with this username or email already exists"
+        ) from exc
+
+    return user
+
+
+async def update_admin_user(
+    user_id: PydanticObjectId,
+    data: UpdateAdminUserRequest,
+) -> User:
+    user = await get_admin_user(user_id)
+    was_active = user.is_active
+
+    if "username" in data.model_fields_set:
+        user.username = data.username
+    if "email" in data.model_fields_set:
+        user.email = data.email
+    if "permissions" in data.model_fields_set:
+        user.permissions = _dedupe_permissions(data.permissions or [])
+    if "is_active" in data.model_fields_set:
+        user.is_active = bool(data.is_active)
+
+    if was_active and not user.is_active:
+        user.auth_version += 1
+
+    user.updated_at = datetime.now(UTC)
+
+    try:
+        await user.save()
+    except DuplicateKeyError as exc:
+        raise AdminUserAlreadyExistsError(
+            "A user with this username or email already exists"
+        ) from exc
+
+    if was_active and not user.is_active:
+        await _revoke_user_sessions(
+            user.id,
+            reason=RefreshRevokeReason.ACCOUNT_DISABLED,
+        )
+
+    return user
+
+
+async def reset_admin_user_password(
+    user_id: PydanticObjectId,
+    data: ResetAdminUserPasswordRequest,
+) -> None:
+    user = await get_admin_user(user_id)
+    now = datetime.now(UTC)
+    user.password_hash = hash_password(data.password)
+    user.auth_version += 1
+    user.updated_at = now
+    await user.save()
+    await _revoke_user_sessions(
+        user.id,
+        reason=RefreshRevokeReason.PASSWORD_RESET,
+        now=now,
+    )
+
+
+async def delete_admin_user(user_id: PydanticObjectId) -> None:
+    await get_admin_user(user_id)
+    owned_school = await School.find_one(School.admin_owner_id == user_id)
+
+    if owned_school is not None:
+        raise AdminUserOwnsSchoolsError("Administrator owns schools")
+
+    async def purge_admin(session: AsyncClientSession) -> None:
+        user = await User.get_pymongo_collection().find_one(
+            {
+                "_id": user_id,
+                "role": UserRole.ADMIN.value,
+            },
+            {"_id": 1},
+            session=session,
+        )
+        if user is None:
+            raise AdminUserNotFoundError("Administrator not found")
+
+        await RefreshSession.get_pymongo_collection().delete_many(
+            {"user_id": user_id},
+            session=session,
+        )
+        await User.get_pymongo_collection().delete_one(
+            {"_id": user_id},
+            session=session,
+        )
+
+    async with get_mongo_client().start_session() as session:
+        await session.with_transaction(purge_admin)
+
+
+def _dedupe_permissions(
+    permissions: list[AdminPermission],
+) -> list[AdminPermission]:
+    return list(dict.fromkeys(permissions))
+
+
+def _ensure_school_access(actor: User, school: School) -> None:
+    if actor.role == UserRole.OWNER:
+        return
+
+    if actor.role == UserRole.ADMIN and school.admin_owner_id == actor.id:
+        return
+
+    raise AdminAccessDeniedError("School access denied")
+
+
+async def _resolve_school_owner(
+    actor: User,
+    requested_owner_id: PydanticObjectId | None,
+) -> PydanticObjectId | None:
+    if actor.role == UserRole.ADMIN:
+        if requested_owner_id is not None and requested_owner_id != actor.id:
+            raise AdminAccessDeniedError("Only owner can assign schools to other admins")
+        return actor.id
+
+    if requested_owner_id is None:
+        return None
+
+    owner = await User.get(requested_owner_id)
+    if owner is None or owner.role != UserRole.ADMIN or not owner.is_active:
+        raise AdminUserNotFoundError("Administrator not found")
+
+    return owner.id
 
 
 async def _revoke_user_sessions(

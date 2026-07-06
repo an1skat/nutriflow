@@ -13,7 +13,7 @@ from app.modules.auth.service import (
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Create the first NutriFlow administrator")
+    parser = argparse.ArgumentParser(description="Create the first NutriFlow owner")
     parser.add_argument(
         "--username",
         required=True,
@@ -43,7 +43,7 @@ async def run(
             password=password,
         )
 
-        print(f"Created administrator: {admin.username}")
+        print(f"Created owner: {admin.username}")
     finally:
         await close_mongo()
 

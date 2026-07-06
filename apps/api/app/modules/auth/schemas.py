@@ -1,7 +1,7 @@
 from beanie import PydanticObjectId
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
-from app.modules.identity.models import User, UserRole
+from app.modules.identity.models import AdminPermission, User, UserRole
 
 
 class LoginRequest(BaseModel):
@@ -22,11 +22,25 @@ class UserResponse(BaseModel):
     email: EmailStr | None
     role: UserRole
     school_id: PydanticObjectId | None
+    permissions: list[AdminPermission]
     is_active: bool
 
     @classmethod
-    def from_user(cls, user: User) -> "UserResponse":
-        return cls.model_validate(user)
+    def from_user(
+        cls,
+        user: User,
+        *,
+        permissions: list[AdminPermission],
+    ) -> "UserResponse":
+        return cls(
+            id=user.id,
+            username=user.username,
+            email=user.email,
+            role=user.role,
+            school_id=user.school_id,
+            permissions=permissions,
+            is_active=user.is_active,
+        )
 
 
 class FirstAdminInput(BaseModel):

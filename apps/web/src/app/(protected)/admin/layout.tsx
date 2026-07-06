@@ -8,6 +8,6 @@ export default function AdminRouteLayout({
   children: ReactNode;
 }) {
   return (
-    <AccessGuard allowedRoles={["ADMIN"]}>{children}</AccessGuard>
+    <AccessGuard allowedRoles={["OWNER", "ADMIN"]}>{children}</AccessGuard>
   );
 }
