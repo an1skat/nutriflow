@@ -2,6 +2,7 @@ from beanie import Document, init_beanie
 
 from app.db.mongo import get_database
 from app.modules.identity.models import RefreshSession, School, User
+from app.modules.menus.models import WeeklyMenu
 from app.modules.recipe.models import (
     Allergen,
     DishCard,
@@ -19,6 +20,7 @@ def get_document_models() -> list[type[Document]]:
         Allergen,
         DishCard,
         DishCardVersion,
+        WeeklyMenu,
     ]
 
 

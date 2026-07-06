@@ -1,0 +1,175 @@
+from datetime import date as Date
+from datetime import datetime
+from enum import StrEnum
+from typing import Annotated, Self
+
+from beanie import Document, PydanticObjectId
+from pydantic import BaseModel, Field, StringConstraints, field_validator, model_validator
+from pymongo import ASCENDING, IndexModel
+
+from app.modules.identity.models import AgeGroup, utc_now
+from app.modules.recipe.models import AmountDecimal
+
+MenuText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
+MenuNote = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
+YieldAmount = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=40)]
+
+
+class MealType(StrEnum):
+    BREAKFAST = "breakfast"
+    LUNCH = "lunch"
+
+
+class Weekday(StrEnum):
+    MONDAY = "monday"
+    TUESDAY = "tuesday"
+    WEDNESDAY = "wednesday"
+    THURSDAY = "thursday"
+    FRIDAY = "friday"
+    SATURDAY = "saturday"
+    SUNDAY = "sunday"
+
+
+class WeeklyMenuStatus(StrEnum):
+    DRAFT = "draft"
+    PUBLISHED = "published"
+    ARCHIVED = "archived"
+
+
+class MenuItemKind(StrEnum):
+    DISH_CARD = "dish_card"
+    PRODUCT = "product"
+
+
+class MenuNutrition(BaseModel):
+    kcal: AmountDecimal | None = None
+    proteins: AmountDecimal | None = None
+    fats: AmountDecimal | None = None
+    carbs: AmountDecimal | None = None
+
+
+class MenuPortion(BaseModel):
+    age_group: AgeGroup
+    yield_amount: YieldAmount
+    dish_card_portion_variant_id: PydanticObjectId | None = None
+    nutrition: MenuNutrition = Field(default_factory=MenuNutrition)
+
+
+class MenuItemServingCount(BaseModel):
+    school_group_id: PydanticObjectId
+    age_group: AgeGroup
+    children_count: int = Field(ge=0, le=100_000)
+
+
+class DailyMenuItem(BaseModel):
+    id: PydanticObjectId = Field(default_factory=PydanticObjectId)
+    position: int = Field(ge=1, le=200)
+    kind: MenuItemKind = MenuItemKind.DISH_CARD
+    source_text: MenuText | None = None
+    recipe_card_number: str | None = Field(default=None, min_length=1, max_length=80)
+    dish_card_id: PydanticObjectId | None = None
+    dish_card_version_id: PydanticObjectId | None = None
+    product_ingredient_id: PydanticObjectId | None = None
+    product_name_snapshot: MenuText | None = None
+    name: MenuText
+    allergen_codes: list[str] = Field(default_factory=list)
+    portions: list[MenuPortion] = Field(default_factory=list, min_length=1)
+    servings: list[MenuItemServingCount] = Field(default_factory=list)
+    notes: MenuNote | None = None
+
+    @field_validator("recipe_card_number", "source_text", "product_name_snapshot", "notes")
+    @classmethod
+    def trim_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
+
+    @field_validator("allergen_codes", mode="before")
+    @classmethod
+    def normalize_allergen_codes(cls, value: list[str] | None) -> list[str]:
+        if value is None:
+            return []
+        return sorted({item.strip().upper() for item in value if item and item.strip()})
+
+    @model_validator(mode="after")
+    def validate_reference_shape(self) -> Self:
+        if self.kind == MenuItemKind.PRODUCT:
+            if self.dish_card_id is not None or self.dish_card_version_id is not None:
+                raise ValueError("Product menu item cannot reference a dish card")
+            if self.product_name_snapshot is None:
+                self.product_name_snapshot = self.name
+
+        if self.kind == MenuItemKind.DISH_CARD and self.product_ingredient_id is not None:
+            raise ValueError("Dish card menu item cannot reference a product ingredient")
+
+        return self
+
+
+class DailyMenu(BaseModel):
+    weekday: Weekday
+    date: Date | None = None
+    items: list[DailyMenuItem] = Field(default_factory=list, min_length=1)
+    notes: MenuNote | None = None
+
+    @model_validator(mode="after")
+    def validate_item_positions(self) -> Self:
+        positions = [item.position for item in self.items]
+        if len(positions) != len(set(positions)):
+            raise ValueError("Daily menu item positions must be unique")
+        return self
+
+
+class WeeklyMenu(Document):
+    title: MenuText
+    school_id: PydanticObjectId | None = None
+    source_menu_id: PydanticObjectId | None = None
+    meal_type: MealType
+    cycle_week: int | None = Field(default=None, ge=1, le=53)
+    starts_on: Date | None = None
+    ends_on: Date | None = None
+    status: WeeklyMenuStatus = WeeklyMenuStatus.DRAFT
+    days: list[DailyMenu] = Field(default_factory=list, min_length=1, max_length=7)
+    notes: MenuNote | None = None
+    source_file_name: str | None = Field(default=None, max_length=255)
+    source_sheet_name: str | None = Field(default=None, max_length=120)
+    published_at: datetime | None = None
+    created_by: PydanticObjectId | None = None
+    updated_by: PydanticObjectId | None = None
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+    @model_validator(mode="after")
+    def validate_week_shape(self) -> Self:
+        weekdays = [day.weekday for day in self.days]
+        if len(weekdays) != len(set(weekdays)):
+            raise ValueError("Weekly menu days must be unique")
+        if (
+            self.starts_on is not None
+            and self.ends_on is not None
+            and self.ends_on < self.starts_on
+        ):
+            raise ValueError("Weekly menu end date cannot be before start date")
+        return self
+
+    class Settings:
+        name = "weekly_menus"
+        indexes = [
+            IndexModel(
+                [
+                    ("school_id", ASCENDING),
+                    ("meal_type", ASCENDING),
+                    ("status", ASCENDING),
+                    ("starts_on", ASCENDING),
+                ],
+                name="ix_weekly_menu_school_meal_status_start",
+            ),
+            IndexModel(
+                [
+                    ("source_menu_id", ASCENDING),
+                    ("school_id", ASCENDING),
+                ],
+                name="ix_weekly_menu_source_school",
+            ),
+            IndexModel([("created_at", ASCENDING)], name="ix_weekly_menu_created_at"),
+        ]
