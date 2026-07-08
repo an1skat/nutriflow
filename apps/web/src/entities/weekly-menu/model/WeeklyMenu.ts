@@ -174,6 +174,8 @@ export type WeeklyMenuPayload = {
   source_sheet_name?: string | null;
 };
 
+export type WeeklyMenuUpdatePayload = Partial<WeeklyMenuPayload>;
+
 export type PublishWeeklyMenuPayload = {
   school_ids?: string[];
   replace_existing?: boolean;

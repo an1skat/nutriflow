@@ -36,6 +36,16 @@ const admin: AuthUser = {
   is_active: true,
 };
 
+const technologist: AuthUser = {
+  id: "technologist-id",
+  username: "technologist",
+  email: "technologist@example.com",
+  role: "TECHNOLOGIST",
+  school_id: null,
+  permissions: ["menus.manage", "recipes.view"],
+  is_active: true,
+};
+
 const schoolUser: AuthUser = {
   id: "school-user-id",
   username: "school.user",
@@ -90,12 +100,14 @@ describe("authorization", () => {
   it("provides a safe home route for every role", () => {
     expect(getHomePath(owner)).toBe("/");
     expect(getHomePath(admin)).toBe("/");
+    expect(getHomePath(technologist)).toBe("/admin/menu-changes");
     expect(getHomePath(schoolUser)).toBe("/menu");
   });
 
   it("keeps admin routes hidden from school users", () => {
     expect(canAccessPath(owner, "/admin/access")).toBe(true);
     expect(canAccessPath(admin, "/admin/schools")).toBe(true);
+    expect(canAccessPath(technologist, "/admin/menu-changes")).toBe(true);
     expect(canAccessPath(schoolUser, "/admin/schools")).toBe(false);
     expect(canAccessPath(schoolUser, "/?tab=account")).toBe(true);
   });
@@ -109,5 +121,17 @@ describe("authorization", () => {
       path: "/menu",
       denied: true,
     });
+  });
+  it("gives the technologist menu and recipe access without school management", () => {
+    expect(hasPermission(technologist, "menus.manage")).toBe(true);
+    expect(hasPermission(technologist, "recipes.view")).toBe(true);
+    expect(hasPermission(technologist, "recipes.manage")).toBe(false);
+    expect(hasPermission(technologist, "schools.manage")).toBe(false);
+    expect(
+      getRouteAccess(technologist, {
+        allowedRoles: ["OWNER", "TECHNOLOGIST"],
+        requiredPermissions: ["menus.manage"],
+      }),
+    ).toBe("allow");
   });
 });

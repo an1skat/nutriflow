@@ -1,6 +1,10 @@
 import { z } from "zod";
 
-import type { WeeklyMenu, WeeklyMenuPayload } from "@/entities/weekly-menu/model/WeeklyMenu";
+import type {
+  Weekday,
+  WeeklyMenu,
+  WeeklyMenuPayload,
+} from "@/entities/weekly-menu/model/WeeklyMenu";
 import {
   ageGroupSchema,
   mealTypeSchema,
@@ -8,10 +12,7 @@ import {
   weekdaySchema,
 } from "@/entities/weekly-menu/model/WeeklyMenu";
 
-export const WEEKDAY_LABELS: Record<
-  z.infer<typeof weekdaySchema>,
-  string
-> = {
+export const WEEKDAY_LABELS: Record<z.infer<typeof weekdaySchema>, string> = {
   monday: "Понеділок",
   tuesday: "Вівторок",
   wednesday: "Середа",
@@ -94,10 +95,7 @@ const weeklyMenuItemFormSchema = z.object({
   dish_card_id: z.string().min(1).nullable(),
   dish_card_version_id: z.string().min(1).nullable(),
   product_ingredient_id: z.string().min(1).nullable(),
-  product_name_snapshot: z
-    .string()
-    .trim()
-    .max(255, "Значення надто довге"),
+  product_name_snapshot: z.string().trim().max(255, "Значення надто довге"),
   name: z
     .string()
     .trim()
@@ -152,9 +150,7 @@ export const weeklyMenuFormSchema = z
 
 export type WeeklyMenuFormValues = z.infer<typeof weeklyMenuFormSchema>;
 
-export function createBlankPortion(
-  ageGroup: z.infer<typeof ageGroupSchema>,
-) {
+export function createBlankPortion(ageGroup: z.infer<typeof ageGroupSchema>) {
   return {
     age_group: ageGroup,
     yield_amount: "",
@@ -219,7 +215,8 @@ export function weeklyMenuToFormValues(menu: WeeklyMenu): WeeklyMenuFormValues {
     days: [...menu.days]
       .sort(
         (left, right) =>
-          WEEKDAY_ORDER.indexOf(left.weekday) - WEEKDAY_ORDER.indexOf(right.weekday),
+          WEEKDAY_ORDER.indexOf(left.weekday) -
+          WEEKDAY_ORDER.indexOf(right.weekday),
       )
       .map((day) => ({
         weekday: day.weekday,
@@ -263,7 +260,8 @@ export function formValuesToWeeklyMenuPayload(
   const effectiveStartDate = resolveEffectiveStartDate(values.starts_on);
   const orderedDays = [...values.days].sort(
     (left, right) =>
-      WEEKDAY_ORDER.indexOf(left.weekday) - WEEKDAY_ORDER.indexOf(right.weekday),
+      WEEKDAY_ORDER.indexOf(left.weekday) -
+      WEEKDAY_ORDER.indexOf(right.weekday),
   );
 
   return {
@@ -272,40 +270,45 @@ export function formValuesToWeeklyMenuPayload(
     cycle_week: normalizeOptionalNumber(values.cycle_week),
     starts_on: effectiveStartDate,
     notes: normalizeOptionalText(values.notes),
-    days: orderedDays.map((day, dayIndex) => ({
-        weekday: day.weekday,
-        date: normalizeOptionalText(day.date) ?? addDaysToLocalIso(effectiveStartDate, dayIndex),
-        notes: normalizeOptionalText(day.notes),
-        items: day.items.map((item, index) => ({
-          id: item.id,
-          position: index + 1,
-          kind: item.kind,
-          source_text: normalizeOptionalText(item.source_text),
-          recipe_card_number: normalizeOptionalText(item.recipe_card_number),
-          dish_card_id: item.dish_card_id,
-          dish_card_version_id: item.dish_card_version_id,
-          product_ingredient_id: item.product_ingredient_id,
-          product_name_snapshot:
-            item.kind === "product"
-              ? normalizeOptionalText(item.product_name_snapshot || item.name)
-              : normalizeOptionalText(item.product_name_snapshot),
-          name: item.name.trim(),
-          allergen_codes: normalizeAllergenCodes(item.allergen_codes),
-          portions: item.portions.map((portion) => ({
-            age_group: portion.age_group,
-            yield_amount: portion.yield_amount.trim(),
-            dish_card_portion_variant_id: portion.dish_card_portion_variant_id,
-            nutrition: {
-              kcal: normalizeOptionalText(portion.nutrition.kcal),
-              proteins: normalizeOptionalText(portion.nutrition.proteins),
-              fats: normalizeOptionalText(portion.nutrition.fats),
-              carbs: normalizeOptionalText(portion.nutrition.carbs),
-            },
-          })),
-          servings: item.servings,
-          notes: normalizeOptionalText(item.notes),
+    days: orderedDays.map((day) => ({
+      weekday: day.weekday,
+      date:
+        normalizeOptionalText(day.date) ??
+        addDaysToLocalIso(
+          effectiveStartDate,
+          WEEKDAY_ORDER.indexOf(day.weekday),
+        ),
+      notes: normalizeOptionalText(day.notes),
+      items: day.items.map((item, index) => ({
+        id: item.id,
+        position: index + 1,
+        kind: item.kind,
+        source_text: normalizeOptionalText(item.source_text),
+        recipe_card_number: normalizeOptionalText(item.recipe_card_number),
+        dish_card_id: item.dish_card_id,
+        dish_card_version_id: item.dish_card_version_id,
+        product_ingredient_id: item.product_ingredient_id,
+        product_name_snapshot:
+          item.kind === "product"
+            ? normalizeOptionalText(item.product_name_snapshot || item.name)
+            : normalizeOptionalText(item.product_name_snapshot),
+        name: item.name.trim(),
+        allergen_codes: normalizeAllergenCodes(item.allergen_codes),
+        portions: item.portions.map((portion) => ({
+          age_group: portion.age_group,
+          yield_amount: portion.yield_amount.trim(),
+          dish_card_portion_variant_id: portion.dish_card_portion_variant_id,
+          nutrition: {
+            kcal: normalizeOptionalText(portion.nutrition.kcal),
+            proteins: normalizeOptionalText(portion.nutrition.proteins),
+            fats: normalizeOptionalText(portion.nutrition.fats),
+            carbs: normalizeOptionalText(portion.nutrition.carbs),
+          },
         })),
+        servings: item.servings,
+        notes: normalizeOptionalText(item.notes),
       })),
+    })),
   };
 }
 
@@ -325,11 +328,9 @@ function normalizeOptionalNumber(value: string) {
 }
 
 function normalizeAllergenCodes(value: string[]) {
-  return [...new Set(
-    value
-      .map((item) => item.trim().toUpperCase())
-      .filter(Boolean),
-  )];
+  return [
+    ...new Set(value.map((item) => item.trim().toUpperCase()).filter(Boolean)),
+  ];
 }
 
 export function resolveEffectiveStartDate(value: string | null | undefined) {
@@ -341,8 +342,39 @@ export function resolveEffectiveDayDate(
   dayIndex: number,
   manualDate: string | null | undefined,
 ) {
-  return normalizeOptionalText(manualDate) ??
-    addDaysToLocalIso(resolveEffectiveStartDate(startDate), dayIndex);
+  return (
+    normalizeOptionalText(manualDate) ??
+    addDaysToLocalIso(resolveEffectiveStartDate(startDate), dayIndex)
+  );
+}
+
+export function propagateMondayDate(
+  days: WeeklyMenuFormValues["days"],
+  mondayDate: string,
+): WeeklyMenuFormValues["days"] {
+  const normalizedMondayDate = normalizeOptionalText(mondayDate);
+
+  return days.map((day) => ({
+    ...day,
+    date: normalizedMondayDate
+      ? addDaysToLocalIso(
+          normalizedMondayDate,
+          WEEKDAY_ORDER.indexOf(day.weekday),
+        )
+      : "",
+  }));
+}
+
+export function updateDayDate(
+  days: WeeklyMenuFormValues["days"],
+  weekday: Weekday,
+  date: string,
+): WeeklyMenuFormValues["days"] {
+  if (weekday === "monday") {
+    return propagateMondayDate(days, date);
+  }
+
+  return days.map((day) => (day.weekday === weekday ? { ...day, date } : day));
 }
 
 function getTodayLocalIsoDate() {

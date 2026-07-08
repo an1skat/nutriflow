@@ -2,7 +2,12 @@
 
 import Link from "next/link";
 
-import { useDishCard, useDishCardVersions } from "@/entities/recipe/api/RecipeQueries";
+import {
+  useDishCard,
+  useDishCardVersions,
+} from "@/entities/recipe/api/RecipeQueries";
+import { useCurrentUser } from "@/entities/session/api/SessionQueries";
+import { hasPermission } from "@/features/access/model/AccessPolicy";
 import { RequestError } from "@/shared/ui/RequestError";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -15,12 +20,18 @@ const STATUS_LABELS: Record<string, string> = {
 export function DishCardVersionsWidget({ dishCardId }: { dishCardId: string }) {
   const dishCard = useDishCard(dishCardId);
   const versions = useDishCardVersions(dishCardId);
+  const currentUser = useCurrentUser();
+  const canManage = Boolean(
+    currentUser.data && hasPermission(currentUser.data, "recipes.manage"),
+  );
 
   return (
     <main className="nf-page">
       <header className="nf-page-header">
         <p className="nf-eyebrow">
-          <Link href="/admin/recipe" className="nf-link">Каталог</Link>
+          <Link href="/admin/recipe" className="nf-link">
+            Каталог
+          </Link>
           {" / Техкарта"}
         </p>
         <h1 className="nf-title">{dishCard.data?.name ?? "Техкарта"}</h1>
@@ -34,20 +45,30 @@ export function DishCardVersionsWidget({ dishCardId }: { dishCardId: string }) {
         </p>
       </header>
 
-      <div className="mb-4 flex gap-2">
-        <Link href={`/admin/recipe/dish-cards/${dishCardId}/versions/new`} className="nf-button nf-button-primary">
-          Створити нову версію
-        </Link>
-        <Link href="/admin/recipe-upload" className="nf-button nf-button-secondary">
-          Завантажити нову техкарту
-        </Link>
-      </div>
+      {canManage ? (
+        <div className="mb-4 flex gap-2">
+          <Link
+            href={`/admin/recipe/dish-cards/${dishCardId}/versions/new`}
+            className="nf-button nf-button-primary"
+          >
+            Створити нову версію
+          </Link>
+          <Link
+            href="/admin/recipe-upload"
+            className="nf-button nf-button-secondary"
+          >
+            Завантажити нову техкарту
+          </Link>
+        </div>
+      ) : null}
 
       <section className="nf-panel">
         <div className="nf-panel-header">
           <h2 className="nf-panel-title">Версії</h2>
           {versions.data ? (
-            <p className="mt-0.5 text-xs text-slate-600">Версій: {versions.data.total}</p>
+            <p className="mt-0.5 text-xs text-slate-600">
+              Версій: {versions.data.total}
+            </p>
           ) : null}
         </div>
         <div className="nf-panel-body">
@@ -77,7 +98,8 @@ export function DishCardVersionsWidget({ dishCardId }: { dishCardId: string }) {
                 </thead>
                 <tbody>
                   {versions.data.items.map((v) => {
-                    const isCurrent = dishCard.data?.current_version_id === v.id;
+                    const isCurrent =
+                      dishCard.data?.current_version_id === v.id;
                     return (
                       <tr key={v.id}>
                         <td>
@@ -86,13 +108,25 @@ export function DishCardVersionsWidget({ dishCardId }: { dishCardId: string }) {
                             className="nf-link"
                           >
                             v{v.version}
-                            {isCurrent ? <span className="ml-1 text-xs text-emerald-700">●</span> : null}
+                            {isCurrent ? (
+                              <span className="ml-1 text-xs text-emerald-700">
+                                ●
+                              </span>
+                            ) : null}
                           </Link>
                         </td>
-                        <td className="text-xs">{STATUS_LABELS[v.status] ?? v.status}</td>
-                        <td className="text-xs text-slate-600">{v.portion_variants.length}</td>
-                        <td className="text-xs text-slate-600">{v.ingredient_amounts.length}</td>
-                        <td className="whitespace-nowrap text-xs text-slate-600">{v.updated_at}</td>
+                        <td className="text-xs">
+                          {STATUS_LABELS[v.status] ?? v.status}
+                        </td>
+                        <td className="text-xs text-slate-600">
+                          {v.portion_variants.length}
+                        </td>
+                        <td className="text-xs text-slate-600">
+                          {v.ingredient_amounts.length}
+                        </td>
+                        <td className="whitespace-nowrap text-xs text-slate-600">
+                          {v.updated_at}
+                        </td>
                       </tr>
                     );
                   })}

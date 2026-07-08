@@ -21,7 +21,7 @@ export default function AdminPage() {
       return;
     }
 
-    if (hasPermission(user, "recipes.manage")) {
+    if (hasPermission(user, "recipes.view")) {
       router.replace("/admin/recipe");
       return;
     }

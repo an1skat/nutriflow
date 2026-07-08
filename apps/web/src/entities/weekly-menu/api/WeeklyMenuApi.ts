@@ -11,6 +11,7 @@ import {
   type WeeklyMenuList,
   type WeeklyMenuListRequest,
   type WeeklyMenuPayload,
+  type WeeklyMenuUpdatePayload,
 } from "../model/WeeklyMenu";
 
 export async function fetchWeeklyMenus(
@@ -47,7 +48,7 @@ export async function createWeeklyMenu(
 
 export async function updateWeeklyMenu(
   menuId: string,
-  payload: WeeklyMenuPayload,
+  payload: WeeklyMenuUpdatePayload,
 ): Promise<WeeklyMenu> {
   const response = await apiClient.patch<unknown>(
     `/menus/weekly/${menuId}`,

@@ -1,7 +1,7 @@
 "use client";
 
 import { Archive, RotateCcw } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -13,11 +13,11 @@ import {
   useArchiveSchoolWeeklyMenu,
   useRestoreSchoolWeeklyMenu,
 } from "@/features/weekly-menu-editor/model/UseWeeklyMenuMutations";
-import { weeklyMenuToFormValues } from "@/features/weekly-menu-editor/model/WeeklyMenuFormSchema";
-import { WeeklyMenuEditorForm } from "@/features/weekly-menu-editor/ui/WeeklyMenuEditorForm";
 import { getApiErrorMessage } from "@/shared/api/HttpClient";
 import { formatDate } from "@/shared/lib/FormatDate";
 import { RequestError } from "@/shared/ui/RequestError";
+
+import { WeeklyMenuSchoolTable } from "./WeeklyMenuSchoolTable";
 
 export function WeeklyMenuSchoolWorkspace() {
   const menus = useWeeklyMenus({
@@ -34,11 +34,6 @@ export function WeeklyMenuSchoolWorkspace() {
   const effectiveSelectedMenuId = selectedMenuId ?? menus.data?.items[0]?.id ?? null;
   const selectedMenu = useWeeklyMenu(effectiveSelectedMenuId ?? "");
   const archiveSelectedMenu = useArchiveSchoolWeeklyMenu(selectedMenu.data?.id ?? "");
-
-  const editorInitialValues = useMemo(
-    () => (selectedMenu.data ? weeklyMenuToFormValues(selectedMenu.data) : null),
-    [selectedMenu.data],
-  );
 
   const handleArchiveSelectedMenu = async () => {
     if (!selectedMenu.data) {
@@ -209,26 +204,10 @@ export function WeeklyMenuSchoolWorkspace() {
             />
           ) : null}
 
-          {selectedMenu.data && editorInitialValues ? (
-            <WeeklyMenuEditorForm
+          {selectedMenu.data ? (
+            <WeeklyMenuSchoolTable
               key={`${selectedMenu.data.id}:${selectedMenu.data.updated_at}`}
-              initialValues={editorInitialValues}
-              mode="school-readonly"
-              submitLabel=""
-              saving={false}
-              onSubmit={async () => {}}
-              recipeCatalogEnabled={false}
-              headerNote={
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-slate-900">
-                    Опубліковане меню для вашої школи
-                  </p>
-                  <p className="text-xs text-slate-600">
-                    Це меню надійшло від адміністратора або власника і доступне
-                    лише для перегляду.
-                  </p>
-                </div>
-              }
+              menu={selectedMenu.data}
             />
           ) : menus.isPending || selectedMenu.isPending ? null : (
             <section className="nf-panel">

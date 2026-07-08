@@ -11,7 +11,7 @@ type VersionPageProps = {
 export default async function VersionPage({ params }: VersionPageProps) {
   const { dishCardId, versionId } = await params;
   return (
-    <AccessGuard requiredPermissions={["recipes.manage"]}>
+    <AccessGuard requiredPermissions={["recipes.view"]}>
       <DishCardVersionDetailsWidget
         dishCardId={dishCardId}
         versionId={versionId}

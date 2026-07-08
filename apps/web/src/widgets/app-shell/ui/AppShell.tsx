@@ -4,6 +4,8 @@ import {
   BookOpen,
   Building2,
   CalendarDays,
+  ClipboardCheck,
+  ClipboardList,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -32,6 +34,7 @@ type NavigationItem = {
   ownerOnly?: boolean;
   requiredPermission?: AdminPermission;
   schoolOnly?: boolean;
+  technologistOnly?: boolean;
 };
 
 const navigation: NavigationItem[] = [
@@ -50,13 +53,19 @@ const navigation: NavigationItem[] = [
     href: "/admin/recipe",
     label: "Техкарти",
     icon: BookOpen,
-    requiredPermission: "recipes.manage",
+    requiredPermission: "recipes.view",
   },
   {
     href: "/admin/menus",
     label: "Тижневе меню",
     icon: CalendarDays,
     requiredPermission: "menus.manage",
+  },
+  {
+    href: "/admin/menu-changes",
+    label: "Зміни від шкіл",
+    icon: ClipboardCheck,
+    technologistOnly: true,
   },
   {
     href: "/admin/access",
@@ -68,6 +77,12 @@ const navigation: NavigationItem[] = [
     href: "/menu",
     label: "Тижневе меню",
     icon: CalendarDays,
+    schoolOnly: true,
+  },
+  {
+    href: "/daily-menu",
+    label: "Денне меню",
+    icon: ClipboardList,
     schoolOnly: true,
   },
   {
@@ -106,14 +121,17 @@ export function AppShell({ children }: { children: ReactNode }) {
       (!item.requiredPermission ||
         (isBackofficeUser(user) &&
           hasPermission(user, item.requiredPermission))) &&
-      (!item.schoolOnly || user.role === "SCHOOL_USER"),
+      (!item.schoolOnly || user.role === "SCHOOL_USER") &&
+      (!item.technologistOnly || user.role === "TECHNOLOGIST"),
   );
   const roleLabel =
     user.role === "OWNER"
       ? "Власник"
       : user.role === "ADMIN"
         ? "Адміністратор"
-        : "Користувач школи";
+        : user.role === "TECHNOLOGIST"
+          ? "Технолог"
+          : "Користувач школи";
 
   return (
     <div className="min-h-screen bg-[var(--nf-canvas)]">

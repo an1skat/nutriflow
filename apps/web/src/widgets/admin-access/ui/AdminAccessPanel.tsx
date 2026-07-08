@@ -9,6 +9,7 @@ import type { AdminUser } from "@/entities/admin-user/model/AdminUser";
 import type { AdminPermission } from "@/entities/session/model/Session";
 import {
   adminPermissionOptions,
+  defaultLowerAdminPermissions,
 } from "@/features/admin-access-management/model/AdminAccessSchemas";
 import {
   useDeleteAdminUser,
@@ -160,6 +161,9 @@ function AdminUserAccessRow({ admin }: { admin: AdminUser }) {
             {admin.username}
           </h3>
           <p className="mt-1 text-xs text-slate-600">{admin.email}</p>
+          <p className="mt-1 text-xs font-bold text-slate-700">
+            {admin.role === "TECHNOLOGIST" ? "Технолог" : "Адміністратор"}
+          </p>
           <p className="mt-1 text-xs text-slate-500">
             Оновлено: {formatDate(admin.updated_at)}
           </p>
@@ -187,6 +191,41 @@ function AdminUserAccessRow({ admin }: { admin: AdminUser }) {
         </div>
       </div>
 
+      <div className="mt-4 max-w-sm">
+        <label className="nf-label" htmlFor={`admin-role-${admin.id}`}>
+          Роль
+        </label>
+        <select
+          id={`admin-role-${admin.id}`}
+          className="nf-input"
+          value={admin.role}
+          disabled={updateAdmin.isPending}
+          onChange={async (event) => {
+            const role = event.target.value as AdminUser["role"];
+            try {
+              await updateAdmin.mutateAsync({
+                role,
+                permissions:
+                  role === "ADMIN" ? defaultLowerAdminPermissions : [],
+              });
+              toast.success("Роль оновлено.");
+            } catch (error) {
+              toast.error(getApiErrorMessage(error));
+            }
+          }}
+        >
+          <option value="ADMIN">Адміністратор</option>
+          <option value="TECHNOLOGIST">Технолог</option>
+        </select>
+      </div>
+
+      {admin.role === "TECHNOLOGIST" ? (
+        <div className="mt-4 border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-950">
+          Фіксований доступ: перегляд техкарт, тижневі меню для всіх шкіл і
+          зміни від шкіл. Школи та керування доступами приховані.
+        </div>
+      ) : null}
+
       <div className="mt-4 grid gap-2 md:grid-cols-2 lg:grid-cols-3">
         {adminPermissionOptions.map((permission) => (
           <label
@@ -196,7 +235,7 @@ function AdminUserAccessRow({ admin }: { admin: AdminUser }) {
             <input
               type="checkbox"
               checked={admin.permissions.includes(permission.value)}
-              disabled={updateAdmin.isPending}
+              disabled={updateAdmin.isPending || admin.role === "TECHNOLOGIST"}
               onChange={(event) =>
                 void handlePermissionChange(
                   permission.value,

@@ -21,7 +21,9 @@ export default function HomePage() {
       ? "Власник"
       : user.role === "ADMIN"
         ? "Адміністратор"
-        : "Користувач школи";
+        : user.role === "TECHNOLOGIST"
+          ? "Технолог"
+          : "Користувач школи";
 
   return (
     <main className="nf-page">
@@ -73,6 +75,11 @@ export default function HomePage() {
                 {hasPermission(user, "menus.manage") ? (
                   <Link href="/admin/menus" className="nf-link block">
                     Тижневе меню
+                  </Link>
+                ) : null}
+                {user.role === "TECHNOLOGIST" ? (
+                  <Link href="/admin/menu-changes" className="nf-link block">
+                    Зміни меню від шкіл
                   </Link>
                 ) : null}
                 {user.role === "OWNER" ? (

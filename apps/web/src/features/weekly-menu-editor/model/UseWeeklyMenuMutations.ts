@@ -17,6 +17,7 @@ import { weeklyMenuQueryKeys } from "@/entities/weekly-menu/api/WeeklyMenuQuerie
 import type {
   PublishWeeklyMenuPayload,
   WeeklyMenuPayload,
+  WeeklyMenuUpdatePayload,
 } from "@/entities/weekly-menu/model/WeeklyMenu";
 
 export function useCreateWeeklyMenu() {
@@ -37,7 +38,7 @@ export function useUpdateWeeklyMenu(menuId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (payload: WeeklyMenuPayload) =>
+    mutationFn: (payload: WeeklyMenuUpdatePayload) =>
       updateWeeklyMenu(menuId, payload),
     onSuccess: async (menu) => {
       queryClient.setQueryData(weeklyMenuQueryKeys.detail(menuId), menu);

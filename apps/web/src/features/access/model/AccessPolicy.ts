@@ -5,10 +5,7 @@ import type {
 } from "@/entities/session/model/Session";
 
 export type RouteAccessDecision =
-  | "allow"
-  | "unauthenticated"
-  | "forbidden-role"
-  | "forbidden-tenant";
+  "allow" | "unauthenticated" | "forbidden-role" | "forbidden-tenant";
 
 type AccessRequirements = {
   allowedRoles?: readonly UserRole[];
@@ -21,20 +18,37 @@ export function getHomePath(user: AuthUser): string {
     case "OWNER":
     case "ADMIN":
       return "/";
+    case "TECHNOLOGIST":
+      return "/admin/menu-changes";
     case "SCHOOL_USER":
       return "/menu";
   }
 }
 
 export function isBackofficeUser(user: AuthUser): boolean {
-  return user.role === "OWNER" || user.role === "ADMIN";
+  return (
+    user.role === "OWNER" ||
+    user.role === "ADMIN" ||
+    user.role === "TECHNOLOGIST"
+  );
 }
 
 export function hasPermission(
   user: AuthUser,
   permission: AdminPermission,
 ): boolean {
-  return user.role === "OWNER" || user.permissions.includes(permission);
+  if (user.role === "OWNER") {
+    return true;
+  }
+
+  if (
+    permission === "recipes.view" &&
+    user.permissions.includes("recipes.manage")
+  ) {
+    return true;
+  }
+
+  return user.permissions.includes(permission);
 }
 
 export function hasEveryPermission(

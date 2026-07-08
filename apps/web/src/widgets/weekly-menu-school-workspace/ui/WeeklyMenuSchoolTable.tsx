@@ -1,20 +1,20 @@
 import type { CSSProperties, ReactNode } from "react";
 
-import type { AgeGroup } from "@/entities/weekly-menu/model/WeeklyMenu";
+import type {
+  AgeGroup,
+  DailyMenu,
+  DailyMenuItem,
+  MenuPortion,
+  WeeklyMenu,
+} from "@/entities/weekly-menu/model/WeeklyMenu";
 import {
   AGE_GROUP_LABELS,
   WEEKDAY_LABELS,
 } from "@/features/weekly-menu-editor/model/WeeklyMenuFormSchema";
 
-import {
-  getPortionForAgeGroup,
-  PREVIEW_AGE_GROUPS,
-  type WeeklyMenuImportDay,
-  type WeeklyMenuImportItem,
-  type WeeklyMenuImportMenu,
-} from "../model/WeeklyMenuExcel";
+const DISPLAY_AGE_GROUPS: AgeGroup[] = ["6-11", "11-14", "14-18"];
 
-const PREVIEW_GRID_STYLE = {
+const MENU_GRID_STYLE = {
   gridTemplateColumns:
     "48px minmax(320px, 1.55fr) 132px repeat(3, minmax(156px, 1fr))",
 } satisfies CSSProperties;
@@ -42,8 +42,15 @@ function formatDecimal(value: number | null): string {
   }).format(value);
 }
 
+function getPortionForAgeGroup(
+  item: DailyMenuItem,
+  ageGroup: AgeGroup,
+): MenuPortion | undefined {
+  return item.portions.find((portion) => portion.age_group === ageGroup);
+}
+
 function sumNutrition(
-  items: WeeklyMenuImportItem[],
+  items: DailyMenuItem[],
   ageGroup: AgeGroup,
   field: "kcal" | "proteins" | "fats" | "carbs",
 ): number | null {
@@ -55,7 +62,7 @@ function sumNutrition(
   return values.length ? values.reduce((sum, value) => sum + value, 0) : null;
 }
 
-function sumYield(items: WeeklyMenuImportItem[], ageGroup: AgeGroup): string {
+function sumYield(items: DailyMenuItem[], ageGroup: AgeGroup): string {
   const rawValues = items
     .map((item) => getPortionForAgeGroup(item, ageGroup)?.yield_amount)
     .filter((value): value is string => Boolean(value?.trim()));
@@ -70,11 +77,11 @@ function sumYield(items: WeeklyMenuImportItem[], ageGroup: AgeGroup): string {
   );
 }
 
-function getItemSource(item: WeeklyMenuImportItem): string {
+function getItemSource(item: DailyMenuItem): string {
   return displayValue(item.source_text ?? item.recipe_card_number);
 }
 
-function PreviewCell({
+function TableCell({
   children,
   className = "",
 }: {
@@ -90,17 +97,26 @@ function PreviewCell({
   );
 }
 
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2">
+      <span className="font-medium">{label}</span>
+      <span className="font-semibold tabular-nums text-slate-900">{value}</span>
+    </div>
+  );
+}
+
 function NutritionBlock({
   item,
   ageGroup,
 }: {
-  item: WeeklyMenuImportItem;
+  item: DailyMenuItem;
   ageGroup: AgeGroup;
 }) {
   const portion = getPortionForAgeGroup(item, ageGroup);
 
   return (
-    <PreviewCell className="bg-white/70">
+    <TableCell className="bg-white/70">
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-[11px] font-bold uppercase text-slate-500">
           Вихід
@@ -115,7 +131,7 @@ function NutritionBlock({
         <Metric label="Ж" value={displayValue(portion?.nutrition.fats)} />
         <Metric label="В" value={displayValue(portion?.nutrition.carbs)} />
       </div>
-    </PreviewCell>
+    </TableCell>
   );
 }
 
@@ -123,11 +139,11 @@ function TotalNutritionBlock({
   items,
   ageGroup,
 }: {
-  items: WeeklyMenuImportItem[];
+  items: DailyMenuItem[];
   ageGroup: AgeGroup;
 }) {
   return (
-    <PreviewCell className="bg-amber-50">
+    <TableCell className="bg-amber-50">
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-[11px] font-bold uppercase text-amber-700">
           Всього
@@ -154,20 +170,11 @@ function TotalNutritionBlock({
           value={formatDecimal(sumNutrition(items, ageGroup, "carbs"))}
         />
       </div>
-    </PreviewCell>
+    </TableCell>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-baseline justify-between gap-2">
-      <span className="font-medium">{label}</span>
-      <span className="font-semibold tabular-nums text-slate-900">{value}</span>
-    </div>
-  );
-}
-
-function AllergenList({ item }: { item: WeeklyMenuImportItem }) {
+function AllergenList({ item }: { item: DailyMenuItem }) {
   if (!item.allergen_codes.length) {
     return <span className="text-slate-400">-</span>;
   }
@@ -176,7 +183,7 @@ function AllergenList({ item }: { item: WeeklyMenuImportItem }) {
     <div className="flex flex-wrap gap-1.5">
       {item.allergen_codes.map((code) => (
         <span
-          key={`${item.position}-${code}`}
+          key={`${item.id}-${code}`}
           className="border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] font-bold text-amber-900"
         >
           {code}
@@ -186,7 +193,7 @@ function AllergenList({ item }: { item: WeeklyMenuImportItem }) {
   );
 }
 
-function DaySection({ day }: { day: WeeklyMenuImportDay }) {
+function DaySection({ day }: { day: DailyMenu }) {
   const sortedItems = [...day.items].sort(
     (left, right) => left.position - right.position,
   );
@@ -211,14 +218,14 @@ function DaySection({ day }: { day: WeeklyMenuImportDay }) {
       <div className="divide-y divide-slate-100 bg-white">
         {sortedItems.map((item) => (
           <div
-            key={`${day.weekday}-${item.position}-${item.name}`}
+            key={item.id}
             className="grid items-stretch text-sm transition-colors hover:bg-slate-50"
-            style={PREVIEW_GRID_STYLE}
+            style={MENU_GRID_STYLE}
           >
-            <PreviewCell className="bg-slate-50 text-center font-bold tabular-nums text-slate-500">
+            <TableCell className="bg-slate-50 text-center font-bold tabular-nums text-slate-500">
               {item.position}
-            </PreviewCell>
-            <PreviewCell>
+            </TableCell>
+            <TableCell>
               <div className="font-bold leading-snug text-slate-950">
                 {item.name}
               </div>
@@ -230,13 +237,13 @@ function DaySection({ day }: { day: WeeklyMenuImportDay }) {
                   {item.notes}
                 </div>
               ) : null}
-            </PreviewCell>
-            <PreviewCell>
+            </TableCell>
+            <TableCell>
               <AllergenList item={item} />
-            </PreviewCell>
-            {PREVIEW_AGE_GROUPS.map((ageGroup) => (
+            </TableCell>
+            {DISPLAY_AGE_GROUPS.map((ageGroup) => (
               <NutritionBlock
-                key={`${item.position}-${ageGroup}`}
+                key={`${item.id}-${ageGroup}`}
                 item={item}
                 ageGroup={ageGroup}
               />
@@ -247,16 +254,16 @@ function DaySection({ day }: { day: WeeklyMenuImportDay }) {
 
       <div
         className="grid border-t border-amber-200 text-sm"
-        style={PREVIEW_GRID_STYLE}
+        style={MENU_GRID_STYLE}
       >
-        <PreviewCell className="bg-amber-50" />
-        <PreviewCell className="bg-amber-50 font-bold text-amber-950">
+        <TableCell className="bg-amber-50" />
+        <TableCell className="bg-amber-50 font-bold text-amber-950">
           Підсумок за день
-        </PreviewCell>
-        <PreviewCell className="bg-amber-50 text-xs font-bold text-amber-800">
+        </TableCell>
+        <TableCell className="bg-amber-50 text-xs font-bold text-amber-800">
           {sortedItems.length} страв
-        </PreviewCell>
-        {PREVIEW_AGE_GROUPS.map((ageGroup) => (
+        </TableCell>
+        {DISPLAY_AGE_GROUPS.map((ageGroup) => (
           <TotalNutritionBlock
             key={`${day.weekday}-${ageGroup}-total`}
             items={day.items}
@@ -268,37 +275,60 @@ function DaySection({ day }: { day: WeeklyMenuImportDay }) {
   );
 }
 
-export function WeeklyMenuImportPreviewTable({
-  menu,
-}: {
-  menu: WeeklyMenuImportMenu;
-}) {
+function getMealTypeLabel(menu: WeeklyMenu): string {
+  return menu.meal_type === "lunch" ? "Обід" : "Сніданок";
+}
+
+export function WeeklyMenuSchoolTable({ menu }: { menu: WeeklyMenu }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm">
-      <div className="max-h-[58vh] overflow-auto bg-slate-50">
+    <section className="nf-panel overflow-hidden">
+      <div className="nf-panel-header items-start gap-4">
+        <div>
+          <p className="nf-eyebrow">{getMealTypeLabel(menu)}</p>
+          <h2 className="nf-panel-title">{menu.title}</h2>
+          <p className="mt-1 text-xs text-slate-600">
+            {menu.cycle_week ? `Цикл ${menu.cycle_week}` : "Без циклу"}
+            {menu.starts_on ? ` · початок ${menu.starts_on}` : ""}
+            {menu.ends_on ? ` · кінець ${menu.ends_on}` : ""}
+          </p>
+        </div>
+        {menu.source_sheet_name ? (
+          <span className="border border-slate-200 bg-white px-2 py-1 text-xs font-bold text-slate-600">
+            {menu.source_sheet_name}
+          </span>
+        ) : null}
+      </div>
+
+      {menu.notes ? (
+        <div className="border-b border-[var(--nf-line)] bg-slate-50 px-5 py-3 text-sm text-slate-700">
+          {menu.notes}
+        </div>
+      ) : null}
+
+      <div className="max-h-[calc(100vh-220px)] overflow-auto bg-slate-50">
         <div
-          className="sticky top-0 z-20 grid min-w-270 border-b border-slate-300 bg-slate-100 text-xs font-bold uppercase text-slate-600 shadow-sm"
-          style={PREVIEW_GRID_STYLE}
+          className="sticky top-0 z-20 grid min-w-[1080px] border-b border-slate-300 bg-slate-100 text-xs font-bold uppercase text-slate-600 shadow-sm"
+          style={MENU_GRID_STYLE}
         >
-          <PreviewCell className="py-2">№</PreviewCell>
-          <PreviewCell className="py-2">Страва</PreviewCell>
-          <PreviewCell className="py-2">Алергени</PreviewCell>
-          {PREVIEW_AGE_GROUPS.map((ageGroup) => (
-            <PreviewCell
+          <TableCell className="py-2">№</TableCell>
+          <TableCell className="py-2">Страва</TableCell>
+          <TableCell className="py-2">Алергени</TableCell>
+          {DISPLAY_AGE_GROUPS.map((ageGroup) => (
+            <TableCell
               key={ageGroup}
               className="bg-emerald-50 py-2 text-emerald-950"
             >
               {AGE_GROUP_LABELS[ageGroup]}
-            </PreviewCell>
+            </TableCell>
           ))}
         </div>
 
-        <div className="min-w-270 bg-white">
+        <div className="min-w-[1080px] bg-white">
           {menu.days.map((day) => (
             <DaySection key={day.weekday} day={day} />
           ))}
         </div>
       </div>
-    </div>
+    </section>
   );
 }

@@ -3,12 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown } from "lucide-react";
-import {
-  useDeferredValue,
-  useEffect,
-  useState,
-  type ReactNode,
-} from "react";
+import { useDeferredValue, useEffect, useState, type ReactNode } from "react";
 import {
   useFieldArray,
   useForm,
@@ -35,9 +30,11 @@ import { getApiErrorMessage } from "@/shared/api/HttpClient";
 import {
   AGE_GROUP_LABELS,
   WEEKDAY_LABELS,
+  WEEKDAY_ORDER,
   createBlankDay,
   createBlankItem,
   getRemainingWeekdays,
+  updateDayDate,
   resolveEffectiveDayDate,
   resolveEffectiveStartDate,
   weeklyMenuFormSchema,
@@ -170,7 +167,9 @@ export function WeeklyMenuEditorForm({
               </select>
             ) : (
               <ReadonlyFieldValue
-                value={form.getValues("meal_type") === "lunch" ? "Обід" : "Сніданок"}
+                value={
+                  form.getValues("meal_type") === "lunch" ? "Обід" : "Сніданок"
+                }
               />
             )}
           </div>
@@ -275,7 +274,7 @@ export function WeeklyMenuEditorForm({
               const day = watchedDays[index];
               const resolvedDayDate = resolveEffectiveDayDate(
                 watchedStartDate,
-                index,
+                WEEKDAY_ORDER.indexOf(day?.weekday ?? "monday"),
                 day?.date,
               );
 
@@ -382,7 +381,8 @@ export function WeeklyMenuEditorForm({
         </div>
       ) : (
         <p className="text-xs text-slate-600">
-          Шкільний акаунт бачить лише опубліковане меню без можливості редагування.
+          Шкільний акаунт бачить лише опубліковане меню без можливості
+          редагування.
         </p>
       )}
     </form>
@@ -420,9 +420,10 @@ function DailyMenuDayEditor({
   });
   const resolvedDayDate = resolveEffectiveDayDate(
     effectiveStartDate,
-    dayIndex,
+    WEEKDAY_ORDER.indexOf(day?.weekday ?? "monday"),
     day?.date,
   );
+  const dateRegistration = form.register(`days.${dayIndex}.date` as const);
   const [openItemId, setOpenItemId] = useState<string | null>(null);
 
   return (
@@ -441,7 +442,21 @@ function DailyMenuDayEditor({
                 id={`day-date-${dayIndex}`}
                 type="date"
                 placeholder={resolvedDayDate}
-                {...form.register(`days.${dayIndex}.date` as const)}
+                {...dateRegistration}
+                onChange={(event) => {
+                  form.setValue(
+                    "days",
+                    updateDayDate(
+                      form.getValues("days"),
+                      day?.weekday ?? "monday",
+                      event.target.value,
+                    ),
+                    {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    },
+                  );
+                }}
                 readOnly={!allowValueEdits}
                 className="nf-input"
               />
@@ -574,7 +589,10 @@ function DailyMenuDayEditor({
               />
 
               {isItemOpen ? (
-                <div id={itemPanelId} className="border-t border-[var(--nf-line)]">
+                <div
+                  id={itemPanelId}
+                  className="border-t border-[var(--nf-line)]"
+                >
                   <div className="grid gap-4 p-4 lg:grid-cols-3">
                     <div className="lg:col-span-3">
                       <label className="nf-label">Джерело позиції</label>
@@ -584,7 +602,9 @@ function DailyMenuDayEditor({
                             type="button"
                             disabled={!allowValueEdits}
                             className={`nf-button ${
-                              item?.kind === "dish_card" ? "nf-button-primary" : ""
+                              item?.kind === "dish_card"
+                                ? "nf-button-primary"
+                                : ""
                             }`}
                             onClick={() => {
                               if (!allowValueEdits) {
@@ -613,7 +633,9 @@ function DailyMenuDayEditor({
                             type="button"
                             disabled={!allowValueEdits}
                             className={`nf-button ${
-                              item?.kind === "product" ? "nf-button-primary" : ""
+                              item?.kind === "product"
+                                ? "nf-button-primary"
+                                : ""
                             }`}
                             onClick={() => {
                               if (!allowValueEdits) {
@@ -652,7 +674,9 @@ function DailyMenuDayEditor({
                       ) : (
                         <ReadonlyFieldValue
                           value={
-                            item?.kind === "dish_card" ? "Техкарта" : "Пром. вироб."
+                            item?.kind === "dish_card"
+                              ? "Техкарта"
+                              : "Пром. вироб."
                           }
                         />
                       )}
@@ -702,192 +726,210 @@ function DailyMenuDayEditor({
                       </div>
                     )}
 
-                <div className="lg:col-span-2">
-                  <label
-                    className="nf-label"
-                    htmlFor={`day-${dayIndex}-item-${itemIndex}-name`}
-                  >
-                    Назва позиції
-                  </label>
-                  {allowValueEdits ? (
-                    <input
-                      id={`day-${dayIndex}-item-${itemIndex}-name`}
-                      {...form.register(
-                        `days.${dayIndex}.items.${itemIndex}.name` as const,
+                    <div className="lg:col-span-2">
+                      <label
+                        className="nf-label"
+                        htmlFor={`day-${dayIndex}-item-${itemIndex}-name`}
+                      >
+                        Назва позиції
+                      </label>
+                      {allowValueEdits ? (
+                        <input
+                          id={`day-${dayIndex}-item-${itemIndex}-name`}
+                          {...form.register(
+                            `days.${dayIndex}.items.${itemIndex}.name` as const,
+                          )}
+                          readOnly={!allowValueEdits}
+                          aria-invalid={itemErrors?.name ? "true" : "false"}
+                          className="nf-input"
+                        />
+                      ) : (
+                        <ReadonlyFieldValue value={item?.name} />
                       )}
-                      readOnly={!allowValueEdits}
-                      aria-invalid={itemErrors?.name ? "true" : "false"}
-                      className="nf-input"
-                    />
-                  ) : (
-                    <ReadonlyFieldValue value={item?.name} />
-                  )}
-                  {itemErrors?.name ? (
-                    <p role="alert" className="nf-field-error">
-                      {itemErrors.name.message}
-                    </p>
-                  ) : null}
-                </div>
+                      {itemErrors?.name ? (
+                        <p role="alert" className="nf-field-error">
+                          {itemErrors.name.message}
+                        </p>
+                      ) : null}
+                    </div>
 
-                <div>
-                  <label
-                    className="nf-label"
-                    htmlFor={`day-${dayIndex}-item-${itemIndex}-allergens`}
-                  >
-                    Алергени
-                  </label>
-                  <AllergenCheckboxList
-                    itemId={`day-${dayIndex}-item-${itemIndex}-allergens`}
-                    options={allergenOptions}
-                    selectedCodes={item?.allergen_codes ?? []}
-                    readOnly={!allowValueEdits}
-                    onChange={(nextCodes) => {
-                      form.setValue(
-                        `days.${dayIndex}.items.${itemIndex}.allergen_codes`,
-                        nextCodes,
-                        { shouldDirty: true },
-                      );
-                    }}
-                  />
-                  <p className="mt-1 text-xs text-slate-500">
-                    {allowValueEdits
-                      ? "Для техкарти алергени підтягуються автоматично. За потреби їх можна скоригувати вручну чекбоксами."
-                      : "Алергени показані списком і, якщо позиція прив’язана до ТК, заповнюються з неї автоматично."}
-                  </p>
-                </div>
-              </div>
-
-              <div className="px-4 pb-4">
-                <div className="nf-table-wrap">
-                  <table className="nf-table">
-                    <thead>
-                      <tr>
-                        <th>Вікова група</th>
-                        <th>Вихід</th>
-                        <th>Ккал</th>
-                        <th>Білки</th>
-                        <th>Жири</th>
-                        <th>Вуглеводи</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(item?.portions ?? []).map((portion, portionIndex) => {
-                        const portionErrors = itemErrors?.portions?.[portionIndex];
-
-                        return (
-                          <tr key={portion.age_group}>
-                            <td className="font-medium text-slate-700">
-                              {AGE_GROUP_LABELS[portion.age_group]}
-                            </td>
-                            <td>
-                              {allowValueEdits ? (
-                                <input
-                                  {...form.register(
-                                    `days.${dayIndex}.items.${itemIndex}.portions.${portionIndex}.yield_amount` as const,
-                                  )}
-                                  readOnly={!allowValueEdits}
-                                  aria-invalid={
-                                    portionErrors?.yield_amount ? "true" : "false"
-                                  }
-                                  className="nf-input"
-                                />
-                              ) : (
-                                <div className="text-sm text-slate-700">
-                                  {portion.yield_amount}
-                                </div>
-                              )}
-                              {portionErrors?.yield_amount ? (
-                                <p role="alert" className="nf-field-error">
-                                  {portionErrors.yield_amount.message}
-                                </p>
-                              ) : null}
-                            </td>
-                            <NutritionCell value={portion.nutrition.kcal} />
-                            <NutritionCell value={portion.nutrition.proteins} />
-                            <NutritionCell value={portion.nutrition.fats} />
-                            <NutritionCell value={portion.nutrition.carbs} />
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <details className="mx-4 mb-4 border border-[var(--nf-line)]">
-                <summary className="cursor-pointer px-4 py-3 text-sm font-bold text-slate-800">
-                  Додаткові поля позиції
-                </summary>
-                <div className="grid gap-4 border-t border-[var(--nf-line)] p-4 lg:grid-cols-2">
-                  <div>
-                  <label
-                    className="nf-label"
-                    htmlFor={`day-${dayIndex}-item-${itemIndex}-recipe`}
-                  >
-                      Позначення ТК / номера
-                    </label>
-                    {allowValueEdits ? (
-                      <input
-                        id={`day-${dayIndex}-item-${itemIndex}-recipe`}
-                        {...form.register(
-                          `days.${dayIndex}.items.${itemIndex}.recipe_card_number` as const,
-                        )}
+                    <div>
+                      <label
+                        className="nf-label"
+                        htmlFor={`day-${dayIndex}-item-${itemIndex}-allergens`}
+                      >
+                        Алергени
+                      </label>
+                      <AllergenCheckboxList
+                        itemId={`day-${dayIndex}-item-${itemIndex}-allergens`}
+                        options={allergenOptions}
+                        selectedCodes={item?.allergen_codes ?? []}
                         readOnly={!allowValueEdits}
-                        className="nf-input"
+                        onChange={(nextCodes) => {
+                          form.setValue(
+                            `days.${dayIndex}.items.${itemIndex}.allergen_codes`,
+                            nextCodes,
+                            { shouldDirty: true },
+                          );
+                        }}
                       />
-                    ) : (
-                      <ReadonlyFieldValue value={item?.recipe_card_number} />
-                    )}
-                  </div>
-
-                  <div>
-                    <label
-                      className="nf-label"
-                      htmlFor={`day-${dayIndex}-item-${itemIndex}-source`}
-                    >
-                      Джерело / збірник
-                    </label>
-                    {allowValueEdits ? (
-                      <input
-                        id={`day-${dayIndex}-item-${itemIndex}-source`}
-                        {...form.register(
-                          `days.${dayIndex}.items.${itemIndex}.source_text` as const,
-                        )}
-                        readOnly={!allowValueEdits}
-                        className="nf-input"
-                      />
-                    ) : (
-                      <ReadonlyFieldValue value={item?.source_text} />
-                    )}
-                  </div>
-
-                  <div className="lg:col-span-2">
-                    <label
-                      className="nf-label"
-                      htmlFor={`day-${dayIndex}-item-${itemIndex}-notes`}
-                    >
-                      Нотатки до позиції
-                    </label>
-                    {allowValueEdits ? (
-                      <textarea
-                        id={`day-${dayIndex}-item-${itemIndex}-notes`}
-                        {...form.register(
-                          `days.${dayIndex}.items.${itemIndex}.notes` as const,
-                        )}
-                        readOnly={!allowValueEdits}
-                        className="nf-input min-h-20"
-                      />
-                    ) : (
-                      <ReadonlyFieldValue value={item?.notes} multiline />
-                    )}
-                    {itemErrors?.notes ? (
-                      <p role="alert" className="nf-field-error">
-                        {itemErrors.notes.message}
+                      <p className="mt-1 text-xs text-slate-500">
+                        {allowValueEdits
+                          ? "Для техкарти алергени підтягуються автоматично. За потреби їх можна скоригувати вручну чекбоксами."
+                          : "Алергени показані списком і, якщо позиція прив’язана до ТК, заповнюються з неї автоматично."}
                       </p>
-                    ) : null}
+                    </div>
                   </div>
-                </div>
-              </details>
+
+                  <div className="px-4 pb-4">
+                    <div className="nf-table-wrap">
+                      <table className="nf-table">
+                        <thead>
+                          <tr>
+                            <th>Вікова група</th>
+                            <th>Вихід</th>
+                            <th>Ккал</th>
+                            <th>Білки</th>
+                            <th>Жири</th>
+                            <th>Вуглеводи</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(item?.portions ?? []).map(
+                            (portion, portionIndex) => {
+                              const portionErrors =
+                                itemErrors?.portions?.[portionIndex];
+
+                              return (
+                                <tr key={portion.age_group}>
+                                  <td className="font-medium text-slate-700">
+                                    {AGE_GROUP_LABELS[portion.age_group]}
+                                  </td>
+                                  <td>
+                                    {allowValueEdits ? (
+                                      <input
+                                        {...form.register(
+                                          `days.${dayIndex}.items.${itemIndex}.portions.${portionIndex}.yield_amount` as const,
+                                        )}
+                                        readOnly={!allowValueEdits}
+                                        aria-invalid={
+                                          portionErrors?.yield_amount
+                                            ? "true"
+                                            : "false"
+                                        }
+                                        className="nf-input"
+                                      />
+                                    ) : (
+                                      <div className="text-sm text-slate-700">
+                                        {portion.yield_amount}
+                                      </div>
+                                    )}
+                                    {portionErrors?.yield_amount ? (
+                                      <p
+                                        role="alert"
+                                        className="nf-field-error"
+                                      >
+                                        {portionErrors.yield_amount.message}
+                                      </p>
+                                    ) : null}
+                                  </td>
+                                  <NutritionCell
+                                    value={portion.nutrition.kcal}
+                                  />
+                                  <NutritionCell
+                                    value={portion.nutrition.proteins}
+                                  />
+                                  <NutritionCell
+                                    value={portion.nutrition.fats}
+                                  />
+                                  <NutritionCell
+                                    value={portion.nutrition.carbs}
+                                  />
+                                </tr>
+                              );
+                            },
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <details className="mx-4 mb-4 border border-[var(--nf-line)]">
+                    <summary className="cursor-pointer px-4 py-3 text-sm font-bold text-slate-800">
+                      Додаткові поля позиції
+                    </summary>
+                    <div className="grid gap-4 border-t border-[var(--nf-line)] p-4 lg:grid-cols-2">
+                      <div>
+                        <label
+                          className="nf-label"
+                          htmlFor={`day-${dayIndex}-item-${itemIndex}-recipe`}
+                        >
+                          Позначення ТК / номера
+                        </label>
+                        {allowValueEdits ? (
+                          <input
+                            id={`day-${dayIndex}-item-${itemIndex}-recipe`}
+                            {...form.register(
+                              `days.${dayIndex}.items.${itemIndex}.recipe_card_number` as const,
+                            )}
+                            readOnly={!allowValueEdits}
+                            className="nf-input"
+                          />
+                        ) : (
+                          <ReadonlyFieldValue
+                            value={item?.recipe_card_number}
+                          />
+                        )}
+                      </div>
+
+                      <div>
+                        <label
+                          className="nf-label"
+                          htmlFor={`day-${dayIndex}-item-${itemIndex}-source`}
+                        >
+                          Джерело / збірник
+                        </label>
+                        {allowValueEdits ? (
+                          <input
+                            id={`day-${dayIndex}-item-${itemIndex}-source`}
+                            {...form.register(
+                              `days.${dayIndex}.items.${itemIndex}.source_text` as const,
+                            )}
+                            readOnly={!allowValueEdits}
+                            className="nf-input"
+                          />
+                        ) : (
+                          <ReadonlyFieldValue value={item?.source_text} />
+                        )}
+                      </div>
+
+                      <div className="lg:col-span-2">
+                        <label
+                          className="nf-label"
+                          htmlFor={`day-${dayIndex}-item-${itemIndex}-notes`}
+                        >
+                          Нотатки до позиції
+                        </label>
+                        {allowValueEdits ? (
+                          <textarea
+                            id={`day-${dayIndex}-item-${itemIndex}-notes`}
+                            {...form.register(
+                              `days.${dayIndex}.items.${itemIndex}.notes` as const,
+                            )}
+                            readOnly={!allowValueEdits}
+                            className="nf-input min-h-20"
+                          />
+                        ) : (
+                          <ReadonlyFieldValue value={item?.notes} multiline />
+                        )}
+                        {itemErrors?.notes ? (
+                          <p role="alert" className="nf-field-error">
+                            {itemErrors.notes.message}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  </details>
                 </div>
               ) : null}
             </section>
@@ -928,7 +970,10 @@ function DishCardLookupField({
 
   return (
     <div className="space-y-2">
-      <label className="nf-label" htmlFor={`dish-card-lookup-${dayIndex}-${itemIndex}`}>
+      <label
+        className="nf-label"
+        htmlFor={`dish-card-lookup-${dayIndex}-${itemIndex}`}
+      >
         Техкарта
       </label>
       {enabled ? (
@@ -965,7 +1010,9 @@ function DishCardLookupField({
                 </div>
                 <div className="text-sm text-slate-700">{dishCard.name}</div>
                 {dishCard.source ? (
-                  <div className="text-xs text-slate-500">{dishCard.source}</div>
+                  <div className="text-xs text-slate-500">
+                    {dishCard.source}
+                  </div>
                 ) : null}
               </button>
             ))}
@@ -1013,7 +1060,10 @@ function IngredientLookupField({
 
   return (
     <div className="space-y-2">
-      <label className="nf-label" htmlFor={`ingredient-lookup-${dayIndex}-${itemIndex}`}>
+      <label
+        className="nf-label"
+        htmlFor={`ingredient-lookup-${dayIndex}-${itemIndex}`}
+      >
         Промисловий виріб
       </label>
       {enabled ? (
@@ -1042,7 +1092,12 @@ function IngredientLookupField({
                 disabled={readOnly}
                 className="block w-full border-b border-[var(--nf-line)] px-3 py-2 text-left last:border-b-0 hover:bg-slate-50"
                 onClick={() =>
-                  applyIngredientSelection(form, dayIndex, itemIndex, ingredient)
+                  applyIngredientSelection(
+                    form,
+                    dayIndex,
+                    itemIndex,
+                    ingredient,
+                  )
                 }
               >
                 <div className="text-sm font-bold text-slate-900">
@@ -1088,9 +1143,10 @@ function MenuItemReferenceSync({
     control: form.control,
     name: `days.${dayIndex}.items.${itemIndex}` as const,
   });
-  const dishCardId = item?.kind === "dish_card" ? item.dish_card_id ?? "" : "";
+  const dishCardId =
+    item?.kind === "dish_card" ? (item.dish_card_id ?? "") : "";
   const versionId =
-    item?.kind === "dish_card" ? item.dish_card_version_id ?? "" : "";
+    item?.kind === "dish_card" ? (item.dish_card_version_id ?? "") : "";
 
   const dishCard = useQuery({
     ...dishCardQueryOptions(dishCardId),
@@ -1132,7 +1188,9 @@ function MenuItemReferenceSync({
       return;
     }
 
-    const currentItem = form.getValues(`days.${dayIndex}.items.${itemIndex}` as const);
+    const currentItem = form.getValues(
+      `days.${dayIndex}.items.${itemIndex}` as const,
+    );
     currentItem.portions.forEach((_portion, portionIndex) => {
       form.setValue(
         `days.${dayIndex}.items.${itemIndex}.portions.${portionIndex}.dish_card_portion_variant_id`,
@@ -1166,7 +1224,9 @@ function MenuItemReferenceSync({
       return;
     }
 
-    const currentItem = form.getValues(`days.${dayIndex}.items.${itemIndex}` as const);
+    const currentItem = form.getValues(
+      `days.${dayIndex}.items.${itemIndex}` as const,
+    );
     syncNutritionFromVersion(
       form,
       dayIndex,
@@ -1197,9 +1257,7 @@ function MenuItemReferenceSync({
 
 function NutritionCell({ value }: { value: string | undefined }) {
   return (
-    <td className="text-sm text-slate-700">
-      {value?.trim() ? value : "—"}
-    </td>
+    <td className="text-sm text-slate-700">{value?.trim() ? value : "—"}</td>
   );
 }
 
@@ -1217,7 +1275,9 @@ function AllergenCheckboxList({
   onChange: (codes: string[]) => void;
 }) {
   const selectedCodeSet = new Set(selectedCodes);
-  const selectedOptions = options.filter((allergen) => selectedCodeSet.has(allergen.code));
+  const selectedOptions = options.filter((allergen) =>
+    selectedCodeSet.has(allergen.code),
+  );
 
   if (readOnly) {
     if (!selectedCodes.length) {
@@ -1229,28 +1289,30 @@ function AllergenCheckboxList({
         id={itemId}
         className="flex flex-wrap gap-2 rounded border border-dashed border-[var(--nf-line)] bg-slate-50 p-3"
       >
-        {(selectedOptions.length ? selectedOptions : selectedCodes).map((item) => {
-          if (typeof item === "string") {
+        {(selectedOptions.length ? selectedOptions : selectedCodes).map(
+          (item) => {
+            if (typeof item === "string") {
+              return (
+                <span
+                  key={item}
+                  className="rounded-full border border-[var(--nf-line)] bg-white px-2.5 py-1 text-sm text-slate-700"
+                >
+                  {item}
+                </span>
+              );
+            }
+
             return (
               <span
-                key={item}
+                key={item.id}
                 className="rounded-full border border-[var(--nf-line)] bg-white px-2.5 py-1 text-sm text-slate-700"
               >
-                {item}
+                <span className="font-medium text-slate-900">{item.code}</span>{" "}
+                {item.name}
               </span>
             );
-          }
-
-          return (
-            <span
-              key={item.id}
-              className="rounded-full border border-[var(--nf-line)] bg-white px-2.5 py-1 text-sm text-slate-700"
-            >
-              <span className="font-medium text-slate-900">{item.code}</span>{" "}
-              {item.name}
-            </span>
-          );
-        })}
+          },
+        )}
       </div>
     );
   }
@@ -1348,11 +1410,9 @@ function applyDishCardSelection(
     "",
     { shouldDirty: true },
   );
-  form.setValue(
-    `days.${dayIndex}.items.${itemIndex}.allergen_codes`,
-    [],
-    { shouldDirty: true },
-  );
+  form.setValue(`days.${dayIndex}.items.${itemIndex}.allergen_codes`, [], {
+    shouldDirty: true,
+  });
 }
 
 function applyIngredientSelection(
@@ -1382,26 +1442,20 @@ function applyIngredientSelection(
     "пром. вироб.",
     { shouldDirty: true },
   );
-  form.setValue(
-    `days.${dayIndex}.items.${itemIndex}.dish_card_id`,
-    null,
-    { shouldDirty: true },
-  );
+  form.setValue(`days.${dayIndex}.items.${itemIndex}.dish_card_id`, null, {
+    shouldDirty: true,
+  });
   form.setValue(
     `days.${dayIndex}.items.${itemIndex}.dish_card_version_id`,
     null,
     { shouldDirty: true },
   );
-  form.setValue(
-    `days.${dayIndex}.items.${itemIndex}.recipe_card_number`,
-    "",
-    { shouldDirty: true },
-  );
-  form.setValue(
-    `days.${dayIndex}.items.${itemIndex}.allergen_codes`,
-    [],
-    { shouldDirty: true },
-  );
+  form.setValue(`days.${dayIndex}.items.${itemIndex}.recipe_card_number`, "", {
+    shouldDirty: true,
+  });
+  form.setValue(`days.${dayIndex}.items.${itemIndex}.allergen_codes`, [], {
+    shouldDirty: true,
+  });
 }
 
 function syncNutritionFromVersion(
@@ -1438,7 +1492,11 @@ function syncAllergensFromVersion(
   version: DishCardVersion,
   allergenOptions: Allergen[],
 ) {
-  if (currentCodes.length || !version.allergen_ids.length || !allergenOptions.length) {
+  if (
+    currentCodes.length ||
+    !version.allergen_ids.length ||
+    !allergenOptions.length
+  ) {
     return;
   }
 
@@ -1471,7 +1529,9 @@ function ReadonlyReferenceField({
     <div className="space-y-2">
       <p className="nf-label">{label}</p>
       <ReadonlyFieldValue value={value} />
-      <p className="text-xs text-slate-500">Поле доступне лише для перегляду.</p>
+      <p className="text-xs text-slate-500">
+        Поле доступне лише для перегляду.
+      </p>
     </div>
   );
 }
@@ -1485,7 +1545,8 @@ function ReadonlyFieldValue({
   emptyLabel?: string;
   multiline?: boolean;
 }) {
-  const hasValue = value !== null && value !== undefined && `${value}`.trim().length > 0;
+  const hasValue =
+    value !== null && value !== undefined && `${value}`.trim().length > 0;
 
   return (
     <div

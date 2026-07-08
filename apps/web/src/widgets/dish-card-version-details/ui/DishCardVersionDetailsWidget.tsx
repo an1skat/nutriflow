@@ -8,12 +8,14 @@ import {
   useDishCard,
   useDishCardVersion,
 } from "@/entities/recipe/api/RecipeQueries";
+import { useCurrentUser } from "@/entities/session/api/SessionQueries";
 import type {
   Allergen,
   DishCardVersion,
   IngredientAmount,
   PortionVariant,
 } from "@/entities/recipe/model/Recipe";
+import { hasPermission } from "@/features/access/model/AccessPolicy";
 import { formatDate } from "@/shared/lib/FormatDate";
 import { RequestError } from "@/shared/ui/RequestError";
 
@@ -41,6 +43,10 @@ export function DishCardVersionDetailsWidget({ dishCardId, versionId }: Props) {
   const dishCard = useDishCard(dishCardId);
   const version = useDishCardVersion(versionId);
   const allergens = useAllergens("");
+  const currentUser = useCurrentUser();
+  const canManage = Boolean(
+    currentUser.data && hasPermission(currentUser.data, "recipes.manage"),
+  );
 
   const allergenById = useMemo(
     () => new Map((allergens.data?.items ?? []).map((item) => [item.id, item])),
@@ -84,11 +90,13 @@ export function DishCardVersionDetailsWidget({ dishCardId, versionId }: Props) {
             Каталог
           </Link>
           {" / "}
-          <Link href={`/admin/recipe/dish-cards/${dishCardId}`} className="nf-link">
+          <Link
+            href={`/admin/recipe/dish-cards/${dishCardId}`}
+            className="nf-link"
+          >
             Версії
           </Link>
-          {" / "}
-          v{version.data.version}
+          {" / "}v{version.data.version}
         </p>
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
@@ -100,12 +108,14 @@ export function DishCardVersionDetailsWidget({ dishCardId, versionId }: Props) {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link
-              href={`/admin/recipe/dish-cards/${dishCardId}/versions/new`}
-              className="nf-button nf-button-primary"
-            >
-              Створити нову версію
-            </Link>
+            {canManage ? (
+              <Link
+                href={`/admin/recipe/dish-cards/${dishCardId}/versions/new`}
+                className="nf-button nf-button-primary"
+              >
+                Створити нову версію
+              </Link>
+            ) : null}
             <Link
               href={`/admin/recipe/dish-cards/${dishCardId}`}
               className="nf-button nf-button-secondary"
@@ -124,13 +134,26 @@ export function DishCardVersionDetailsWidget({ dishCardId, versionId }: Props) {
           <dl className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
             <Fact label="Статус" value={STATUS_LABELS[version.data.status]} />
             <Fact label="Версія" value={`v${version.data.version}`} />
-            <Fact label="Створено" value={formatDate(version.data.created_at)} />
-            <Fact label="Оновлено" value={formatDate(version.data.updated_at)} />
+            <Fact
+              label="Створено"
+              value={formatDate(version.data.created_at)}
+            />
+            <Fact
+              label="Оновлено"
+              value={formatDate(version.data.updated_at)}
+            />
             <Fact label="Джерело картки" value={dishCard.data.source ?? "—"} />
-            <Fact label="Файл імпорту" value={version.data.source_file_name ?? "—"} />
+            <Fact
+              label="Файл імпорту"
+              value={version.data.source_file_name ?? "—"}
+            />
             <Fact
               label="Сторінка"
-              value={version.data.source_page ? String(version.data.source_page) : "—"}
+              value={
+                version.data.source_page
+                  ? String(version.data.source_page)
+                  : "—"
+              }
             />
             <Fact label="ID версії" value={version.data.id} />
           </dl>
@@ -145,7 +168,11 @@ export function DishCardVersionDetailsWidget({ dishCardId, versionId }: Props) {
           {version.data.allergen_ids.length ? (
             <div className="flex flex-wrap gap-2">
               {version.data.allergen_ids.map((id) => (
-                <AllergenBadge key={id} id={id} allergen={allergenById.get(id)} />
+                <AllergenBadge
+                  key={id}
+                  id={id}
+                  allergen={allergenById.get(id)}
+                />
               ))}
             </div>
           ) : (
@@ -182,9 +209,13 @@ export function DishCardVersionDetailsWidget({ dishCardId, versionId }: Props) {
                       </td>
                     ) : (
                       <>
-                        <td>{formatNutritionAmount(portion.nutrition.proteins)}</td>
+                        <td>
+                          {formatNutritionAmount(portion.nutrition.proteins)}
+                        </td>
                         <td>{formatNutritionAmount(portion.nutrition.fats)}</td>
-                        <td>{formatNutritionAmount(portion.nutrition.carbs)}</td>
+                        <td>
+                          {formatNutritionAmount(portion.nutrition.carbs)}
+                        </td>
                         <td>{formatNutritionAmount(portion.nutrition.kcal)}</td>
                       </>
                     )}
@@ -219,23 +250,35 @@ export function DishCardVersionDetailsWidget({ dishCardId, versionId }: Props) {
                 {rows.map((row) => (
                   <tr key={row.key}>
                     <td>
-                      <Link href={ingredientCatalogHref(row.name)} className="nf-link">
+                      <Link
+                        href={ingredientCatalogHref(row.name)}
+                        className="nf-link"
+                      >
                         {row.name}
                       </Link>
                       {!row.ingredientId ? (
-                        <span className="ml-2 text-xs text-slate-500">не прив&apos;язано</span>
+                        <span className="ml-2 text-xs text-slate-500">
+                          не прив&apos;язано
+                        </span>
                       ) : null}
                     </td>
                     {version.data.portion_variants.map((portion) => {
                       const amount = row.amountsByPortionId[portion.id];
                       return (
-                        <td key={portion.id} className="whitespace-nowrap text-xs">
+                        <td
+                          key={portion.id}
+                          className="whitespace-nowrap text-xs"
+                        >
                           {amount ? (
                             <>
-                              <span className="font-bold">{formatAmount(amount.gross_amount)}</span>
+                              <span className="font-bold">
+                                {formatAmount(amount.gross_amount)}
+                              </span>
                               <span className="text-slate-500"> / </span>
                               <span>{formatAmount(amount.net_amount)}</span>
-                              <span className="ml-1 text-slate-500">{amount.unit}</span>
+                              <span className="ml-1 text-slate-500">
+                                {amount.unit}
+                              </span>
                             </>
                           ) : (
                             "—"
@@ -243,13 +286,17 @@ export function DishCardVersionDetailsWidget({ dishCardId, versionId }: Props) {
                         </td>
                       );
                     })}
-                    <td className="text-xs text-slate-600">{row.notes ?? "—"}</td>
+                    <td className="text-xs text-slate-600">
+                      {row.notes ?? "—"}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <p className="mt-2 text-xs text-slate-500">У клітинках: брутто / нетто.</p>
+          <p className="mt-2 text-xs text-slate-500">
+            У клітинках: брутто / нетто.
+          </p>
         </div>
       </section>
 
@@ -268,14 +315,19 @@ export function DishCardVersionDetailsWidget({ dishCardId, versionId }: Props) {
         </div>
       </section>
 
-      {version.data.recognized_warnings.length || version.data.recognition_errors.length ? (
+      {version.data.recognized_warnings.length ||
+      version.data.recognition_errors.length ? (
         <section className="nf-panel">
           <div className="nf-panel-header">
             <h2 className="nf-panel-title">Діагностика імпорту</h2>
           </div>
           <div className="nf-panel-body flex flex-col gap-3">
             {version.data.recognition_errors.length ? (
-              <MessageList title="Помилки" items={version.data.recognition_errors} tone="error" />
+              <MessageList
+                title="Помилки"
+                items={version.data.recognition_errors}
+                tone="error"
+              />
             ) : null}
             {version.data.recognized_warnings.length ? (
               <MessageList
@@ -300,7 +352,13 @@ function Fact({ label, value }: { label: string; value: string }) {
   );
 }
 
-function AllergenBadge({ id, allergen }: { id: string; allergen: Allergen | undefined }) {
+function AllergenBadge({
+  id,
+  allergen,
+}: {
+  id: string;
+  allergen: Allergen | undefined;
+}) {
   const label = allergen ? `${allergen.code} — ${allergen.name}` : id;
   const href = allergen
     ? `/admin/recipe?tab=allergens&query=${encodeURIComponent(allergen.code)}`

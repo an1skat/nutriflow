@@ -5,6 +5,7 @@ export const adminPermissionSchema = z.enum([
   "school_users.manage",
   "school_groups.manage",
   "menus.manage",
+  "recipes.view",
   "recipes.manage",
 ]);
 
@@ -26,6 +27,10 @@ export const authUserSchema = z.discriminatedUnion("role", [
     school_id: z.null(),
   }),
   authUserBaseSchema.extend({
+    role: z.literal("TECHNOLOGIST"),
+    school_id: z.null(),
+  }),
+  authUserBaseSchema.extend({
     role: z.literal("SCHOOL_USER"),
     school_id: z.string().min(1),
   }),
@@ -37,10 +42,7 @@ export const loginSchema = z.object({
     .trim()
     .min(3, "Введіть щонайменше 3 символи")
     .max(320, "Значення надто довге"),
-  password: z
-    .string()
-    .min(1, "Введіть пароль")
-    .max(128, "Пароль надто довгий"),
+  password: z.string().min(1, "Введіть пароль").max(128, "Пароль надто довгий"),
 });
 
 export type AuthUser = z.infer<typeof authUserSchema>;

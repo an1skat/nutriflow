@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createBlankWeeklyMenuFormValues,
   formValuesToWeeklyMenuPayload,
+  updateDayDate,
   weeklyMenuFormSchema,
 } from "./WeeklyMenuFormSchema";
 
@@ -75,5 +76,38 @@ describe("weekly menu form schema", () => {
     expect(payload.starts_on).toBe("2026-07-06");
     expect(payload.days[0].date).toBe("2026-07-06");
     expect(payload.days[1].date).toBe("2026-07-07");
+  });
+  it("propagates a changed Monday date across the remaining weekdays", () => {
+    const values = createBlankWeeklyMenuFormValues();
+    values.days = values.days.slice(0, 5);
+
+    const updatedDays = updateDayDate(values.days, "monday", "2026-07-13");
+
+    expect(updatedDays.map((day) => day.date)).toEqual([
+      "2026-07-13",
+      "2026-07-14",
+      "2026-07-15",
+      "2026-07-16",
+      "2026-07-17",
+    ]);
+  });
+
+  it("changes only the selected non-Monday date", () => {
+    const values = createBlankWeeklyMenuFormValues();
+    values.days = updateDayDate(
+      values.days.slice(0, 5),
+      "monday",
+      "2026-07-13",
+    );
+
+    const updatedDays = updateDayDate(values.days, "wednesday", "2026-07-22");
+
+    expect(updatedDays.map((day) => day.date)).toEqual([
+      "2026-07-13",
+      "2026-07-14",
+      "2026-07-22",
+      "2026-07-16",
+      "2026-07-17",
+    ]);
   });
 });

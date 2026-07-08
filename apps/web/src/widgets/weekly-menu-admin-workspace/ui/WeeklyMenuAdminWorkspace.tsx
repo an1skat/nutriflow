@@ -47,7 +47,9 @@ export function WeeklyMenuAdminWorkspace() {
   const [menuOverride, setMenuOverride] = useState<WeeklyMenu | null>(null);
   const [replaceExisting, setReplaceExisting] = useState(true);
   const [selectedSchoolIds, setSelectedSchoolIds] = useState<string[]>([]);
-  const [selectedRevokeCopyIds, setSelectedRevokeCopyIds] = useState<string[]>([]);
+  const [selectedRevokeCopyIds, setSelectedRevokeCopyIds] = useState<string[]>(
+    [],
+  );
 
   const availableMenus = useMemo(() => {
     const items = menus.data?.items ?? [];
@@ -105,13 +107,18 @@ export function WeeklyMenuAdminWorkspace() {
   });
 
   const canInspectSchools = Boolean(
-    user && (user.role === "OWNER" || hasPermission(user, "schools.manage")),
+    user &&
+    (hasPermission(user, "schools.manage") ||
+      hasPermission(user, "menus.manage")),
+  );
+  const canSelectTargetSchools = Boolean(
+    user && (user.role === "OWNER" || user.role === "TECHNOLOGIST"),
   );
   const canUseRecipeCatalog = Boolean(
     user &&
-      (user.role === "OWNER" ||
-        hasPermission(user, "recipes.manage") ||
-        hasPermission(user, "menus.manage")),
+    (user.role === "OWNER" ||
+      hasPermission(user, "recipes.manage") ||
+      hasPermission(user, "menus.manage")),
   );
 
   const schools = useQuery({
@@ -135,7 +142,8 @@ export function WeeklyMenuAdminWorkspace() {
     [schools.data?.items],
   );
   const schoolById = useMemo(
-    () => new Map((schools.data?.items ?? []).map((school) => [school.id, school])),
+    () =>
+      new Map((schools.data?.items ?? []).map((school) => [school.id, school])),
     [schools.data?.items],
   );
   const activeSchoolIds = useMemo(
@@ -169,8 +177,8 @@ export function WeeklyMenuAdminWorkspace() {
       const label =
         school.admin_owner_id === null
           ? "Без закріпленого адміністратора"
-          : adminLabelById.get(school.admin_owner_id) ??
-            `Адміністратор ${school.admin_owner_id}`;
+          : (adminLabelById.get(school.admin_owner_id) ??
+            `Адміністратор ${school.admin_owner_id}`);
       const existing = groups.get(key);
 
       if (existing) {
@@ -215,15 +223,20 @@ export function WeeklyMenuAdminWorkspace() {
     >();
 
     for (const copy of revokableMenuCopies) {
-      const school = copy.school_id ? schoolById.get(copy.school_id) : undefined;
+      const school = copy.school_id
+        ? schoolById.get(copy.school_id)
+        : undefined;
       const key =
-        user?.role === "OWNER" ? (school?.admin_owner_id ?? "unassigned") : "schools";
+        user?.role === "OWNER"
+          ? (school?.admin_owner_id ?? "unassigned")
+          : "schools";
       const label =
         user?.role === "OWNER"
-          ? school?.admin_owner_id === null || school?.admin_owner_id === undefined
+          ? school?.admin_owner_id === null ||
+            school?.admin_owner_id === undefined
             ? "Без закріпленого адміністратора"
-            : adminLabelById.get(school.admin_owner_id) ??
-              `Адміністратор ${school.admin_owner_id}`
+            : (adminLabelById.get(school.admin_owner_id) ??
+              `Адміністратор ${school.admin_owner_id}`)
           : "Школи з цим меню";
       const existing = groups.get(key);
 
@@ -256,14 +269,13 @@ export function WeeklyMenuAdminWorkspace() {
     ? `${selectedMenu.id}:${selectedMenu.updated_at}`
     : `new:${newMenuRevision}`;
 
-  const savePending =
-    createWeeklyMenu.isPending || updateWeeklyMenu.isPending;
+  const savePending = createWeeklyMenu.isPending || updateWeeklyMenu.isPending;
 
   const publishDisabled =
     !selectedMenu ||
     publishWeeklyMenu.isPending ||
-    (user?.role === "OWNER" && effectiveSelectedSchoolIds.length === 0) ||
-    (user?.role === "OWNER" && schools.isError);
+    (canSelectTargetSchools && effectiveSelectedSchoolIds.length === 0) ||
+    (canSelectTargetSchools && schools.isError);
   const revokeCopiesLoading =
     publishedMenuCopies.isPending || archivedMenuCopies.isPending;
   const revokeCopiesError =
@@ -308,7 +320,7 @@ export function WeeklyMenuAdminWorkspace() {
     }
 
     const result = await publishWeeklyMenu.mutateAsync(
-      user.role === "OWNER"
+      canSelectTargetSchools
         ? {
             school_ids: effectiveSelectedSchoolIds,
             replace_existing: replaceExisting,
@@ -383,12 +395,15 @@ export function WeeklyMenuAdminWorkspace() {
         <p className="nf-eyebrow">Меню</p>
         <h1 className="nf-title">Тижневе меню</h1>
         <p className="nf-description">
-          Створюйте й редагуйте тижневі меню, а потім розсилайте їх школам.
-          Для адміністратора розсилка піде лише у його школи, для власника
-          можна вручну обрати цільові школи.
+          Створюйте й редагуйте тижневі меню, а потім розсилайте їх школам. Для
+          адміністратора розсилка піде лише у його школи, а власник і технолог
+          можуть вручну обрати будь-які цільові школи.
         </p>
         <div className="mt-4">
-          <Link href="/admin/menus/archive" className="nf-button nf-button-secondary">
+          <Link
+            href="/admin/menus/archive"
+            className="nf-button nf-button-secondary"
+          >
             Архів меню
           </Link>
         </div>
@@ -464,21 +479,25 @@ export function WeeklyMenuAdminWorkspace() {
                   <input
                     type="checkbox"
                     checked={replaceExisting}
-                    onChange={(event) => setReplaceExisting(event.target.checked)}
+                    onChange={(event) =>
+                      setReplaceExisting(event.target.checked)
+                    }
                   />
                   <span className="text-sm text-slate-700">
                     Оновлювати вже розіслані копії меню
                   </span>
                 </label>
 
-                {user.role === "OWNER" ? (
+                {canSelectTargetSchools ? (
                   <div className="space-y-4">
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
                         className="nf-button"
                         onClick={() =>
-                          setSelectedSchoolIds(activeSchools.map((school) => school.id))
+                          setSelectedSchoolIds(
+                            activeSchools.map((school) => school.id),
+                          )
                         }
                       >
                         Обрати всі
@@ -492,7 +511,8 @@ export function WeeklyMenuAdminWorkspace() {
                       </button>
                     </div>
 
-                    {schools.isPending || adminUsers.isPending ? (
+                    {schools.isPending ||
+                    (user.role === "OWNER" && adminUsers.isPending) ? (
                       <p role="status" className="text-sm text-slate-600">
                         Завантажуємо школи для розсилки…
                       </p>
@@ -505,14 +525,23 @@ export function WeeklyMenuAdminWorkspace() {
                       />
                     ) : null}
 
-                    {adminUsers.isError ? (
+                    {user.role === "OWNER" && adminUsers.isError ? (
                       <RequestError
                         error={adminUsers.error}
                         onRetry={() => void adminUsers.refetch()}
                       />
                     ) : null}
 
-                    {ownerSchoolGroups.map((group) => (
+                    {(user.role === "OWNER"
+                      ? ownerSchoolGroups
+                      : [
+                          {
+                            key: "all-schools",
+                            label: "Усі активні школи",
+                            schools: activeSchools,
+                          },
+                        ]
+                    ).map((group) => (
                       <div key={group.key} className="space-y-2">
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-xs font-bold uppercase tracking-wide text-slate-600">
@@ -524,12 +553,16 @@ export function WeeklyMenuAdminWorkspace() {
                             <label key={school.id} className="nf-checkbox-row">
                               <input
                                 type="checkbox"
-                                checked={effectiveSelectedSchoolIds.includes(school.id)}
+                                checked={effectiveSelectedSchoolIds.includes(
+                                  school.id,
+                                )}
                                 onChange={(event) =>
                                   setSelectedSchoolIds((previous) =>
                                     event.target.checked
                                       ? [...previous, school.id]
-                                      : previous.filter((id) => id !== school.id),
+                                      : previous.filter(
+                                          (id) => id !== school.id,
+                                        ),
                                   )
                                 }
                               />
@@ -559,8 +592,8 @@ export function WeeklyMenuAdminWorkspace() {
                 ) : (
                   <p className="text-sm text-slate-700">
                     Розсилка піде у всі активні школи, закріплені за вашим
-                    адміністратором. Список шкіл недоступний без додаткового права
-                    перегляду шкіл.
+                    адміністратором. Список шкіл недоступний без додаткового
+                    права перегляду шкіл.
                   </p>
                 )}
 
@@ -570,7 +603,9 @@ export function WeeklyMenuAdminWorkspace() {
                   className="nf-button nf-button-primary w-full sm:w-auto"
                   onClick={() => void handlePublish()}
                 >
-                  {publishWeeklyMenu.isPending ? "Розсилаємо…" : "Розіслати школам"}
+                  {publishWeeklyMenu.isPending
+                    ? "Розсилаємо…"
+                    : "Розіслати школам"}
                 </button>
               </div>
             </section>
@@ -642,7 +677,9 @@ export function WeeklyMenuAdminWorkspace() {
                           <label key={copy.id} className="nf-checkbox-row">
                             <input
                               type="checkbox"
-                              checked={effectiveSelectedRevokeCopyIds.includes(copy.id)}
+                              checked={effectiveSelectedRevokeCopyIds.includes(
+                                copy.id,
+                              )}
                               onChange={(event) =>
                                 setSelectedRevokeCopyIds((previous) =>
                                   event.target.checked
@@ -652,8 +689,11 @@ export function WeeklyMenuAdminWorkspace() {
                               }
                             />
                             <span className="text-sm text-slate-700">
-                              {school?.name ?? `Школа ${copy.school_id ?? copy.id}`}
-                              {copy.status === "archived" ? " · архів школи" : ""}
+                              {school?.name ??
+                                `Школа ${copy.school_id ?? copy.id}`}
+                              {copy.status === "archived"
+                                ? " · архів школи"
+                                : ""}
                             </span>
                           </label>
                         );

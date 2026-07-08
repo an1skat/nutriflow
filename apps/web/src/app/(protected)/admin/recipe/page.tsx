@@ -21,7 +21,7 @@ export default async function RecipeCatalogPage({ searchParams }: RecipeCatalogP
       : "dish-cards";
 
   return (
-    <AccessGuard requiredPermissions={["recipes.manage"]}>
+    <AccessGuard requiredPermissions={["recipes.view"]}>
       <RecipeCatalogWidget
         initialTab={initialTab}
         initialQuery={firstParam(params.query) ?? ""}

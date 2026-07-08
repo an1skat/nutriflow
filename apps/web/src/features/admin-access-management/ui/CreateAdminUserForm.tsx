@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 
 import { getApiErrorMessage } from "@/shared/api/HttpClient";
 
@@ -21,9 +21,11 @@ export function CreateAdminUserForm() {
       username: "",
       email: "",
       password: "",
+      role: "ADMIN",
       permissions: defaultLowerAdminPermissions,
     },
   });
+  const role = useWatch({ control: form.control, name: "role" });
 
   const onSubmit = form.handleSubmit(async (values) => {
     form.clearErrors("root");
@@ -34,6 +36,7 @@ export function CreateAdminUserForm() {
         username: "",
         email: "",
         password: "",
+        role: "ADMIN",
         permissions: defaultLowerAdminPermissions,
       });
     } catch (error) {
@@ -46,7 +49,7 @@ export function CreateAdminUserForm() {
 
   return (
     <form onSubmit={onSubmit} className="grid gap-4">
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <div>
           <label htmlFor="admin-username" className="nf-label">
             Логін
@@ -99,39 +102,66 @@ export function CreateAdminUserForm() {
             </p>
           ) : null}
         </div>
+
+        <div>
+          <label htmlFor="admin-role" className="nf-label">
+            Роль
+          </label>
+          <select
+            id="admin-role"
+            {...form.register("role", {
+              onChange: (event) => {
+                const nextRole = event.target.value;
+                form.setValue(
+                  "permissions",
+                  nextRole === "TECHNOLOGIST"
+                    ? []
+                    : defaultLowerAdminPermissions,
+                  { shouldValidate: true },
+                );
+              },
+            })}
+            className="nf-input"
+          >
+            <option value="ADMIN">Адміністратор</option>
+            <option value="TECHNOLOGIST">Технолог</option>
+          </select>
+        </div>
       </div>
 
-      <fieldset>
-        <legend className="nf-label">Права доступу</legend>
-        <div className="grid gap-2 md:grid-cols-2">
-          {adminPermissionOptions.map((permission) => (
-            <label
-              key={permission.value}
-              className="flex min-h-16 gap-3 border border-[var(--nf-line)] bg-white p-3 text-sm"
-            >
-              <input
-                type="checkbox"
-                value={permission.value}
-                {...form.register("permissions")}
-                className="mt-1 size-4"
-              />
-              <span>
-                <span className="block font-bold text-slate-900">
-                  {permission.label}
+      {role === "ADMIN" ? (
+        <fieldset>
+          <legend className="nf-label">Права доступу</legend>
+          <div className="grid gap-2 md:grid-cols-2">
+            {adminPermissionOptions.map((permission) => (
+              <label
+                key={permission.value}
+                className="flex min-h-16 gap-3 border border-[var(--nf-line)] bg-white p-3 text-sm"
+              >
+                <input
+                  type="checkbox"
+                  value={permission.value}
+                  {...form.register("permissions")}
+                  className="mt-1 size-4"
+                />
+                <span>
+                  <span className="block font-bold text-slate-900">
+                    {permission.label}
+                  </span>
+                  <span className="mt-0.5 block text-xs leading-5 text-slate-600">
+                    {permission.description}
+                  </span>
                 </span>
-                <span className="mt-0.5 block text-xs leading-5 text-slate-600">
-                  {permission.description}
-                </span>
-              </span>
-            </label>
-          ))}
-        </div>
-        {form.formState.errors.permissions ? (
-          <p role="alert" className="nf-field-error">
-            {form.formState.errors.permissions.message}
-          </p>
-        ) : null}
-      </fieldset>
+              </label>
+            ))}
+          </div>
+          {form.formState.errors.permissions ? (
+            <p role="alert" className="nf-field-error">
+              {form.formState.errors.permissions.message}
+            </p>
+          ) : null}
+        </fieldset>
+      ) : null}
 
       {form.formState.errors.root ? (
         <p role="alert" className="nf-error">
@@ -147,13 +177,17 @@ export function CreateAdminUserForm() {
         >
           {form.formState.isSubmitting
             ? "Створюємо…"
-            : "Створити адміністратора"}
+            : role === "TECHNOLOGIST"
+              ? "Створити технолога"
+              : "Створити адміністратора"}
         </button>
       </div>
 
       {createAdminUser.isSuccess ? (
         <p role="status" className="nf-success">
-          Адміністратора створено.
+          {role === "TECHNOLOGIST"
+            ? "Технолога створено."
+            : "Адміністратора створено."}
         </p>
       ) : null}
     </form>

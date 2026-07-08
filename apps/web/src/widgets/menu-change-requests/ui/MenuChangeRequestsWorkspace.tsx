@@ -1,0 +1,344 @@
+"use client";
+
+import { CheckCheck, Clock3 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
+
+import {
+  useMarkMenuChangeRequestReviewed,
+  useMenuChangeRequests,
+} from "@/entities/menu-change-request/api/MenuChangeRequestQueries";
+import type {
+  MenuChangeRequest,
+  MenuChangeRequestStatus,
+  MenuFieldChange,
+} from "@/entities/menu-change-request/model/MenuChangeRequest";
+import { WEEKDAY_LABELS } from "@/features/weekly-menu-editor/model/WeeklyMenuFormSchema";
+import { getApiErrorMessage } from "@/shared/api/HttpClient";
+import { formatDate } from "@/shared/lib/FormatDate";
+import { RequestError } from "@/shared/ui/RequestError";
+
+const FIELD_LABELS: Record<string, string> = {
+  kind: "Тип позиції",
+  source_text: "Джерело",
+  recipe_card_number: "Номер техкарти",
+  dish_card_id: "Техкарта (ID)",
+  dish_card_version_id: "Версія техкарти (ID)",
+  product_ingredient_id: "Інгредієнт (ID)",
+  product_name_snapshot: "Промисловий виріб",
+  name: "Назва страви",
+  allergen_codes: "Алергени",
+  portions: "Порції та КБЖВ",
+  notes: "Нотатки",
+};
+
+const HIDDEN_TECHNICAL_FIELDS = new Set([
+  "dish_card_id",
+  "dish_card_version_id",
+  "product_ingredient_id",
+]);
+
+export function MenuChangeRequestsWorkspace() {
+  const [status, setStatus] = useState<MenuChangeRequestStatus>("pending");
+  const requests = useMenuChangeRequests({
+    offset: 0,
+    limit: 100,
+    status,
+  });
+  const markReviewed = useMarkMenuChangeRequestReviewed();
+
+  const handleMarkReviewed = async (requestId: string) => {
+    try {
+      await markReviewed.mutateAsync(requestId);
+      toast.success("Зміну позначено як переглянуту.");
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
+    }
+  };
+
+  return (
+    <main className="nf-page nf-page-wide">
+      <header className="nf-page-header">
+        <p className="nf-eyebrow">Технолог</p>
+        <h1 className="nf-title">Зміни меню від шкіл</h1>
+        <p className="nf-description">
+          Тут з’являються лише збереження, у яких школа замінила страву або
+          змінила її дані. Зміни кількості дітей сюди не потрапляють.
+        </p>
+      </header>
+
+      <div className="nf-tabs mb-5" role="tablist" aria-label="Статус змін">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={status === "pending"}
+          className={`nf-tab ${status === "pending" ? "nf-tab-active" : ""}`}
+          onClick={() => setStatus("pending")}
+        >
+          Нові
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={status === "reviewed"}
+          className={`nf-tab ${status === "reviewed" ? "nf-tab-active" : ""}`}
+          onClick={() => setStatus("reviewed")}
+        >
+          Переглянуті
+        </button>
+      </div>
+
+      {requests.isPending ? (
+        <section className="nf-panel">
+          <div className="nf-panel-body">
+            <p role="status" className="text-sm text-slate-600">
+              Завантажуємо зміни…
+            </p>
+          </div>
+        </section>
+      ) : null}
+
+      {requests.isError ? (
+        <RequestError
+          error={requests.error}
+          onRetry={() => void requests.refetch()}
+        />
+      ) : null}
+
+      {requests.data?.items.length === 0 ? (
+        <section className="nf-panel">
+          <div className="nf-panel-body">
+            <div className="nf-empty">
+              {status === "pending"
+                ? "Нових змін страв від шкіл немає."
+                : "Переглянутих змін поки немає."}
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      <div className="space-y-5">
+        {requests.data?.items.map((request) => (
+          <ChangeRequestCard
+            key={request.id}
+            request={request}
+            reviewing={
+              markReviewed.isPending && markReviewed.variables === request.id
+            }
+            onMarkReviewed={() => void handleMarkReviewed(request.id)}
+          />
+        ))}
+      </div>
+    </main>
+  );
+}
+
+function ChangeRequestCard({
+  request,
+  reviewing,
+  onMarkReviewed,
+}: {
+  request: MenuChangeRequest;
+  reviewing: boolean;
+  onMarkReviewed: () => void;
+}) {
+  const groupedChanges = useMemo(() => groupChanges(request), [request]);
+
+  return (
+    <article className="nf-panel overflow-hidden">
+      <div className="nf-panel-header items-start gap-4">
+        <div>
+          <p className="nf-eyebrow">{request.school_name}</p>
+          <h2 className="nf-panel-title">{request.menu_title}</h2>
+          <p className="mt-1 text-xs text-slate-600">
+            {request.meal_type === "lunch" ? "Обід" : "Сніданок"}
+            {request.cycle_week ? ` · цикл ${request.cycle_week}` : ""}
+            {` · надіслано ${formatDate(request.created_at)}`}
+          </p>
+        </div>
+        <span
+          className={`inline-flex items-center gap-1 border px-2 py-1 text-xs font-bold ${
+            request.status === "pending"
+              ? "border-amber-300 bg-amber-50 text-amber-900"
+              : "border-emerald-300 bg-emerald-50 text-emerald-900"
+          }`}
+        >
+          {request.status === "pending" ? (
+            <Clock3 className="size-3.5" aria-hidden />
+          ) : (
+            <CheckCheck className="size-3.5" aria-hidden />
+          )}
+          {request.status === "pending" ? "Нова зміна" : "Переглянуто"}
+        </span>
+      </div>
+
+      <div className="nf-panel-body space-y-4">
+        {groupedChanges.map((group) => (
+          <section
+            key={`${group.weekday}-${group.position}`}
+            className="border border-amber-200 bg-amber-50/40"
+          >
+            <div className="border-b border-amber-200 bg-amber-50 px-4 py-3">
+              <h3 className="text-sm font-bold text-amber-950">
+                {WEEKDAY_LABELS[group.weekday]} · страва № {group.position}
+                {group.date ? ` · ${formatDayDate(group.date)}` : ""}
+              </h3>
+            </div>
+            <div className="divide-y divide-amber-100 bg-white">
+              {group.changes.map((change) => (
+                <ChangedField
+                  key={`${change.item_id}-${change.field}`}
+                  change={change}
+                />
+              ))}
+            </div>
+          </section>
+        ))}
+
+        <details className="border border-slate-200 bg-slate-50">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-bold text-slate-800">
+            Меню після збереження
+          </summary>
+          <div className="space-y-3 border-t border-slate-200 p-4">
+            {request.days_snapshot.map((day) => (
+              <div key={day.weekday}>
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-600">
+                  {WEEKDAY_LABELS[day.weekday]}
+                  {day.date ? ` · ${formatDayDate(day.date)}` : ""}
+                </p>
+                <ol className="mt-1 list-decimal space-y-1 pl-5 text-sm text-slate-800">
+                  {[...day.items]
+                    .sort((left, right) => left.position - right.position)
+                    .map((item) => (
+                      <li key={item.id}>{item.name}</li>
+                    ))}
+                </ol>
+              </div>
+            ))}
+          </div>
+        </details>
+
+        {request.status === "pending" ? (
+          <button
+            type="button"
+            className="nf-button nf-button-primary"
+            disabled={reviewing}
+            onClick={onMarkReviewed}
+          >
+            <CheckCheck className="size-4" aria-hidden />
+            {reviewing ? "Позначаємо…" : "Позначити як переглянуте"}
+          </button>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
+function ChangedField({ change }: { change: MenuFieldChange }) {
+  return (
+    <div className="grid gap-3 px-4 py-3 lg:grid-cols-[180px_minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="text-xs font-bold uppercase tracking-wide text-slate-600">
+        {FIELD_LABELS[change.field] ?? change.field}
+      </div>
+      <div className="border border-red-200 bg-red-50 p-3">
+        <p className="text-[11px] font-bold uppercase text-red-700">Було</p>
+        <ValuePreview value={change.before_value} />
+      </div>
+      <div className="border border-emerald-200 bg-emerald-50 p-3">
+        <p className="text-[11px] font-bold uppercase text-emerald-700">
+          Стало
+        </p>
+        <ValuePreview value={change.after_value} />
+      </div>
+    </div>
+  );
+}
+
+function ValuePreview({ value }: { value: unknown }) {
+  if (value === null || value === undefined || value === "") {
+    return <p className="mt-1 text-sm text-slate-500">—</p>;
+  }
+
+  if (Array.isArray(value)) {
+    if (value.every((item) => typeof item === "string")) {
+      return (
+        <p className="mt-1 text-sm text-slate-800">{value.join(", ") || "—"}</p>
+      );
+    }
+
+    return (
+      <pre className="mt-1 max-h-44 overflow-auto whitespace-pre-wrap break-words text-xs text-slate-800">
+        {JSON.stringify(value, null, 2)}
+      </pre>
+    );
+  }
+
+  if (typeof value === "object") {
+    return (
+      <pre className="mt-1 max-h-44 overflow-auto whitespace-pre-wrap break-words text-xs text-slate-800">
+        {JSON.stringify(value, null, 2)}
+      </pre>
+    );
+  }
+
+  return (
+    <p className="mt-1 break-words text-sm text-slate-800">{String(value)}</p>
+  );
+}
+
+function groupChanges(request: MenuChangeRequest) {
+  const groups = new Map<
+    string,
+    {
+      weekday: MenuFieldChange["weekday"];
+      position: number;
+      date: string | null;
+      visibleChanges: MenuFieldChange[];
+      technicalChanges: MenuFieldChange[];
+    }
+  >();
+
+  for (const change of request.changes) {
+    const key = `${change.weekday}:${change.position}`;
+    const existing = groups.get(key) ?? {
+      weekday: change.weekday,
+      position: change.position,
+      date:
+        request.days_snapshot.find((day) => day.weekday === change.weekday)
+          ?.date ?? null,
+      visibleChanges: [],
+      technicalChanges: [],
+    };
+
+    if (HIDDEN_TECHNICAL_FIELDS.has(change.field)) {
+      existing.technicalChanges.push(change);
+    } else {
+      existing.visibleChanges.push(change);
+    }
+
+    groups.set(key, existing);
+  }
+
+  return [...groups.values()].map((group) => ({
+    weekday: group.weekday,
+    position: group.position,
+    date: group.date,
+    changes:
+      group.visibleChanges.length > 0
+        ? group.visibleChanges
+        : group.technicalChanges,
+  }));
+}
+
+function formatDayDate(value: string): string {
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("uk-UA", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+}

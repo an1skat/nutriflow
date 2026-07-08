@@ -10,7 +10,7 @@ type DishCardPageProps = {
 export default async function DishCardPage({ params }: DishCardPageProps) {
   const { dishCardId } = await params;
   return (
-    <AccessGuard requiredPermissions={["recipes.manage"]}>
+    <AccessGuard requiredPermissions={["recipes.view"]}>
       <DishCardVersionsWidget dishCardId={dishCardId} />
     </AccessGuard>
   );
