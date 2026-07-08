@@ -1,19 +1,23 @@
+import asyncio
 import re
 from copy import deepcopy
-from datetime import UTC, datetime
-from decimal import Decimal
-from io import BytesIO
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from beanie import PydanticObjectId
 from fastapi import UploadFile
+from pymongo import ReturnDocument
 
+from app.core.config import get_settings
 from app.modules.auth.service import user_has_permissions
-from app.modules.identity.models import AdminPermission, AgeGroup, School, User, UserRole
+from app.modules.identity.models import AdminPermission, School, User, UserRole
 from app.modules.menus.models import (
     DailyMenu,
     DailyMenuItem,
     MealType,
+    MenuImportDiagnostic,
+    MenuImportDiagnosticLevel,
+    MenuImportPreviewSession,
     MenuItemKind,
     MenuItemServingCount,
     MenuNutrition,
@@ -31,9 +35,28 @@ from app.modules.menus.schemas import (
     PublishWeeklyMenuRequest,
     PublishWeeklyMenuResponse,
     UpdateWeeklyMenuRequest,
+    WeeklyMenuImportCommitResponse,
+    WeeklyMenuImportDiagnosticResponse,
+    WeeklyMenuImportPreviewItemResponse,
     WeeklyMenuImportPreviewResponse,
+    WeeklyMenuResponse,
 )
-from app.modules.recipe.models import DishCard, DishCardVersion, Ingredient
+from app.modules.menus.xlsx import (
+    ParsedWeeklyMenuPreview,
+    XlsxMenuError,
+    build_export_workbook,
+    build_template_workbook,
+)
+from app.modules.menus.xlsx import (
+    preview_weekly_menu_workbook as preview_xlsx_weekly_menu_workbook,
+)
+from app.modules.recipe.models import (
+    Allergen,
+    DishCard,
+    DishCardVersion,
+    Ingredient,
+    normalize_lookup_text,
+)
 
 
 class MenuNotFoundError(ValueError):
@@ -52,31 +75,13 @@ class MenuImportError(ValueError):
     """Menu import file cannot be parsed into a weekly menu."""
 
 
-UKRAINIAN_WEEKDAYS = {
-    "понеділок": Weekday.MONDAY,
-    "вівторок": Weekday.TUESDAY,
-    "середа": Weekday.WEDNESDAY,
-    "четвер": Weekday.THURSDAY,
-    "п'ятниця": Weekday.FRIDAY,
-    "п’ятниця": Weekday.FRIDAY,
-    "пятниця": Weekday.FRIDAY,
-    "субота": Weekday.SATURDAY,
-    "неділя": Weekday.SUNDAY,
-}
-
-AGE_GROUPS_BY_BLOCK = [
-    AgeGroup.SIX_TO_ELEVEN,
-    AgeGroup.ELEVEN_TO_FOURTEEN,
-    AgeGroup.FOURTEEN_TO_EIGHTEEN,
-]
-
-
 async def list_weekly_menus(
     current_user: User,
     *,
     offset: int,
     limit: int,
     school_id: PydanticObjectId | None = None,
+    source_menu_id: PydanticObjectId | None = None,
     template_only: bool = False,
     status: WeeklyMenuStatus | None = None,
     meal_type: MealType | None = None,
@@ -105,8 +110,23 @@ async def list_weekly_menus(
     elif school_id is not None:
         filters["school_id"] = school_id
 
+    if source_menu_id is not None:
+        filters["source_menu_id"] = source_menu_id
+
     if status is not None:
         filters["status"] = status.value
+    else:
+        filters["status"] = {
+            "$nin": [
+                WeeklyMenuStatus.ARCHIVED.value,
+                WeeklyMenuStatus.REVOKED.value,
+            ]
+        }
+    if current_user.role == UserRole.SCHOOL_USER:
+        if status is None:
+            filters["status"] = WeeklyMenuStatus.PUBLISHED.value
+        elif status not in {WeeklyMenuStatus.PUBLISHED, WeeklyMenuStatus.ARCHIVED}:
+            return [], 0
     if meal_type is not None:
         filters["meal_type"] = meal_type.value
 
@@ -167,6 +187,12 @@ async def update_weekly_menu(
 ) -> WeeklyMenu:
     menu = await get_weekly_menu(menu_id, current_user)
 
+    if (
+        current_user.role == UserRole.SCHOOL_USER
+        and menu.status != WeeklyMenuStatus.PUBLISHED
+    ):
+        raise MenuAccessDeniedError("Menu access denied")
+
     if current_user.role == UserRole.SCHOOL_USER and "days" in data.model_fields_set:
         _ensure_school_menu_shape_is_stable(menu, data.days or [])
 
@@ -191,6 +217,163 @@ async def update_weekly_menu(
     return menu
 
 
+async def archive_weekly_menu(
+    menu_id: PydanticObjectId,
+    current_user: User,
+) -> WeeklyMenu:
+    await _ensure_menu_permission(current_user)
+    menu = await get_weekly_menu(menu_id, current_user)
+
+    if menu.school_id is not None:
+        raise MenuValidationError("Only template weekly menus can be archived")
+
+    if menu.status == WeeklyMenuStatus.ARCHIVED:
+        return menu
+
+    now = datetime.now(UTC)
+    menu.archived_from_status = menu.status
+    menu.status = WeeklyMenuStatus.ARCHIVED
+    menu.updated_by = current_user.id
+    menu.updated_at = now
+    await menu.save()
+
+    await WeeklyMenu.find(
+        WeeklyMenu.source_menu_id == menu.id,
+        WeeklyMenu.school_id != None,  # noqa: E711
+        WeeklyMenu.status != WeeklyMenuStatus.REVOKED,
+    ).update(
+        {
+            "$set": {
+                "status": WeeklyMenuStatus.REVOKED.value,
+                "revoked_at": now,
+                "revoked_by": current_user.id,
+                "revoke_reason": "source_archived",
+                "updated_by": current_user.id,
+                "updated_at": now,
+            }
+        }
+    )
+    return menu
+
+
+async def restore_weekly_menu(
+    menu_id: PydanticObjectId,
+    current_user: User,
+) -> WeeklyMenu:
+    await _ensure_menu_permission(current_user)
+    menu = await get_weekly_menu(menu_id, current_user)
+
+    if menu.status != WeeklyMenuStatus.ARCHIVED:
+        return menu
+
+    restored_status = menu.archived_from_status
+    if restored_status is None or restored_status == WeeklyMenuStatus.ARCHIVED:
+        restored_status = (
+            WeeklyMenuStatus.PUBLISHED
+            if menu.published_at is not None
+            else WeeklyMenuStatus.DRAFT
+        )
+
+    menu.status = restored_status
+    menu.archived_from_status = None
+    menu.updated_by = current_user.id
+    menu.updated_at = datetime.now(UTC)
+    await menu.save()
+    return menu
+
+
+async def delete_weekly_menu(
+    menu_id: PydanticObjectId,
+    current_user: User,
+) -> None:
+    await _ensure_menu_permission(current_user)
+    menu = await get_weekly_menu(menu_id, current_user)
+
+    if menu.school_id is not None:
+        raise MenuValidationError("School archived weekly menus cannot be hard-deleted")
+    if menu.status != WeeklyMenuStatus.ARCHIVED:
+        raise MenuValidationError("Only archived weekly menus can be deleted")
+
+    await menu.delete()
+
+
+async def revoke_weekly_menu(
+    menu_id: PydanticObjectId,
+    current_user: User,
+) -> WeeklyMenu:
+    await _ensure_menu_permission(current_user)
+    menu = await get_weekly_menu(menu_id, current_user)
+
+    if menu.school_id is None:
+        raise MenuValidationError("Only school menu copies can be revoked")
+    if menu.status == WeeklyMenuStatus.REVOKED:
+        return menu
+
+    now = datetime.now(UTC)
+    menu.status = WeeklyMenuStatus.REVOKED
+    menu.revoked_at = now
+    menu.revoked_by = current_user.id
+    menu.revoke_reason = "manual"
+    menu.updated_by = current_user.id
+    menu.updated_at = now
+    await menu.save()
+    return menu
+
+
+async def archive_school_weekly_menu(
+    menu_id: PydanticObjectId,
+    current_user: User,
+) -> WeeklyMenu:
+    if current_user.role != UserRole.SCHOOL_USER:
+        raise MenuAccessDeniedError("Only schools can archive their own menus locally")
+
+    menu = await WeeklyMenu.get(menu_id)
+    if menu is None:
+        raise MenuNotFoundError("Weekly menu not found")
+    if menu.school_id != current_user.school_id:
+        raise MenuAccessDeniedError("School access denied")
+    if menu.status == WeeklyMenuStatus.REVOKED:
+        raise MenuAccessDeniedError("Weekly menu is revoked")
+    if menu.status == WeeklyMenuStatus.ARCHIVED:
+        return menu
+
+    menu.archived_from_status = menu.status
+    menu.status = WeeklyMenuStatus.ARCHIVED
+    menu.updated_by = current_user.id
+    menu.updated_at = datetime.now(UTC)
+    await menu.save()
+    return menu
+
+
+async def restore_school_weekly_menu(
+    menu_id: PydanticObjectId,
+    current_user: User,
+) -> WeeklyMenu:
+    if current_user.role != UserRole.SCHOOL_USER:
+        raise MenuAccessDeniedError("Only schools can restore their own archived menus")
+
+    menu = await WeeklyMenu.get(menu_id)
+    if menu is None:
+        raise MenuNotFoundError("Weekly menu not found")
+    if menu.school_id != current_user.school_id:
+        raise MenuAccessDeniedError("School access denied")
+    if menu.status == WeeklyMenuStatus.REVOKED:
+        raise MenuAccessDeniedError("Weekly menu is revoked")
+    if menu.status != WeeklyMenuStatus.ARCHIVED:
+        return menu
+
+    restored_status = menu.archived_from_status
+    if restored_status is None or restored_status == WeeklyMenuStatus.ARCHIVED:
+        restored_status = WeeklyMenuStatus.PUBLISHED
+
+    menu.status = restored_status
+    menu.archived_from_status = None
+    menu.updated_by = current_user.id
+    menu.updated_at = datetime.now(UTC)
+    await menu.save()
+    return menu
+
+
 async def publish_weekly_menu(
     menu_id: PydanticObjectId,
     data: PublishWeeklyMenuRequest,
@@ -200,6 +383,8 @@ async def publish_weekly_menu(
 
     if source.school_id is not None:
         raise MenuValidationError("Only template weekly menus can be published")
+    if source.status == WeeklyMenuStatus.ARCHIVED:
+        raise MenuValidationError("Archived weekly menus cannot be published")
 
     target_schools = await _get_publish_target_schools(data.school_ids, admin)
     created_menu_ids: list[PydanticObjectId] = []
@@ -278,20 +463,39 @@ async def preview_weekly_menu_import(
     meal_type: MealType,
     sheet_name: str | None,
     title: str | None,
+    current_user: User,
 ) -> WeeklyMenuImportPreviewResponse:
     content = await file.read()
-    menu, warnings, parsed_sheet_name = parse_weekly_menu_workbook(
+    preview = await _preview_weekly_menu_workbook_with_references(
         content,
         filename=file.filename or "",
         meal_type=meal_type,
         sheet_name=sheet_name,
         title=title,
     )
-    return WeeklyMenuImportPreviewResponse(
+    expires_at = datetime.now(UTC) + timedelta(
+        minutes=get_settings().menu_import_preview_ttl_minutes
+    )
+    preview_session = MenuImportPreviewSession(
+        owner_user_id=current_user.id,
         filename=file.filename or "",
-        sheet_name=parsed_sheet_name,
-        warnings=warnings,
-        menu=menu,
+        meal_type=meal_type,
+        available_sheet_names=preview.available_sheet_names,
+        selected_sheet_name=preview.selected_sheet_name,
+        parsed_sheet_names=preview.parsed_sheet_names,
+        title_override=title,
+        diagnostics=preview.diagnostics,
+        menu_payload=preview.menu.model_dump(mode="json") if preview.menu is not None else None,
+        menu_payloads=[preview_item.menu.model_dump(mode="json") for preview_item in preview.menus],
+        expires_at=expires_at,
+    )
+    await preview_session.insert()
+
+    return _build_import_preview_response(
+        preview_id=preview_session.id,
+        filename=file.filename or "",
+        preview=preview,
+        expires_at=expires_at,
     )
 
 
@@ -305,15 +509,186 @@ async def create_weekly_menu_from_import(
     current_user: User,
 ) -> WeeklyMenu:
     content = await file.read()
-    menu_request, _warnings, _parsed_sheet_name = parse_weekly_menu_workbook(
+    preview = await _preview_weekly_menu_workbook_with_references(
         content,
         filename=file.filename or "",
         meal_type=meal_type,
         sheet_name=sheet_name,
         title=title,
     )
+
+    errors = [
+        diagnostic
+        for diagnostic in preview.diagnostics
+        if diagnostic.level == MenuImportDiagnosticLevel.ERROR
+    ]
+    if errors:
+        raise MenuImportError(_format_diagnostic_messages(errors))
+    if not preview.menus:
+        raise MenuImportError("Workbook does not contain importable menu sheets")
+    if sheet_name is None and len(preview.menus) > 1:
+        raise MenuImportError(
+            "Workbook contains multiple menu sheets; use import preview + commit "
+            "to import them together"
+        )
+
+    menu_request = deepcopy(preview.menus[0].menu)
     menu_request.school_id = school_id
     return await create_weekly_menu(menu_request, current_user=current_user)
+
+
+async def commit_weekly_menu_import(
+    preview_id: PydanticObjectId,
+    *,
+    school_id: PydanticObjectId | None,
+    current_user: User,
+) -> WeeklyMenuImportCommitResponse:
+    preview_session = await MenuImportPreviewSession.get(preview_id)
+    if preview_session is None:
+        raise MenuImportError("Import preview not found")
+    if preview_session.owner_user_id != current_user.id:
+        raise MenuAccessDeniedError("Import preview belongs to another administrator")
+    if preview_session.expires_at <= datetime.now(UTC):
+        raise MenuImportError("Import preview has expired; upload the workbook again")
+    if (
+        preview_session.status.value == "committed"
+        or preview_session.committed_menu_id is not None
+        or preview_session.committed_menu_ids
+    ):
+        raise MenuImportError("Import preview was already committed")
+    if preview_session.status.value == "committing":
+        raise MenuImportError("Import preview is already being committed")
+    if preview_session.status.value == "failed":
+        raise MenuImportError("Import preview commit previously failed; upload the workbook again")
+    if any(
+        diagnostic.level == MenuImportDiagnosticLevel.ERROR
+        for diagnostic in preview_session.diagnostics
+    ):
+        raise MenuImportError("Import preview contains errors and cannot be committed")
+
+    payloads = preview_session.menu_payloads
+    if not payloads and preview_session.menu_payload is not None:
+        payloads = [preview_session.menu_payload]
+    if not payloads:
+        raise MenuImportError("Import preview does not contain menu payloads")
+
+    claimed_document = await MenuImportPreviewSession.get_pymongo_collection().find_one_and_update(
+        {
+            "_id": preview_session.id,
+            "owner_user_id": current_user.id,
+            "expires_at": {"$gt": datetime.now(UTC)},
+            "$and": [
+                {
+                    "$or": [
+                        {"status": "previewed"},
+                        {"status": {"$exists": False}},
+                    ]
+                },
+                {
+                    "$or": [
+                        {"committed_menu_ids": []},
+                        {"committed_menu_ids": {"$exists": False}},
+                    ]
+                },
+                {
+                    "$or": [
+                        {"committed_menu_id": None},
+                        {"committed_menu_id": {"$exists": False}},
+                    ]
+                },
+            ],
+        },
+        {
+            "$set": {
+                "status": "committing",
+                "commit_error": None,
+                "updated_at": datetime.now(UTC),
+            }
+        },
+        return_document=ReturnDocument.AFTER,
+    )
+    if claimed_document is None:
+        raise MenuImportError("Import preview is already being committed or was committed")
+
+    created_menu_ids: list[PydanticObjectId] = []
+    menus: list[WeeklyMenu] = []
+    try:
+        for payload in payloads:
+            menu_request = CreateWeeklyMenuRequest.model_validate(payload)
+            menu_request.school_id = school_id
+            menu = await create_weekly_menu(menu_request, current_user=current_user)
+            menus.append(menu)
+            created_menu_ids.append(menu.id)
+    except Exception as exc:
+        if created_menu_ids:
+            await WeeklyMenu.get_pymongo_collection().delete_many(
+                {"_id": {"$in": created_menu_ids}}
+            )
+        await MenuImportPreviewSession.get_pymongo_collection().update_one(
+            {"_id": preview_session.id, "status": "committing"},
+            {
+                "$set": {
+                    "status": "failed",
+                    "commit_error": str(exc)[:500],
+                    "updated_at": datetime.now(UTC),
+                }
+            },
+        )
+        raise
+
+    await MenuImportPreviewSession.get_pymongo_collection().update_one(
+        {"_id": preview_session.id, "status": "committing"},
+        {
+            "$set": {
+                "status": "committed",
+                "committed_menu_id": menus[0].id if menus else None,
+                "committed_menu_ids": created_menu_ids,
+                "updated_at": datetime.now(UTC),
+            }
+        },
+    )
+
+    return WeeklyMenuImportCommitResponse(
+        preview_id=preview_session.id,
+        school_id=school_id,
+        created_menu_ids=created_menu_ids,
+        menu=WeeklyMenuResponse.from_menu(menus[0]) if menus else None,
+        menus=[WeeklyMenuResponse.from_menu(menu) for menu in menus],
+    )
+
+
+async def export_weekly_menu_workbook(
+    menu_id: PydanticObjectId,
+    current_user: User,
+) -> tuple[str, bytes]:
+    menu = await get_weekly_menu(menu_id, current_user)
+    try:
+        content = await asyncio.to_thread(build_export_workbook, [menu])
+    except XlsxMenuError as exc:
+        raise MenuImportError(str(exc)) from exc
+    return _export_filename(menu), content
+
+
+async def export_many_weekly_menu_workbooks(
+    menu_ids: list[PydanticObjectId],
+    current_user: User,
+) -> tuple[str, bytes]:
+    if len(menu_ids) > 4:
+        raise MenuImportError("Can export at most four weekly menus in one workbook")
+    menus = [await get_weekly_menu(menu_id, current_user) for menu_id in menu_ids]
+    try:
+        content = await asyncio.to_thread(build_export_workbook, menus)
+    except XlsxMenuError as exc:
+        raise MenuImportError(str(exc)) from exc
+    return "weekly-menus.xlsx", content
+
+
+async def generate_weekly_menu_template_workbook() -> tuple[str, bytes]:
+    try:
+        content = await asyncio.to_thread(build_template_workbook, weeks=4)
+    except XlsxMenuError as exc:
+        raise MenuImportError(str(exc)) from exc
+    return "weekly-menu-template.xlsx", content
 
 
 def parse_weekly_menu_workbook(
@@ -323,78 +698,64 @@ def parse_weekly_menu_workbook(
     meal_type: MealType,
     sheet_name: str | None = None,
     title: str | None = None,
-) -> tuple[CreateWeeklyMenuRequest, list[str], str]:
-    try:
-        import openpyxl
-    except ModuleNotFoundError as exc:
-        raise MenuImportError("openpyxl is required to parse menu workbooks") from exc
-
-    try:
-        workbook = openpyxl.load_workbook(
-            BytesIO(content),
-            data_only=True,
-            read_only=True,
-        )
-    except Exception as exc:
-        raise MenuImportError(f"Could not read .xlsx file: {exc}") from exc
-
-    if not workbook.sheetnames:
-        raise MenuImportError("Workbook does not contain sheets")
-
-    selected_sheet_name = sheet_name or workbook.sheetnames[0]
-    if selected_sheet_name not in workbook.sheetnames:
-        raise MenuImportError("Requested sheet was not found in workbook")
-
-    sheet = workbook[selected_sheet_name]
-    source_col, allergen_col, name_col = _detect_menu_columns(sheet)
-    portion_blocks = _detect_portion_blocks(sheet, name_col)
-    day_rows = _detect_day_rows(sheet, name_col)
-
-    if len(portion_blocks) < 3:
-        raise MenuImportError("Could not detect all age-group nutrition blocks")
-    if not day_rows:
-        raise MenuImportError("Could not detect weekday blocks")
-
-    warnings: list[str] = []
-    days: list[DailyMenuPayload] = []
-    week_number = _detect_cycle_week(sheet, selected_sheet_name)
-
-    for index, (row_number, weekday) in enumerate(day_rows):
-        next_row = day_rows[index + 1][0] if index + 1 < len(day_rows) else sheet.max_row + 1
-        items = _parse_day_items(
-            sheet,
-            start_row=row_number + 1,
-            end_row=next_row,
-            source_col=source_col,
-            allergen_col=allergen_col,
-            name_col=name_col,
-            portion_blocks=portion_blocks[:3],
-            warnings=warnings,
-        )
-        if items:
-            days.append(DailyMenuPayload(weekday=weekday, items=items))
-
-    if not days:
-        raise MenuImportError("Workbook sheet does not contain menu items")
-
-    resolved_title = title or _default_import_title(
+) -> tuple[CreateWeeklyMenuRequest, str]:
+    preview = preview_weekly_menu_workbook(
+        content,
         filename=filename,
-        sheet_name=selected_sheet_name,
         meal_type=meal_type,
+        sheet_name=sheet_name,
+        title=title,
     )
+    errors = [
+        diagnostic
+        for diagnostic in preview.diagnostics
+        if diagnostic.level == MenuImportDiagnosticLevel.ERROR
+    ]
+    if errors:
+        raise MenuImportError(_format_diagnostic_messages(errors))
+    if preview.menu is None:
+        raise MenuImportError("Workbook does not contain importable menu sheets")
+    return preview.menu, preview.menu.source_sheet_name or preview.selected_sheet_name or ""
 
-    return (
-        CreateWeeklyMenuRequest(
-            title=resolved_title,
+
+def preview_weekly_menu_workbook(
+    content: bytes,
+    *,
+    filename: str,
+    meal_type: MealType,
+    sheet_name: str | None = None,
+    title: str | None = None,
+) -> ParsedWeeklyMenuPreview:
+    try:
+        return preview_xlsx_weekly_menu_workbook(
+            content,
+            filename=filename,
             meal_type=meal_type,
-            cycle_week=week_number,
-            days=days,
-            source_file_name=filename,
-            source_sheet_name=selected_sheet_name,
-        ),
-        warnings,
-        selected_sheet_name,
+            sheet_name=sheet_name,
+            title=title,
+        )
+    except XlsxMenuError as exc:
+        raise MenuImportError(str(exc)) from exc
+
+
+async def _preview_weekly_menu_workbook_with_references(
+    content: bytes,
+    *,
+    filename: str,
+    meal_type: MealType,
+    sheet_name: str | None = None,
+    title: str | None = None,
+) -> ParsedWeeklyMenuPreview:
+    preview = await asyncio.to_thread(
+        preview_weekly_menu_workbook,
+        content,
+        filename=filename,
+        meal_type=meal_type,
+        sheet_name=sheet_name,
+        title=title,
     )
+    await _hydrate_preview_references(preview)
+    return preview
 
 
 async def _to_daily_menus(data: list[DailyMenuPayload]) -> list[DailyMenu]:
@@ -458,7 +819,15 @@ async def _resolve_item_references(item: DailyMenuItem) -> None:
             ingredient = await Ingredient.get(item.product_ingredient_id)
             if ingredient is None:
                 raise MenuValidationError("Product ingredient not found")
-            item.product_name_snapshot = item.product_name_snapshot or ingredient.name
+            item.product_name_snapshot = ingredient.name
+            return
+
+        lookup_name = item.product_name_snapshot or item.name
+        if lookup_name:
+            ingredient = await _find_ingredient_by_name(lookup_name)
+            if ingredient is not None:
+                item.product_ingredient_id = ingredient.id
+                item.product_name_snapshot = ingredient.name
         return
 
     if item.dish_card_id is None and item.recipe_card_number:
@@ -476,11 +845,15 @@ async def _resolve_item_references(item: DailyMenuItem) -> None:
 
     if item.dish_card_version_id is None:
         item.dish_card_version_id = dish_card.current_version_id
-        return
+        if item.dish_card_version_id is None:
+            return
 
     version = await DishCardVersion.get(item.dish_card_version_id)
     if version is None or version.dish_card_id != dish_card.id:
         raise MenuValidationError("Dish card version does not belong to menu item dish card")
+
+    if not item.allergen_codes:
+        item.allergen_codes = await _resolve_allergen_codes(version)
 
 
 async def _find_dish_card_by_number(card_number: str) -> DishCard | None:
@@ -489,6 +862,35 @@ async def _find_dish_card_by_number(card_number: str) -> DishCard | None:
         if dish_card is not None:
             return dish_card
     return None
+
+
+async def _find_ingredient_by_name(name: str) -> Ingredient | None:
+    normalized = normalize_lookup_text(name)
+    if not normalized:
+        return None
+
+    return await Ingredient.find_one(
+        {
+            "$or": [
+                {"normalized_name": normalized},
+                {"aliases": normalized},
+            ]
+        }
+    )
+
+
+async def _resolve_allergen_codes(version: DishCardVersion) -> list[str]:
+    resolved_codes: list[str] = []
+    seen_codes: set[str] = set()
+
+    for allergen_id in version.allergen_ids:
+        allergen = await Allergen.get(allergen_id)
+        if allergen is None or allergen.code in seen_codes:
+            continue
+        seen_codes.add(allergen.code)
+        resolved_codes.append(allergen.code)
+
+    return resolved_codes
 
 
 def _card_number_candidates(card_number: str) -> list[str]:
@@ -517,6 +919,10 @@ async def _authorize_menu_access(menu: WeeklyMenu, current_user: User) -> None:
 
     if menu.school_id != current_user.school_id:
         raise MenuAccessDeniedError("School access denied")
+    if menu.status == WeeklyMenuStatus.REVOKED:
+        raise MenuAccessDeniedError("Weekly menu is revoked")
+    if menu.status == WeeklyMenuStatus.ARCHIVED:
+        raise MenuAccessDeniedError("Menu access denied")
 
 
 async def _get_active_school(school_id: PydanticObjectId) -> School:
@@ -600,197 +1006,177 @@ def _ensure_school_menu_shape_is_stable(
         raise MenuValidationError("School users cannot change the number of dishes in a day")
 
 
-def _detect_menu_columns(sheet) -> tuple[int, int, int]:
-    source_col = allergen_col = name_col = None
-
-    for column, cell in enumerate(sheet[1], start=1):
-        value = _cell_text(cell.value).lower()
-        if "збірник" in value or "розкладки" in value:
-            source_col = column
-        elif "алерген" in value:
-            allergen_col = column
-        elif "найменування" in value:
-            name_col = column
-
-    if source_col is None or allergen_col is None or name_col is None:
-        raise MenuImportError("Could not detect source, allergen, and dish name columns")
-
-    return source_col, allergen_col, name_col
-
-
-def _detect_portion_blocks(sheet, name_col: int) -> list[int]:
-    blocks: list[int] = []
-    for column, cell in enumerate(sheet[2], start=1):
-        if column <= name_col:
-            continue
-        value = _cell_text(cell.value).lower()
-        if value.startswith("вихід"):
-            blocks.append(column)
-    return blocks
-
-
-def _detect_day_rows(sheet, name_col: int) -> list[tuple[int, Weekday]]:
-    day_rows: list[tuple[int, Weekday]] = []
-
-    for row_number in range(1, sheet.max_row + 1):
-        for column in range(max(1, name_col - 1), name_col + 2):
-            value = _cell_text(sheet.cell(row_number, column).value).lower()
-            if value in UKRAINIAN_WEEKDAYS:
-                day_rows.append((row_number, UKRAINIAN_WEEKDAYS[value]))
-                break
-
-    return day_rows
-
-
-def _parse_day_items(
-    sheet,
+def _build_import_preview_response(
     *,
-    start_row: int,
-    end_row: int,
-    source_col: int,
-    allergen_col: int,
-    name_col: int,
-    portion_blocks: list[int],
-    warnings: list[str],
-) -> list[DailyMenuItemPayload]:
-    items: list[DailyMenuItemPayload] = []
-    position = 1
-
-    for row_number in range(start_row, end_row):
-        source_text = _cell_text(sheet.cell(row_number, source_col).value)
-        name = _cell_text(sheet.cell(row_number, name_col).value)
-
-        if not source_text and not name:
-            continue
-        if _is_total_row(source_text) or _is_total_row(name):
-            break
-        if not name:
-            warnings.append(f"Row {row_number}: skipped item without dish name.")
-            continue
-
-        kind = MenuItemKind.PRODUCT if _is_product_source(source_text) else MenuItemKind.DISH_CARD
-        item = DailyMenuItemPayload(
-            position=position,
-            kind=kind,
-            source_text=source_text or None,
-            recipe_card_number=_extract_recipe_card_number(source_text)
-            if kind == MenuItemKind.DISH_CARD
-            else None,
-            product_name_snapshot=name if kind == MenuItemKind.PRODUCT else None,
-            name=name,
-            allergen_codes=_parse_allergen_codes(sheet.cell(row_number, allergen_col).value),
-            portions=_parse_portions(sheet, row_number, portion_blocks, warnings),
-        )
-        items.append(item)
-        position += 1
-
-    return items
-
-
-def _parse_portions(
-    sheet,
-    row_number: int,
-    portion_blocks: list[int],
-    warnings: list[str],
-) -> list[MenuPortionPayload]:
-    portions: list[MenuPortionPayload] = []
-
-    for age_group, start_col in zip(AGE_GROUPS_BY_BLOCK, portion_blocks, strict=True):
-        yield_amount = _format_yield_amount(sheet.cell(row_number, start_col).value)
-        if not yield_amount:
-            warnings.append(f"Row {row_number}: missing yield amount for {age_group.value}.")
-            continue
-
-        portions.append(
-            MenuPortionPayload(
-                age_group=age_group,
-                yield_amount=yield_amount,
-                nutrition={
-                    "kcal": _decimal_or_none(sheet.cell(row_number, start_col + 1).value),
-                    "proteins": _decimal_or_none(sheet.cell(row_number, start_col + 2).value),
-                    "fats": _decimal_or_none(sheet.cell(row_number, start_col + 3).value),
-                    "carbs": _decimal_or_none(sheet.cell(row_number, start_col + 4).value),
-                },
+    preview_id: PydanticObjectId,
+    filename: str,
+    preview: ParsedWeeklyMenuPreview,
+    expires_at: datetime,
+) -> WeeklyMenuImportPreviewResponse:
+    return WeeklyMenuImportPreviewResponse(
+        preview_id=preview_id,
+        filename=filename,
+        available_sheet_names=preview.available_sheet_names,
+        selected_sheet_name=preview.selected_sheet_name,
+        parsed_sheet_names=preview.parsed_sheet_names,
+        diagnostics=[
+            WeeklyMenuImportDiagnosticResponse.from_diagnostic(diagnostic)
+            for diagnostic in preview.diagnostics
+        ],
+        commit_ready=preview.commit_ready,
+        expires_at=expires_at,
+        menu=preview.menu,
+        menus=[
+            WeeklyMenuImportPreviewItemResponse(
+                sheet_name=preview_item.sheet_name,
+                menu=preview_item.menu,
             )
-        )
-
-    return portions
-
-
-def _parse_allergen_codes(value: Any) -> list[str]:
-    text = _cell_text(value)
-    if not text:
-        return []
-    codes: list[str] = []
-    for raw_code in re.split(r"[,/;]", text):
-        code = raw_code.strip().upper()
-        if not code or code == "-":
-            continue
-        codes.append(code)
-    return sorted(set(codes))
+            for preview_item in preview.menus
+        ],
+    )
 
 
-def _extract_recipe_card_number(source_text: str) -> str | None:
-    match = re.search(r"ТК\s*№\s*([0-9]+(?:[._][0-9]+)*)", source_text, re.IGNORECASE)
-    if match:
-        return match.group(1).replace("_", ".").strip()
+async def _hydrate_preview_references(preview: ParsedWeeklyMenuPreview) -> None:
+    if not preview.menus:
+        return
 
-    match = re.search(r"№\s*([0-9]+(?:[._][0-9]+)*)", source_text, re.IGNORECASE)
-    if match:
-        return match.group(1).replace("_", ".").strip()
+    known_allergen_codes = await _load_known_allergen_codes()
+    dish_card_cache: dict[str, DishCard | None] = {}
+    version_cache: dict[PydanticObjectId, DishCardVersion | None] = {}
+    ingredient_cache: dict[str, Ingredient | None] = {}
 
-    return None
+    for preview_item in preview.menus:
+        for day in preview_item.menu.days:
+            for item in day.items:
+                row_number = preview_item.item_rows.get((day.weekday.value, item.position))
+                if item.kind == MenuItemKind.PRODUCT:
+                    lookup_name = item.product_name_snapshot or item.name
+                    normalized_name = normalize_lookup_text(lookup_name)
+                    ingredient = None
+                    if normalized_name:
+                        if normalized_name not in ingredient_cache:
+                            ingredient_cache[normalized_name] = await _find_ingredient_by_name(
+                                lookup_name
+                            )
+                        ingredient = ingredient_cache[normalized_name]
+                    if ingredient is None:
+                        preview.diagnostics.append(
+                            _import_diagnostic(
+                                level=MenuImportDiagnosticLevel.WARNING,
+                                code="ingredient_not_found",
+                                message=f'Ingredient "{lookup_name}" was not found',
+                                sheet_name=preview_item.sheet_name,
+                                row_number=row_number,
+                                column_number=3,
+                            )
+                        )
+                    else:
+                        item.product_ingredient_id = ingredient.id
+                        item.product_name_snapshot = ingredient.name
+                else:
+                    recipe_card_number = (item.recipe_card_number or "").strip()
+                    if recipe_card_number:
+                        if recipe_card_number not in dish_card_cache:
+                            dish_card_cache[recipe_card_number] = await _find_dish_card_by_number(
+                                recipe_card_number
+                            )
+                        dish_card = dish_card_cache[recipe_card_number]
+                        if dish_card is None:
+                            preview.diagnostics.append(
+                                _import_diagnostic(
+                                    level=MenuImportDiagnosticLevel.ERROR,
+                                    code="dish_card_not_found",
+                                    message=f'Recipe card "{recipe_card_number}" was not found',
+                                    sheet_name=preview_item.sheet_name,
+                                    row_number=row_number,
+                                    column_number=1,
+                                )
+                            )
+                        else:
+                            item.dish_card_id = dish_card.id
+                            item.dish_card_version_id = dish_card.current_version_id
+                            if (
+                                not item.allergen_codes
+                                and dish_card.current_version_id is not None
+                            ):
+                                if dish_card.current_version_id not in version_cache:
+                                    version_cache[dish_card.current_version_id] = (
+                                        await DishCardVersion.get(dish_card.current_version_id)
+                                    )
+                                version = version_cache[dish_card.current_version_id]
+                                if version is not None:
+                                    item.allergen_codes = await _resolve_allergen_codes(version)
+
+                unknown_codes = [
+                    code for code in item.allergen_codes if code not in known_allergen_codes
+                ]
+                if unknown_codes:
+                    preview.diagnostics.append(
+                        _import_diagnostic(
+                            level=MenuImportDiagnosticLevel.WARNING,
+                            code="unknown_allergen_codes",
+                            message="Unknown allergen codes: " + ", ".join(unknown_codes),
+                            sheet_name=preview_item.sheet_name,
+                            row_number=row_number,
+                            column_number=2,
+                        )
+                    )
 
 
-def _detect_cycle_week(sheet, sheet_name: str) -> int | None:
-    for row_number in range(1, min(sheet.max_row, 5) + 1):
-        for column in range(1, min(sheet.max_column, 6) + 1):
-            text = _cell_text(sheet.cell(row_number, column).value).lower()
-            match = re.search(r"(\d+)\s*-\s*й\s+тиждень", text)
-            if match:
-                return int(match.group(1))
-
-    roman = sheet_name.strip().lower().replace(" ", "")
-    if roman.startswith("іv") or roman.startswith("iv"):
-        return 4
-    if roman.startswith("ііі") or roman.startswith("iii"):
-        return 3
-    if roman.startswith("іі") or roman.startswith("ii"):
-        return 2
-    if roman.startswith("і") or roman.startswith("i"):
-        return 1
-    return None
+async def _load_known_allergen_codes() -> set[str]:
+    allergens = await Allergen.find_all().to_list()
+    return {allergen.code for allergen in allergens}
 
 
-def _default_import_title(*, filename: str, sheet_name: str, meal_type: MealType) -> str:
-    meal_label = "Сніданки" if meal_type == MealType.BREAKFAST else "Обіди"
-    file_label = filename.rsplit(".", 1)[0] if filename else "Імпорт меню"
-    return f"{file_label}: {meal_label}, {sheet_name.strip()}"
+def _import_diagnostic(
+    *,
+    level: MenuImportDiagnosticLevel,
+    code: str,
+    message: str,
+    sheet_name: str,
+    row_number: int | None = None,
+    column_number: int | None = None,
+) -> MenuImportDiagnostic:
+    column_letter = _column_letter(column_number) if column_number is not None else None
+    cell = (
+        f"{column_letter}{row_number}"
+        if column_letter is not None and row_number is not None
+        else None
+    )
+    return MenuImportDiagnostic(
+        level=level,
+        code=code,
+        message=message,
+        sheet_name=sheet_name,
+        row_number=row_number,
+        column_letter=column_letter,
+        cell=cell,
+    )
 
 
-def _cell_text(value: Any) -> str:
-    if value is None:
-        return ""
-    return str(value).strip()
+def _format_diagnostic_messages(diagnostics: list[MenuImportDiagnostic]) -> str:
+    formatted: list[str] = []
+    for diagnostic in diagnostics:
+        location = ""
+        if diagnostic.sheet_name and diagnostic.cell:
+            location = f" ({diagnostic.sheet_name}!{diagnostic.cell})"
+        elif diagnostic.row_number is not None:
+            location = f" (row {diagnostic.row_number})"
+        formatted.append(f"{diagnostic.message}{location}")
+    return "; ".join(formatted)
 
 
-def _is_total_row(value: str) -> bool:
-    return value.strip().lower().startswith("всього")
+def _export_filename(menu: WeeklyMenu) -> str:
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "-", menu.title.strip()).strip("-")
+    if not slug:
+        slug = f"weekly-menu-{menu.id}"
+    return f"{slug}.xlsx"
 
 
-def _is_product_source(source_text: str) -> bool:
-    return "пром" in source_text.lower() and "вироб" in source_text.lower()
-
-
-def _format_yield_amount(value: Any) -> str:
-    if value is None:
-        return ""
-    if isinstance(value, float) and value.is_integer():
-        return str(int(value))
-    return str(value).strip()
-
-
-def _decimal_or_none(value: Any) -> Decimal | None:
-    if value is None or value == "":
-        return None
-    return Decimal(str(value))
+def _column_letter(column_number: int) -> str:
+    result = ""
+    current = column_number
+    while current > 0:
+        current, remainder = divmod(current - 1, 26)
+        result = chr(65 + remainder) + result
+    return result

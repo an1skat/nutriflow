@@ -62,6 +62,11 @@ class Settings(BaseSettings):
     auth_refresh_failure_limit: int = Field(default=10, ge=1)
     auth_refresh_failure_lock_seconds: int = Field(default=15 * 60, ge=1)
 
+    menu_import_max_file_bytes: int = Field(default=5 * 1024 * 1024, ge=1024)
+    menu_import_max_sheet_count: int = Field(default=12, ge=1, le=100)
+    menu_import_max_rows_per_sheet: int = Field(default=1000, ge=10, le=20_000)
+    menu_import_preview_ttl_minutes: int = Field(default=30, ge=1, le=24 * 60)
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @field_validator("trusted_hosts", "backend_cors_origins")

@@ -1,7 +1,7 @@
 from datetime import date as Date
 from datetime import datetime
 from enum import StrEnum
-from typing import Annotated, Self
+from typing import Annotated, Any, Self
 
 from beanie import Document, PydanticObjectId
 from pydantic import BaseModel, Field, StringConstraints, field_validator, model_validator
@@ -34,11 +34,24 @@ class WeeklyMenuStatus(StrEnum):
     DRAFT = "draft"
     PUBLISHED = "published"
     ARCHIVED = "archived"
+    REVOKED = "revoked"
 
 
 class MenuItemKind(StrEnum):
     DISH_CARD = "dish_card"
     PRODUCT = "product"
+
+
+class MenuImportDiagnosticLevel(StrEnum):
+    WARNING = "warning"
+    ERROR = "error"
+
+
+class MenuImportPreviewStatus(StrEnum):
+    PREVIEWED = "previewed"
+    COMMITTING = "committing"
+    COMMITTED = "committed"
+    FAILED = "failed"
 
 
 class MenuNutrition(BaseModel):
@@ -134,6 +147,10 @@ class WeeklyMenu(Document):
     source_file_name: str | None = Field(default=None, max_length=255)
     source_sheet_name: str | None = Field(default=None, max_length=120)
     published_at: datetime | None = None
+    archived_from_status: WeeklyMenuStatus | None = None
+    revoked_at: datetime | None = None
+    revoked_by: PydanticObjectId | None = None
+    revoke_reason: str | None = Field(default=None, max_length=80)
     created_by: PydanticObjectId | None = None
     updated_by: PydanticObjectId | None = None
     created_at: datetime = Field(default_factory=utc_now)
@@ -172,4 +189,46 @@ class WeeklyMenu(Document):
                 name="ix_weekly_menu_source_school",
             ),
             IndexModel([("created_at", ASCENDING)], name="ix_weekly_menu_created_at"),
+        ]
+
+
+class MenuImportDiagnostic(BaseModel):
+    level: MenuImportDiagnosticLevel
+    message: str = Field(min_length=1, max_length=500)
+    code: str = Field(min_length=1, max_length=80)
+    sheet_name: str | None = Field(default=None, max_length=120)
+    row_number: int | None = Field(default=None, ge=1)
+    column_letter: str | None = Field(default=None, max_length=8)
+    cell: str | None = Field(default=None, max_length=12)
+
+
+class MenuImportPreviewSession(Document):
+    owner_user_id: PydanticObjectId
+    filename: str = Field(min_length=1, max_length=255)
+    meal_type: MealType
+    available_sheet_names: list[str] = Field(default_factory=list)
+    selected_sheet_name: str | None = Field(default=None, max_length=120)
+    parsed_sheet_names: list[str] = Field(default_factory=list)
+    title_override: str | None = Field(default=None, max_length=255)
+    diagnostics: list[MenuImportDiagnostic] = Field(default_factory=list)
+    status: MenuImportPreviewStatus = MenuImportPreviewStatus.PREVIEWED
+    commit_error: str | None = Field(default=None, max_length=500)
+    menu_payload: dict[str, Any] | None = None
+    menu_payloads: list[dict[str, Any]] = Field(default_factory=list)
+    expires_at: datetime
+    committed_menu_id: PydanticObjectId | None = None
+    committed_menu_ids: list[PydanticObjectId] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+    class Settings:
+        name = "menu_import_preview_sessions"
+        indexes = [
+            IndexModel([("owner_user_id", ASCENDING)], name="ix_menu_import_preview_owner"),
+            IndexModel(
+                [("expires_at", ASCENDING)],
+                name="ix_menu_import_preview_expires_at",
+                expireAfterSeconds=0,
+            ),
+            IndexModel([("created_at", ASCENDING)], name="ix_menu_import_preview_created_at"),
         ]

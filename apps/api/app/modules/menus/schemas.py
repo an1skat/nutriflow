@@ -10,6 +10,8 @@ from app.modules.menus.models import (
     DailyMenu,
     DailyMenuItem,
     MealType,
+    MenuImportDiagnostic,
+    MenuImportDiagnosticLevel,
     MenuItemKind,
     MenuItemServingCount,
     MenuNutrition,
@@ -245,6 +247,9 @@ class WeeklyMenuResponse(DecimalResponseModel):
     source_file_name: str | None
     source_sheet_name: str | None
     published_at: datetime | None
+    revoked_at: datetime | None
+    revoked_by: PydanticObjectId | None
+    revoke_reason: str | None
     created_by: PydanticObjectId | None
     updated_by: PydanticObjectId | None
     created_at: datetime
@@ -267,6 +272,9 @@ class WeeklyMenuResponse(DecimalResponseModel):
             source_file_name=menu.source_file_name,
             source_sheet_name=menu.source_sheet_name,
             published_at=menu.published_at,
+            revoked_at=menu.revoked_at,
+            revoked_by=menu.revoked_by,
+            revoke_reason=menu.revoke_reason,
             created_by=menu.created_by,
             updated_by=menu.updated_by,
             created_at=menu.created_at,
@@ -294,8 +302,49 @@ class PublishWeeklyMenuResponse(BaseModel):
     skipped_existing_school_ids: list[PydanticObjectId]
 
 
-class WeeklyMenuImportPreviewResponse(DecimalResponseModel):
-    filename: str
+class WeeklyMenuImportDiagnosticResponse(BaseModel):
+    level: MenuImportDiagnosticLevel
+    message: str
+    code: str
+    sheet_name: str | None = None
+    row_number: int | None = None
+    column_letter: str | None = None
+    cell: str | None = None
+
+    @classmethod
+    def from_diagnostic(
+        cls,
+        diagnostic: MenuImportDiagnostic,
+    ) -> "WeeklyMenuImportDiagnosticResponse":
+        return cls.model_validate(diagnostic.model_dump())
+
+
+class CommitWeeklyMenuImportRequest(BaseModel):
+    preview_id: PydanticObjectId
+    school_id: PydanticObjectId | None = None
+
+
+class WeeklyMenuImportPreviewItemResponse(DecimalResponseModel):
     sheet_name: str
-    warnings: list[str]
     menu: CreateWeeklyMenuRequest
+
+
+class WeeklyMenuImportPreviewResponse(DecimalResponseModel):
+    preview_id: PydanticObjectId
+    filename: str
+    available_sheet_names: list[str]
+    selected_sheet_name: str | None = None
+    parsed_sheet_names: list[str] = Field(default_factory=list)
+    diagnostics: list[WeeklyMenuImportDiagnosticResponse]
+    commit_ready: bool
+    expires_at: datetime
+    menu: CreateWeeklyMenuRequest | None = None
+    menus: list[WeeklyMenuImportPreviewItemResponse] = Field(default_factory=list)
+
+
+class WeeklyMenuImportCommitResponse(BaseModel):
+    preview_id: PydanticObjectId
+    school_id: PydanticObjectId | None = None
+    created_menu_ids: list[PydanticObjectId]
+    menu: WeeklyMenuResponse | None = None
+    menus: list[WeeklyMenuResponse]
