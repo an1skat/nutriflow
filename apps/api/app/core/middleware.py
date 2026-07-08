@@ -73,7 +73,7 @@ class RequestHardeningMiddleware:
                 headers["X-Request-ID"] = request_id
 
                 if self.settings.security_headers_enabled:
-                    self._set_security_headers(headers)
+                    self._set_security_headers(headers, scope)
 
             await send(message)
 
@@ -111,7 +111,7 @@ class RequestHardeningMiddleware:
         except ValueError:
             return True
 
-    def _set_security_headers(self, headers: MutableHeaders) -> None:
+    def _set_security_headers(self, headers: MutableHeaders, scope: Scope) -> None:
         headers.setdefault("X-Content-Type-Options", "nosniff")
         headers.setdefault("X-Frame-Options", "DENY")
         headers.setdefault("Referrer-Policy", "no-referrer")
@@ -119,16 +119,43 @@ class RequestHardeningMiddleware:
             "Permissions-Policy",
             "camera=(), microphone=(), geolocation=(), payment=()",
         )
-        headers.setdefault(
-            "Content-Security-Policy",
-            "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
-        )
+        headers.setdefault("Content-Security-Policy", self._content_security_policy(scope))
 
         if self.settings.auth_cookie_secure and self.settings.hsts_max_age_seconds > 0:
             headers.setdefault(
                 "Strict-Transport-Security",
                 f"max-age={self.settings.hsts_max_age_seconds}; includeSubDomains",
             )
+
+    def _content_security_policy(self, scope: Scope) -> str:
+        if self._is_docs_request(scope):
+            return (
+                "default-src 'self'; "
+                "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+                "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
+                "img-src 'self' data: https://fastapi.tiangolo.com; "
+                "font-src 'self' data: https://fonts.gstatic.com; "
+                "connect-src 'self'; "
+                "frame-ancestors 'none'; "
+                "base-uri 'none'; "
+                "form-action 'none'"
+            )
+
+        return "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+
+    def _is_docs_request(self, scope: Scope) -> bool:
+        path = scope.get("path", "")
+
+        if self.settings.docs_enabled and (path == "/docs" or path.startswith("/docs/")):
+            return True
+
+        if self.settings.redoc_enabled and path == "/redoc":
+            return True
+
+        if self.settings.openapi_enabled and path == f"{self.settings.api_v1_prefix}/openapi.json":
+            return True
+
+        return False
 
     def _request_id(self, scope: Scope) -> str:
         headers = Headers(scope=scope)
