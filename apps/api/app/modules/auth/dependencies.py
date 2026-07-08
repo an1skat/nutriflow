@@ -40,7 +40,7 @@ async def get_current_user(
     if user is None or not user.is_active or user.auth_version != identity.auth_version:
         raise unauthorized()
 
-    if user.role in {UserRole.OWNER, UserRole.ADMIN}:
+    if user.role in {UserRole.OWNER, UserRole.ADMIN, UserRole.TECHNOLOGIST}:
         if user.school_id is not None:
             raise unauthorized()
         return user
@@ -126,6 +126,25 @@ def require_permissions(
             )
 
         return current_user
+
+    return dependency
+
+
+def require_any_permission(
+    *required_permissions: AdminPermission,
+) -> Callable[..., Awaitable[User]]:
+    if not required_permissions:
+        raise ValueError("At least one permission must be specified")
+
+    async def dependency(current_user: CurrentUser) -> User:
+        for permission in required_permissions:
+            if await user_has_permissions(current_user, permission):
+                return current_user
+
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions",
+        )
 
     return dependency
 

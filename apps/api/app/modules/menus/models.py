@@ -54,6 +54,11 @@ class MenuImportPreviewStatus(StrEnum):
     FAILED = "failed"
 
 
+class MenuChangeRequestStatus(StrEnum):
+    PENDING = "pending"
+    REVIEWED = "reviewed"
+
+
 class MenuNutrition(BaseModel):
     kcal: AmountDecimal | None = None
     proteins: AmountDecimal | None = None
@@ -189,6 +194,51 @@ class WeeklyMenu(Document):
                 name="ix_weekly_menu_source_school",
             ),
             IndexModel([("created_at", ASCENDING)], name="ix_weekly_menu_created_at"),
+        ]
+
+
+class MenuFieldChange(BaseModel):
+    weekday: Weekday
+    item_id: PydanticObjectId
+    position: int = Field(ge=1, le=200)
+    field: str = Field(min_length=1, max_length=80)
+    before_value: Any = None
+    after_value: Any = None
+
+
+class MenuChangeRequest(Document):
+    menu_id: PydanticObjectId
+    source_menu_id: PydanticObjectId | None = None
+    school_id: PydanticObjectId
+    submitted_by: PydanticObjectId
+    menu_title: MenuText
+    meal_type: MealType
+    cycle_week: int | None = Field(default=None, ge=1, le=53)
+    starts_on: Date | None = None
+    ends_on: Date | None = None
+    days_snapshot: list[DailyMenu] = Field(default_factory=list, min_length=1, max_length=7)
+    changes: list[MenuFieldChange] = Field(default_factory=list, min_length=1)
+    status: MenuChangeRequestStatus = MenuChangeRequestStatus.PENDING
+    reviewed_by: PydanticObjectId | None = None
+    reviewed_at: datetime | None = None
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+    class Settings:
+        name = "menu_change_requests"
+        indexes = [
+            IndexModel(
+                [("status", ASCENDING), ("created_at", ASCENDING)],
+                name="ix_menu_change_request_status_created",
+            ),
+            IndexModel(
+                [("school_id", ASCENDING), ("created_at", ASCENDING)],
+                name="ix_menu_change_request_school_created",
+            ),
+            IndexModel(
+                [("menu_id", ASCENDING), ("created_at", ASCENDING)],
+                name="ix_menu_change_request_menu_created",
+            ),
         ]
 
 

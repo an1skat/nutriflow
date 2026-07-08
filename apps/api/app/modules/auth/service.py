@@ -63,7 +63,7 @@ async def authenticate_user(identifier: str, password: str) -> User:
     if not user.is_active:
         raise AuthenticationError("Invalid credentials")
 
-    if user.role in {UserRole.OWNER, UserRole.ADMIN}:
+    if user.role in {UserRole.OWNER, UserRole.ADMIN, UserRole.TECHNOLOGIST}:
         if user.school_id is not None:
             raise AuthenticationError("Invalid credentials")
     else:
@@ -303,9 +303,18 @@ def all_admin_permissions() -> list[AdminPermission]:
     return list(AdminPermission)
 
 
+def technologist_permissions() -> list[AdminPermission]:
+    return [
+        AdminPermission.MENUS_MANAGE,
+        AdminPermission.RECIPES_VIEW,
+    ]
+
+
 async def get_user_permissions(user: User) -> list[AdminPermission]:
     if user.role == UserRole.OWNER:
         return all_admin_permissions()
+    if user.role == UserRole.TECHNOLOGIST:
+        return technologist_permissions()
     if user.role == UserRole.ADMIN:
         return list(user.permissions)
     return []
@@ -317,9 +326,12 @@ async def user_has_permissions(
 ) -> bool:
     if user.role == UserRole.OWNER:
         return True
-    if user.role != UserRole.ADMIN:
+    if user.role == UserRole.TECHNOLOGIST:
+        granted = set(technologist_permissions())
+    elif user.role == UserRole.ADMIN:
+        granted = set(user.permissions)
+    else:
         return False
-    granted = set(user.permissions)
     return all(permission in granted for permission in required_permissions)
 
 

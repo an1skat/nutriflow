@@ -1,6 +1,6 @@
 from datetime import date as Date
 from datetime import datetime
-from typing import Self
+from typing import Any, Self
 
 from beanie import PydanticObjectId
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -10,6 +10,9 @@ from app.modules.menus.models import (
     DailyMenu,
     DailyMenuItem,
     MealType,
+    MenuChangeRequest,
+    MenuChangeRequestStatus,
+    MenuFieldChange,
     MenuImportDiagnostic,
     MenuImportDiagnosticLevel,
     MenuItemKind,
@@ -284,6 +287,75 @@ class WeeklyMenuResponse(DecimalResponseModel):
 
 class WeeklyMenuListResponse(BaseModel):
     items: list[WeeklyMenuResponse]
+    total: int
+    offset: int
+    limit: int
+
+
+class MenuFieldChangeResponse(BaseModel):
+    weekday: Weekday
+    item_id: PydanticObjectId
+    position: int
+    field: str
+    before_value: Any = None
+    after_value: Any = None
+
+    @classmethod
+    def from_change(cls, change: MenuFieldChange) -> "MenuFieldChangeResponse":
+        return cls.model_validate(change.model_dump(mode="json"))
+
+
+class MenuChangeRequestResponse(BaseModel):
+    id: PydanticObjectId
+    menu_id: PydanticObjectId
+    source_menu_id: PydanticObjectId | None
+    school_id: PydanticObjectId
+    school_name: str
+    submitted_by: PydanticObjectId
+    menu_title: str
+    meal_type: MealType
+    cycle_week: int | None
+    starts_on: Date | None
+    ends_on: Date | None
+    days_snapshot: list[DailyMenuResponse]
+    changes: list[MenuFieldChangeResponse]
+    status: MenuChangeRequestStatus
+    reviewed_by: PydanticObjectId | None
+    reviewed_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+    @classmethod
+    def from_request(
+        cls,
+        request: MenuChangeRequest,
+        *,
+        school_name: str,
+    ) -> "MenuChangeRequestResponse":
+        return cls(
+            id=request.id,
+            menu_id=request.menu_id,
+            source_menu_id=request.source_menu_id,
+            school_id=request.school_id,
+            school_name=school_name,
+            submitted_by=request.submitted_by,
+            menu_title=request.menu_title,
+            meal_type=request.meal_type,
+            cycle_week=request.cycle_week,
+            starts_on=request.starts_on,
+            ends_on=request.ends_on,
+            days_snapshot=[DailyMenuResponse.from_day(day) for day in request.days_snapshot],
+            changes=[MenuFieldChangeResponse.from_change(change) for change in request.changes],
+            status=request.status,
+            reviewed_by=request.reviewed_by,
+            reviewed_at=request.reviewed_at,
+            created_at=request.created_at,
+            updated_at=request.updated_at,
+        )
+
+
+class MenuChangeRequestListResponse(BaseModel):
+    items: list[MenuChangeRequestResponse]
     total: int
     offset: int
     limit: int

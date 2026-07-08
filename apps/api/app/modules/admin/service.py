@@ -430,7 +430,16 @@ async def list_admin_users(
     offset: int,
     limit: int,
 ) -> tuple[list[User], int]:
-    query = User.find(User.role == UserRole.ADMIN)
+    query = User.find(
+        {
+            "role": {
+                "$in": [
+                    UserRole.ADMIN.value,
+                    UserRole.TECHNOLOGIST.value,
+                ]
+            }
+        }
+    )
     total = await query.count()
     users = await query.sort("username").skip(offset).limit(limit).to_list()
     return users, total
@@ -439,7 +448,7 @@ async def list_admin_users(
 async def get_admin_user(user_id: PydanticObjectId) -> User:
     user = await User.get(user_id)
 
-    if user is None or user.role != UserRole.ADMIN:
+    if user is None or user.role not in {UserRole.ADMIN, UserRole.TECHNOLOGIST}:
         raise AdminUserNotFoundError("Administrator not found")
 
     return user
@@ -453,8 +462,8 @@ async def create_admin_user(
         username=data.username,
         email=data.email,
         password_hash=hash_password(data.password),
-        role=UserRole.ADMIN,
-        permissions=_dedupe_permissions(data.permissions),
+        role=data.role,
+        permissions=(_dedupe_permissions(data.permissions) if data.role == UserRole.ADMIN else []),
         created_by_admin_id=actor.id,
     )
 
@@ -474,12 +483,22 @@ async def update_admin_user(
 ) -> User:
     user = await get_admin_user(user_id)
     was_active = user.is_active
+    next_role = data.role if "role" in data.model_fields_set else user.role
+
+    if user.role == UserRole.ADMIN and next_role == UserRole.TECHNOLOGIST:
+        owned_school = await School.find_one(School.admin_owner_id == user.id)
+        if owned_school is not None:
+            raise AdminUserOwnsSchoolsError("Administrator owns schools")
 
     if "username" in data.model_fields_set:
         user.username = data.username
     if "email" in data.model_fields_set:
         user.email = data.email
-    if "permissions" in data.model_fields_set:
+    if "role" in data.model_fields_set:
+        user.role = data.role
+    if user.role == UserRole.TECHNOLOGIST:
+        user.permissions = []
+    elif "permissions" in data.model_fields_set:
         user.permissions = _dedupe_permissions(data.permissions or [])
     if "is_active" in data.model_fields_set:
         user.is_active = bool(data.is_active)
@@ -533,7 +552,12 @@ async def delete_admin_user(user_id: PydanticObjectId) -> None:
         user = await User.get_pymongo_collection().find_one(
             {
                 "_id": user_id,
-                "role": UserRole.ADMIN.value,
+                "role": {
+                    "$in": [
+                        UserRole.ADMIN.value,
+                        UserRole.TECHNOLOGIST.value,
+                    ]
+                },
             },
             {"_id": 1},
             session=session,

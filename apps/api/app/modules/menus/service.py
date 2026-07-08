@@ -9,12 +9,16 @@ from fastapi import UploadFile
 from pymongo import ReturnDocument
 
 from app.core.config import get_settings
+from app.db.mongo import get_mongo_client
 from app.modules.auth.service import user_has_permissions
 from app.modules.identity.models import AdminPermission, School, User, UserRole
 from app.modules.menus.models import (
     DailyMenu,
     DailyMenuItem,
     MealType,
+    MenuChangeRequest,
+    MenuChangeRequestStatus,
+    MenuFieldChange,
     MenuImportDiagnostic,
     MenuImportDiagnosticLevel,
     MenuImportPreviewSession,
@@ -105,6 +109,12 @@ async def list_weekly_menus(
                 {"school_id": {"$in": owned_school_ids}},
                 {"school_id": None, "created_by": current_user.id},
             ]
+    elif current_user.role == UserRole.TECHNOLOGIST:
+        await _ensure_menu_permission(current_user)
+        if template_only:
+            filters["school_id"] = None
+        elif school_id is not None:
+            filters["school_id"] = school_id
     elif template_only:
         filters["school_id"] = None
     elif school_id is not None:
@@ -186,15 +196,15 @@ async def update_weekly_menu(
     current_user: User,
 ) -> WeeklyMenu:
     menu = await get_weekly_menu(menu_id, current_user)
+    previous_days = deepcopy(menu.days)
 
-    if (
-        current_user.role == UserRole.SCHOOL_USER
-        and menu.status != WeeklyMenuStatus.PUBLISHED
-    ):
-        raise MenuAccessDeniedError("Menu access denied")
-
-    if current_user.role == UserRole.SCHOOL_USER and "days" in data.model_fields_set:
-        _ensure_school_menu_shape_is_stable(menu, data.days or [])
+    if current_user.role == UserRole.SCHOOL_USER:
+        if menu.status != WeeklyMenuStatus.PUBLISHED:
+            raise MenuAccessDeniedError("Menu access denied")
+        if data.model_fields_set - {"days"}:
+            raise MenuAccessDeniedError("School users can only update daily menu data")
+        if "days" in data.model_fields_set:
+            _ensure_school_menu_shape_is_stable(menu, data.days or [])
 
     if "title" in data.model_fields_set:
         menu.title = data.title
@@ -213,8 +223,70 @@ async def update_weekly_menu(
 
     menu.updated_by = current_user.id
     menu.updated_at = datetime.now(UTC)
-    await menu.save()
+
+    change_request: MenuChangeRequest | None = None
+    if current_user.role == UserRole.SCHOOL_USER and "days" in data.model_fields_set:
+        changes = _collect_school_dish_changes(previous_days, menu.days)
+        if changes:
+            change_request = _build_menu_change_request(menu, current_user, changes)
+
+    if change_request is None:
+        await menu.save()
+    else:
+
+        async def save_menu_and_request(session: Any) -> None:
+            await menu.save(session=session)
+            await change_request.insert(session=session)
+
+        async with get_mongo_client().start_session() as session:
+            await session.with_transaction(save_menu_and_request)
+
     return menu
+
+
+async def list_menu_change_requests(
+    current_user: User,
+    *,
+    offset: int,
+    limit: int,
+    status: MenuChangeRequestStatus | None = None,
+) -> tuple[list[tuple[MenuChangeRequest, str]], int]:
+    _ensure_change_request_access(current_user)
+    filters: dict[str, Any] = {}
+    if status is not None:
+        filters["status"] = status.value
+
+    query = MenuChangeRequest.find(filters)
+    total = await query.count()
+    requests = await query.sort("-created_at").skip(offset).limit(limit).to_list()
+
+    school_ids = {request.school_id for request in requests}
+    schools = await School.find({"_id": {"$in": list(school_ids)}}).to_list()
+    school_names = {school.id: school.name for school in schools}
+    return [
+        (request, school_names.get(request.school_id, "Невідома школа")) for request in requests
+    ], total
+
+
+async def mark_menu_change_request_reviewed(
+    request_id: PydanticObjectId,
+    current_user: User,
+) -> tuple[MenuChangeRequest, str]:
+    _ensure_change_request_access(current_user)
+    request = await MenuChangeRequest.get(request_id)
+    if request is None:
+        raise MenuNotFoundError("Menu change request not found")
+
+    if request.status != MenuChangeRequestStatus.REVIEWED:
+        now = datetime.now(UTC)
+        request.status = MenuChangeRequestStatus.REVIEWED
+        request.reviewed_by = current_user.id
+        request.reviewed_at = now
+        request.updated_at = now
+        await request.save()
+
+    school = await School.get(request.school_id)
+    return request, school.name if school is not None else "Невідома школа"
 
 
 async def archive_weekly_menu(
@@ -269,9 +341,7 @@ async def restore_weekly_menu(
     restored_status = menu.archived_from_status
     if restored_status is None or restored_status == WeeklyMenuStatus.ARCHIVED:
         restored_status = (
-            WeeklyMenuStatus.PUBLISHED
-            if menu.published_at is not None
-            else WeeklyMenuStatus.DRAFT
+            WeeklyMenuStatus.PUBLISHED if menu.published_at is not None else WeeklyMenuStatus.DRAFT
         )
 
     menu.status = restored_status
@@ -906,6 +976,10 @@ async def _authorize_menu_access(menu: WeeklyMenu, current_user: User) -> None:
     if current_user.role == UserRole.OWNER:
         return
 
+    if current_user.role == UserRole.TECHNOLOGIST:
+        await _ensure_menu_permission(current_user)
+        return
+
     if current_user.role == UserRole.ADMIN:
         await _ensure_menu_permission(current_user)
 
@@ -995,15 +1069,104 @@ async def _get_admin_school_ids(current_user: User) -> list[PydanticObjectId]:
     return [school.id for school in schools if school.id is not None]
 
 
+def _ensure_change_request_access(current_user: User) -> None:
+    if current_user.role not in {UserRole.OWNER, UserRole.TECHNOLOGIST}:
+        raise MenuAccessDeniedError("Only owner or technologist can review menu changes")
+
+
+def _build_menu_change_request(
+    menu: WeeklyMenu,
+    current_user: User,
+    changes: list[MenuFieldChange],
+) -> MenuChangeRequest:
+    if menu.id is None or menu.school_id is None or current_user.id is None:
+        raise RuntimeError("Persisted menu and school user are required")
+
+    return MenuChangeRequest(
+        menu_id=menu.id,
+        source_menu_id=menu.source_menu_id,
+        school_id=menu.school_id,
+        submitted_by=current_user.id,
+        menu_title=menu.title,
+        meal_type=menu.meal_type,
+        cycle_week=menu.cycle_week,
+        starts_on=menu.starts_on,
+        ends_on=menu.ends_on,
+        days_snapshot=deepcopy(menu.days),
+        changes=changes,
+    )
+
+
+def _collect_school_dish_changes(
+    previous_days: list[DailyMenu],
+    updated_days: list[DailyMenu],
+) -> list[MenuFieldChange]:
+    previous_items = {(day.weekday, item.id): item for day in previous_days for item in day.items}
+    changes: list[MenuFieldChange] = []
+    compared_fields = (
+        "kind",
+        "source_text",
+        "recipe_card_number",
+        "dish_card_id",
+        "dish_card_version_id",
+        "product_ingredient_id",
+        "product_name_snapshot",
+        "name",
+        "allergen_codes",
+        "portions",
+        "notes",
+    )
+
+    for day in updated_days:
+        for item in day.items:
+            previous_item = previous_items.get((day.weekday, item.id))
+            if previous_item is None:
+                continue
+
+            previous_data = previous_item.model_dump(mode="json")
+            updated_data = item.model_dump(mode="json")
+            for field in compared_fields:
+                before_value = previous_data.get(field)
+                after_value = updated_data.get(field)
+                if before_value == after_value:
+                    continue
+                changes.append(
+                    MenuFieldChange(
+                        weekday=day.weekday,
+                        item_id=item.id,
+                        position=item.position,
+                        field=field,
+                        before_value=before_value,
+                        after_value=after_value,
+                    )
+                )
+
+    return changes
+
+
 def _ensure_school_menu_shape_is_stable(
     current_menu: WeeklyMenu,
     new_days: list[DailyMenuPayload],
 ) -> None:
-    current_counts = {day.weekday: len(day.items) for day in current_menu.days}
-    new_counts = {day.weekday: len(day.items) for day in new_days}
+    current_days = {day.weekday: day for day in current_menu.days}
+    submitted_days = {day.weekday: day for day in new_days}
 
-    if current_counts != new_counts:
-        raise MenuValidationError("School users cannot change the number of dishes in a day")
+    if current_days.keys() != submitted_days.keys():
+        raise MenuValidationError("School users cannot add or remove menu days")
+
+    for weekday, current_day in current_days.items():
+        submitted_day = submitted_days[weekday]
+        if submitted_day.date != current_day.date or submitted_day.notes != current_day.notes:
+            raise MenuValidationError("School users cannot change day metadata")
+
+        current_shape = sorted((item.id, item.position) for item in current_day.items)
+        submitted_shape = sorted(
+            (item.id, item.position) for item in submitted_day.items if item.id is not None
+        )
+        if len(submitted_shape) != len(submitted_day.items) or current_shape != submitted_shape:
+            raise MenuValidationError(
+                "School users cannot add, remove, or reorder dishes",
+            )
 
 
 def _build_import_preview_response(
@@ -1095,14 +1258,11 @@ async def _hydrate_preview_references(preview: ParsedWeeklyMenuPreview) -> None:
                         else:
                             item.dish_card_id = dish_card.id
                             item.dish_card_version_id = dish_card.current_version_id
-                            if (
-                                not item.allergen_codes
-                                and dish_card.current_version_id is not None
-                            ):
+                            if not item.allergen_codes and dish_card.current_version_id is not None:
                                 if dish_card.current_version_id not in version_cache:
-                                    version_cache[dish_card.current_version_id] = (
-                                        await DishCardVersion.get(dish_card.current_version_id)
-                                    )
+                                    version_cache[
+                                        dish_card.current_version_id
+                                    ] = await DishCardVersion.get(dish_card.current_version_id)
                                 version = version_cache[dish_card.current_version_id]
                                 if version is not None:
                                     item.allergen_codes = await _resolve_allergen_codes(version)

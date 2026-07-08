@@ -114,6 +114,7 @@ from app.modules.admin.service import (
 )
 from app.modules.auth.dependencies import (
     CsrfProtection,
+    require_any_permission,
     require_owner,
     require_permissions,
 )
@@ -129,6 +130,15 @@ OwnerUser = Annotated[
 SchoolManagerUser = Annotated[
     User,
     Depends(require_permissions(AdminPermission.SCHOOLS_MANAGE)),
+]
+SchoolListUser = Annotated[
+    User,
+    Depends(
+        require_any_permission(
+            AdminPermission.SCHOOLS_MANAGE,
+            AdminPermission.MENUS_MANAGE,
+        )
+    ),
 ]
 SchoolGroupManagerUser = Annotated[
     User,
@@ -264,6 +274,8 @@ async def update_admin_user(
         raise not_found(exc) from exc
     except AdminUserAlreadyExistsError as exc:
         raise conflict(exc) from exc
+    except AdminUserOwnsSchoolsError as exc:
+        raise conflict(exc) from exc
 
     return AdminUserResponse.from_user(user)
 
@@ -310,7 +322,7 @@ async def reset_admin_user_password(
     response_model=SchoolListResponse,
 )
 async def list_schools(
-    admin: SchoolManagerUser,
+    admin: SchoolListUser,
     offset: Offset = 0,
     limit: Limit = 50,
 ) -> SchoolListResponse:

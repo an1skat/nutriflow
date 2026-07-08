@@ -18,6 +18,7 @@ def utc_now() -> datetime:
 class UserRole(StrEnum):
     OWNER = "OWNER"
     ADMIN = "ADMIN"
+    TECHNOLOGIST = "TECHNOLOGIST"
     SCHOOL_USER = "SCHOOL_USER"
 
 
@@ -26,6 +27,7 @@ class AdminPermission(StrEnum):
     SCHOOL_USERS_MANAGE = "school_users.manage"
     SCHOOL_GROUPS_MANAGE = "school_groups.manage"
     MENUS_MANAGE = "menus.manage"
+    RECIPES_VIEW = "recipes.view"
     RECIPES_MANAGE = "recipes.manage"
 
 
@@ -126,7 +128,7 @@ class User(Document):
 
     @model_validator(mode="after")
     def validate_school_boundary(self) -> Self:
-        if self.role in {UserRole.OWNER, UserRole.ADMIN}:
+        if self.role in {UserRole.OWNER, UserRole.ADMIN, UserRole.TECHNOLOGIST}:
             if self.school_id is not None:
                 raise ValueError("Backoffice user must not have school_id")
             if self.email is None:
@@ -138,8 +140,8 @@ class User(Document):
             if self.permissions:
                 raise ValueError("School user must not have admin permissions")
 
-        if self.role == UserRole.OWNER and self.permissions:
-            raise ValueError("Owner permissions are implicit")
+        if self.role in {UserRole.OWNER, UserRole.TECHNOLOGIST} and self.permissions:
+            raise ValueError("Role permissions are implicit")
 
         return self
 

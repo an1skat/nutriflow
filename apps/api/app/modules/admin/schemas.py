@@ -237,6 +237,7 @@ class CreateAdminUserRequest(BaseModel):
         max_length=128,
         repr=False,
     )
+    role: UserRole = UserRole.ADMIN
     permissions: list[AdminPermission] = Field(default_factory=list)
 
     @field_validator("username", mode="before")
@@ -256,6 +257,14 @@ class CreateAdminUserRequest(BaseModel):
             raise ValueError("Password cannot be blank")
         return value
 
+    @model_validator(mode="after")
+    def validate_role(self) -> Self:
+        if self.role not in {UserRole.ADMIN, UserRole.TECHNOLOGIST}:
+            raise ValueError("Only administrator or technologist can be created here")
+        if self.role == UserRole.TECHNOLOGIST and self.permissions:
+            raise ValueError("Technologist permissions are fixed by role")
+        return self
+
 
 class UpdateAdminUserRequest(BaseModel):
     username: str | None = Field(
@@ -265,6 +274,7 @@ class UpdateAdminUserRequest(BaseModel):
         pattern=r"^[a-z0-9][a-z0-9._-]*$",
     )
     email: EmailStr | None = None
+    role: UserRole | None = None
     permissions: list[AdminPermission] | None = None
     is_active: bool | None = None
 
@@ -290,8 +300,15 @@ class UpdateAdminUserRequest(BaseModel):
             raise ValueError("Username cannot be null")
         if "email" in self.model_fields_set and self.email is None:
             raise ValueError("Email cannot be null")
+        if "role" in self.model_fields_set:
+            if self.role is None:
+                raise ValueError("Role cannot be null")
+            if self.role not in {UserRole.ADMIN, UserRole.TECHNOLOGIST}:
+                raise ValueError("Only administrator or technologist is supported")
         if "permissions" in self.model_fields_set and self.permissions is None:
             raise ValueError("Permissions cannot be null")
+        if self.role == UserRole.TECHNOLOGIST and self.permissions:
+            raise ValueError("Technologist permissions are fixed by role")
         if "is_active" in self.model_fields_set and self.is_active is None:
             raise ValueError("is_active cannot be null")
         return self

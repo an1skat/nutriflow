@@ -7,10 +7,12 @@ from fastapi.responses import StreamingResponse
 
 from app.modules.auth.dependencies import CsrfProtection, CurrentUser, require_permissions
 from app.modules.identity.models import AdminPermission, User
-from app.modules.menus.models import MealType, WeeklyMenuStatus
+from app.modules.menus.models import MealType, MenuChangeRequestStatus, WeeklyMenuStatus
 from app.modules.menus.schemas import (
     CommitWeeklyMenuImportRequest,
     CreateWeeklyMenuRequest,
+    MenuChangeRequestListResponse,
+    MenuChangeRequestResponse,
     PublishWeeklyMenuRequest,
     PublishWeeklyMenuResponse,
     UpdateWeeklyMenuRequest,
@@ -56,7 +58,13 @@ from app.modules.menus.service import (
     get_weekly_menu as get_weekly_menu_record,
 )
 from app.modules.menus.service import (
+    list_menu_change_requests as list_menu_change_request_records,
+)
+from app.modules.menus.service import (
     list_weekly_menus as list_weekly_menu_records,
+)
+from app.modules.menus.service import (
+    mark_menu_change_request_reviewed as mark_menu_change_request_reviewed_record,
 )
 from app.modules.menus.service import (
     preview_weekly_menu_import as preview_weekly_menu_import_record,
@@ -87,9 +95,7 @@ Offset = Annotated[int, Query(ge=0)]
 Limit = Annotated[int, Query(ge=1, le=100)]
 
 
-XLSX_MEDIA_TYPE = (
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-)
+XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
 def xlsx_response(filename: str, content: bytes) -> StreamingResponse:
@@ -99,8 +105,7 @@ def xlsx_response(filename: str, content: bytes) -> StreamingResponse:
         media_type=XLSX_MEDIA_TYPE,
         headers={
             "Content-Disposition": (
-                f"attachment; filename=weekly-menu.xlsx; "
-                f"filename*=UTF-8''{encoded_filename}"
+                f"attachment; filename=weekly-menu.xlsx; filename*=UTF-8''{encoded_filename}"
             )
         },
     )
@@ -139,6 +144,62 @@ def validate_xlsx_file(file: UploadFile) -> None:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only .xlsx files are supported",
         )
+
+
+@router.get(
+    "/change-requests",
+    response_model=MenuChangeRequestListResponse,
+)
+async def list_menu_change_requests(
+    current_user: CurrentUser,
+    offset: Offset = 0,
+    limit: Limit = 50,
+    status_filter: Annotated[
+        MenuChangeRequestStatus | None,
+        Query(alias="status"),
+    ] = None,
+) -> MenuChangeRequestListResponse:
+    try:
+        requests, total = await list_menu_change_request_records(
+            current_user,
+            offset=offset,
+            limit=limit,
+            status=status_filter,
+        )
+    except MenuAccessDeniedError as exc:
+        raise forbidden(exc) from exc
+
+    return MenuChangeRequestListResponse(
+        items=[
+            MenuChangeRequestResponse.from_request(request, school_name=school_name)
+            for request, school_name in requests
+        ],
+        total=total,
+        offset=offset,
+        limit=limit,
+    )
+
+
+@router.post(
+    "/change-requests/{request_id}/reviewed",
+    response_model=MenuChangeRequestResponse,
+)
+async def mark_menu_change_request_reviewed(
+    request_id: PydanticObjectId,
+    current_user: CurrentUser,
+    _csrf: CsrfProtection,
+) -> MenuChangeRequestResponse:
+    try:
+        request, school_name = await mark_menu_change_request_reviewed_record(
+            request_id,
+            current_user,
+        )
+    except MenuNotFoundError as exc:
+        raise not_found(exc) from exc
+    except MenuAccessDeniedError as exc:
+        raise forbidden(exc) from exc
+
+    return MenuChangeRequestResponse.from_request(request, school_name=school_name)
 
 
 @router.get("/weekly", response_model=WeeklyMenuListResponse)
