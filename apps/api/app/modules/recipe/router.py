@@ -3,8 +3,9 @@ from typing import Annotated
 from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 
-from app.modules.auth.dependencies import CsrfProtection, require_permissions
-from app.modules.identity.models import AdminPermission, User
+from app.modules.auth.dependencies import CsrfProtection, CurrentUser, require_permissions
+from app.modules.auth.service import user_has_permissions
+from app.modules.identity.models import AdminPermission, User, UserRole
 from app.modules.recipe.models import DishCardVersionStatus
 from app.modules.recipe.schemas import (
     AllergenListResponse,
@@ -133,9 +134,38 @@ def bad_request(exc: ValueError) -> HTTPException:
     )
 
 
+async def require_recipe_catalog_read(current_user: CurrentUser) -> User:
+    if current_user.role == UserRole.OWNER:
+        return current_user
+
+    if current_user.role == UserRole.ADMIN and (
+        await user_has_any_permission(
+            current_user,
+            AdminPermission.RECIPES_MANAGE,
+            AdminPermission.MENUS_MANAGE,
+        )
+    ):
+        return current_user
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Insufficient permissions",
+    )
+
+
+async def user_has_any_permission(
+    user: User,
+    *permissions: AdminPermission,
+) -> bool:
+    for permission in permissions:
+        if await user_has_permissions(user, permission):
+            return True
+    return False
+
+
 @router.get("/ingredients", response_model=IngredientListResponse)
 async def list_ingredients(
-    _admin: AdminUser,
+    _reader: Annotated[User, Depends(require_recipe_catalog_read)],
     offset: Offset = 0,
     limit: Limit = 50,
     query: str | None = None,
@@ -176,7 +206,7 @@ async def create_ingredient(
 @router.get("/ingredients/{ingredient_id}", response_model=IngredientResponse)
 async def get_ingredient(
     ingredient_id: PydanticObjectId,
-    _admin: AdminUser,
+    _reader: Annotated[User, Depends(require_recipe_catalog_read)],
 ) -> IngredientResponse:
     try:
         ingredient = await get_ingredient_record(ingredient_id)
@@ -205,7 +235,7 @@ async def update_ingredient(
 
 @router.get("/allergens", response_model=AllergenListResponse)
 async def list_allergens(
-    _admin: AdminUser,
+    _reader: Annotated[User, Depends(require_recipe_catalog_read)],
     offset: Offset = 0,
     limit: Limit = 50,
     query: str | None = None,
@@ -244,7 +274,7 @@ async def create_allergen(
 @router.get("/allergens/{allergen_id}", response_model=AllergenResponse)
 async def get_allergen(
     allergen_id: PydanticObjectId,
-    _admin: AdminUser,
+    _reader: Annotated[User, Depends(require_recipe_catalog_read)],
 ) -> AllergenResponse:
     try:
         allergen = await get_allergen_record(allergen_id)
@@ -273,7 +303,7 @@ async def update_allergen(
 
 @router.get("/dish-cards", response_model=DishCardListResponse)
 async def list_dish_cards(
-    _admin: AdminUser,
+    _reader: Annotated[User, Depends(require_recipe_catalog_read)],
     offset: Offset = 0,
     limit: Limit = 50,
     query: str | None = None,
@@ -314,7 +344,7 @@ async def create_dish_card(
 @router.get("/dish-cards/{dish_card_id}", response_model=DishCardResponse)
 async def get_dish_card(
     dish_card_id: PydanticObjectId,
-    _admin: AdminUser,
+    _reader: Annotated[User, Depends(require_recipe_catalog_read)],
 ) -> DishCardResponse:
     try:
         dish_card = await get_dish_card_record(dish_card_id)
@@ -347,7 +377,7 @@ async def update_dish_card(
 )
 async def list_dish_card_versions(
     dish_card_id: PydanticObjectId,
-    _admin: AdminUser,
+    _reader: Annotated[User, Depends(require_recipe_catalog_read)],
     offset: Offset = 0,
     limit: Limit = 50,
 ) -> DishCardVersionListResponse:
@@ -449,7 +479,7 @@ async def preview_dish_card_pdf(
 )
 async def get_dish_card_version(
     version_id: PydanticObjectId,
-    _admin: AdminUser,
+    _reader: Annotated[User, Depends(require_recipe_catalog_read)],
 ) -> DishCardVersionResponse:
     try:
         version = await get_dish_card_version_record(version_id)
