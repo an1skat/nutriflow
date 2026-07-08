@@ -3,6 +3,7 @@
 import {
   BookOpen,
   Building2,
+  CalendarDays,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -52,10 +53,22 @@ const navigation: NavigationItem[] = [
     requiredPermission: "recipes.manage",
   },
   {
+    href: "/admin/menus",
+    label: "Тижневе меню",
+    icon: CalendarDays,
+    requiredPermission: "menus.manage",
+  },
+  {
     href: "/admin/access",
     label: "Доступ",
     icon: ShieldCheck,
     ownerOnly: true,
+  },
+  {
+    href: "/menu",
+    label: "Тижневе меню",
+    icon: CalendarDays,
+    schoolOnly: true,
   },
   {
     href: "/school/groups",

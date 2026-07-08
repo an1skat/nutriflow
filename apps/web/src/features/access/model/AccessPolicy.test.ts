@@ -90,7 +90,7 @@ describe("authorization", () => {
   it("provides a safe home route for every role", () => {
     expect(getHomePath(owner)).toBe("/");
     expect(getHomePath(admin)).toBe("/");
-    expect(getHomePath(schoolUser)).toBe("/");
+    expect(getHomePath(schoolUser)).toBe("/menu");
   });
 
   it("keeps admin routes hidden from school users", () => {
@@ -106,7 +106,7 @@ describe("authorization", () => {
       denied: false,
     });
     expect(getPostLoginPath(schoolUser, "/admin/schools")).toEqual({
-      path: "/",
+      path: "/menu",
       denied: true,
     });
   });

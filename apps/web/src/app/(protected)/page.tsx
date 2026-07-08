@@ -70,6 +70,11 @@ export default function HomePage() {
                     Школи та користувачі
                   </Link>
                 ) : null}
+                {hasPermission(user, "menus.manage") ? (
+                  <Link href="/admin/menus" className="nf-link block">
+                    Тижневе меню
+                  </Link>
+                ) : null}
                 {user.role === "OWNER" ? (
                   <Link href="/admin/access" className="nf-link block">
                     Доступ адміністраторів
@@ -81,12 +86,15 @@ export default function HomePage() {
               </div>
             ) : (
               <div>
-                <Link href="/school/groups" className="nf-link">
-                  Групи школи
+                <Link href="/menu" className="nf-link">
+                  Тижневе меню
                 </Link>
                 <p className="mt-2 text-xs leading-5 text-slate-600">
-                  Перегляд активних вікових груп для денного обліку.
+                  Основний робочий екран для редагування отриманого меню школи.
                 </p>
+                <Link href="/school/groups" className="nf-link block">
+                  Групи школи
+                </Link>
               </div>
             )}
           </div>

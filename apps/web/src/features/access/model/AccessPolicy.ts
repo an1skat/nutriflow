@@ -20,8 +20,9 @@ export function getHomePath(user: AuthUser): string {
   switch (user.role) {
     case "OWNER":
     case "ADMIN":
-    case "SCHOOL_USER":
       return "/";
+    case "SCHOOL_USER":
+      return "/menu";
   }
 }
 

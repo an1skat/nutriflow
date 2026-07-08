@@ -1,0 +1,364 @@
+import { z } from "zod";
+
+import type { WeeklyMenu, WeeklyMenuPayload } from "@/entities/weekly-menu/model/WeeklyMenu";
+import {
+  ageGroupSchema,
+  mealTypeSchema,
+  menuItemKindSchema,
+  weekdaySchema,
+} from "@/entities/weekly-menu/model/WeeklyMenu";
+
+export const WEEKDAY_LABELS: Record<
+  z.infer<typeof weekdaySchema>,
+  string
+> = {
+  monday: "Понеділок",
+  tuesday: "Вівторок",
+  wednesday: "Середа",
+  thursday: "Четвер",
+  friday: "П’ятниця",
+  saturday: "Субота",
+  sunday: "Неділя",
+};
+
+export const AGE_GROUP_LABELS: Record<
+  z.infer<typeof ageGroupSchema>,
+  string
+> = {
+  "6-11": "6-11 років",
+  "11-14": "11-14 років",
+  "14-18": "14-18 років",
+};
+
+export const WEEKDAY_ORDER: Array<z.infer<typeof weekdaySchema>> = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+];
+
+export const DEFAULT_WEEKDAYS: Array<z.infer<typeof weekdaySchema>> = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+];
+
+const optionalDecimalInput = z
+  .string()
+  .trim()
+  .refine(
+    (value) => value === "" || /^-?\d+(\.\d+)?$/.test(value),
+    "Очікуємо десяткове число",
+  );
+
+const optionalDateInput = z
+  .string()
+  .trim()
+  .refine(
+    (value) => value === "" || /^\d{4}-\d{2}-\d{2}$/.test(value),
+    "Використайте формат РРРР-ММ-ДД",
+  );
+
+const weeklyMenuPortionFormSchema = z.object({
+  age_group: ageGroupSchema,
+  yield_amount: z
+    .string()
+    .trim()
+    .min(1, "Вкажіть вихід")
+    .max(40, "Значення надто довге"),
+  dish_card_portion_variant_id: z.string().min(1).nullable(),
+  nutrition: z.object({
+    kcal: optionalDecimalInput,
+    proteins: optionalDecimalInput,
+    fats: optionalDecimalInput,
+    carbs: optionalDecimalInput,
+  }),
+});
+
+const weeklyMenuServingCountFormSchema = z.object({
+  school_group_id: z.string().min(1),
+  age_group: ageGroupSchema,
+  children_count: z.number().int().nonnegative(),
+});
+
+const weeklyMenuItemFormSchema = z.object({
+  id: z.string().min(1).optional(),
+  kind: menuItemKindSchema,
+  source_text: z.string().trim().max(255, "Значення надто довге"),
+  recipe_card_number: z.string().trim().max(80, "Значення надто довге"),
+  dish_card_id: z.string().min(1).nullable(),
+  dish_card_version_id: z.string().min(1).nullable(),
+  product_ingredient_id: z.string().min(1).nullable(),
+  product_name_snapshot: z
+    .string()
+    .trim()
+    .max(255, "Значення надто довге"),
+  name: z
+    .string()
+    .trim()
+    .min(1, "Вкажіть назву страви або продукту")
+    .max(255, "Значення надто довге"),
+  allergen_codes: z.array(z.string()),
+  portions: z.array(weeklyMenuPortionFormSchema).min(1),
+  servings: z.array(weeklyMenuServingCountFormSchema),
+  notes: z.string().trim().max(2000, "Нотатка надто довга"),
+});
+
+const weeklyMenuDayFormSchema = z.object({
+  weekday: weekdaySchema,
+  date: optionalDateInput,
+  items: z.array(weeklyMenuItemFormSchema).min(1, "Додайте хоча б одну страву"),
+  notes: z.string().trim().max(2000, "Нотатка надто довга"),
+});
+
+export const weeklyMenuFormSchema = z
+  .object({
+    title: z
+      .string()
+      .trim()
+      .min(1, "Вкажіть назву меню")
+      .max(255, "Назва надто довга"),
+    meal_type: mealTypeSchema,
+    cycle_week: z
+      .string()
+      .trim()
+      .refine(
+        (value) => value === "" || /^[1-4]$/.test(value),
+        "Тиждень циклу має бути від 1 до 4",
+      ),
+    starts_on: optionalDateInput,
+    notes: z.string().trim().max(2000, "Нотатка надто довга"),
+    days: z
+      .array(weeklyMenuDayFormSchema)
+      .min(1, "Додайте хоча б один день")
+      .max(7, "У меню може бути не більше 7 днів"),
+  })
+  .superRefine((value, ctx) => {
+    const weekdaySet = new Set(value.days.map((day) => day.weekday));
+
+    if (weekdaySet.size !== value.days.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Кожен день тижня може бути вказаний лише один раз",
+        path: ["days"],
+      });
+    }
+  });
+
+export type WeeklyMenuFormValues = z.infer<typeof weeklyMenuFormSchema>;
+
+export function createBlankPortion(
+  ageGroup: z.infer<typeof ageGroupSchema>,
+) {
+  return {
+    age_group: ageGroup,
+    yield_amount: "",
+    dish_card_portion_variant_id: null,
+    nutrition: {
+      kcal: "",
+      proteins: "",
+      fats: "",
+      carbs: "",
+    },
+  };
+}
+
+export function createBlankItem() {
+  return {
+    kind: "dish_card" as const,
+    source_text: "",
+    recipe_card_number: "",
+    dish_card_id: null,
+    dish_card_version_id: null,
+    product_ingredient_id: null,
+    product_name_snapshot: "",
+    name: "",
+    allergen_codes: [],
+    portions: [
+      createBlankPortion("6-11"),
+      createBlankPortion("11-14"),
+      createBlankPortion("14-18"),
+    ],
+    servings: [],
+    notes: "",
+  };
+}
+
+export function createBlankDay(weekday: z.infer<typeof weekdaySchema>) {
+  return {
+    weekday,
+    date: "",
+    items: [createBlankItem()],
+    notes: "",
+  };
+}
+
+export function createBlankWeeklyMenuFormValues(): WeeklyMenuFormValues {
+  return {
+    title: "",
+    meal_type: "lunch",
+    cycle_week: "",
+    starts_on: "",
+    notes: "",
+    days: DEFAULT_WEEKDAYS.map((weekday) => createBlankDay(weekday)),
+  };
+}
+
+export function weeklyMenuToFormValues(menu: WeeklyMenu): WeeklyMenuFormValues {
+  return {
+    title: menu.title,
+    meal_type: menu.meal_type,
+    cycle_week: menu.cycle_week?.toString() ?? "",
+    starts_on: menu.starts_on ?? "",
+    notes: menu.notes ?? "",
+    days: [...menu.days]
+      .sort(
+        (left, right) =>
+          WEEKDAY_ORDER.indexOf(left.weekday) - WEEKDAY_ORDER.indexOf(right.weekday),
+      )
+      .map((day) => ({
+        weekday: day.weekday,
+        date: day.date ?? "",
+        notes: day.notes ?? "",
+        items: [...day.items]
+          .sort((left, right) => left.position - right.position)
+          .map((item) => ({
+            id: item.id,
+            kind: item.kind,
+            source_text: item.source_text ?? "",
+            recipe_card_number: item.recipe_card_number ?? "",
+            dish_card_id: item.dish_card_id,
+            dish_card_version_id: item.dish_card_version_id,
+            product_ingredient_id: item.product_ingredient_id,
+            product_name_snapshot: item.product_name_snapshot ?? "",
+            name: item.name,
+            allergen_codes: item.allergen_codes,
+            portions: item.portions.map((portion) => ({
+              age_group: portion.age_group,
+              yield_amount: portion.yield_amount,
+              dish_card_portion_variant_id:
+                portion.dish_card_portion_variant_id,
+              nutrition: {
+                kcal: portion.nutrition.kcal ?? "",
+                proteins: portion.nutrition.proteins ?? "",
+                fats: portion.nutrition.fats ?? "",
+                carbs: portion.nutrition.carbs ?? "",
+              },
+            })),
+            servings: item.servings,
+            notes: item.notes ?? "",
+          })),
+      })),
+  };
+}
+
+export function formValuesToWeeklyMenuPayload(
+  values: WeeklyMenuFormValues,
+): WeeklyMenuPayload {
+  const effectiveStartDate = resolveEffectiveStartDate(values.starts_on);
+  const orderedDays = [...values.days].sort(
+    (left, right) =>
+      WEEKDAY_ORDER.indexOf(left.weekday) - WEEKDAY_ORDER.indexOf(right.weekday),
+  );
+
+  return {
+    title: values.title.trim(),
+    meal_type: values.meal_type,
+    cycle_week: normalizeOptionalNumber(values.cycle_week),
+    starts_on: effectiveStartDate,
+    notes: normalizeOptionalText(values.notes),
+    days: orderedDays.map((day, dayIndex) => ({
+        weekday: day.weekday,
+        date: normalizeOptionalText(day.date) ?? addDaysToLocalIso(effectiveStartDate, dayIndex),
+        notes: normalizeOptionalText(day.notes),
+        items: day.items.map((item, index) => ({
+          id: item.id,
+          position: index + 1,
+          kind: item.kind,
+          source_text: normalizeOptionalText(item.source_text),
+          recipe_card_number: normalizeOptionalText(item.recipe_card_number),
+          dish_card_id: item.dish_card_id,
+          dish_card_version_id: item.dish_card_version_id,
+          product_ingredient_id: item.product_ingredient_id,
+          product_name_snapshot:
+            item.kind === "product"
+              ? normalizeOptionalText(item.product_name_snapshot || item.name)
+              : normalizeOptionalText(item.product_name_snapshot),
+          name: item.name.trim(),
+          allergen_codes: normalizeAllergenCodes(item.allergen_codes),
+          portions: item.portions.map((portion) => ({
+            age_group: portion.age_group,
+            yield_amount: portion.yield_amount.trim(),
+            dish_card_portion_variant_id: portion.dish_card_portion_variant_id,
+            nutrition: {
+              kcal: normalizeOptionalText(portion.nutrition.kcal),
+              proteins: normalizeOptionalText(portion.nutrition.proteins),
+              fats: normalizeOptionalText(portion.nutrition.fats),
+              carbs: normalizeOptionalText(portion.nutrition.carbs),
+            },
+          })),
+          servings: item.servings,
+          notes: normalizeOptionalText(item.notes),
+        })),
+      })),
+  };
+}
+
+export function getRemainingWeekdays(days: WeeklyMenuFormValues["days"]) {
+  const usedWeekdays = new Set(days.map((day) => day.weekday));
+  return WEEKDAY_ORDER.filter((weekday) => !usedWeekdays.has(weekday));
+}
+
+function normalizeOptionalText(value: string | null | undefined) {
+  const normalized = value?.trim() ?? "";
+  return normalized.length ? normalized : null;
+}
+
+function normalizeOptionalNumber(value: string) {
+  const normalized = value.trim();
+  return normalized ? Number(normalized) : null;
+}
+
+function normalizeAllergenCodes(value: string[]) {
+  return [...new Set(
+    value
+      .map((item) => item.trim().toUpperCase())
+      .filter(Boolean),
+  )];
+}
+
+export function resolveEffectiveStartDate(value: string | null | undefined) {
+  return normalizeOptionalText(value) ?? getTodayLocalIsoDate();
+}
+
+export function resolveEffectiveDayDate(
+  startDate: string | null | undefined,
+  dayIndex: number,
+  manualDate: string | null | undefined,
+) {
+  return normalizeOptionalText(manualDate) ??
+    addDaysToLocalIso(resolveEffectiveStartDate(startDate), dayIndex);
+}
+
+function getTodayLocalIsoDate() {
+  const now = new Date();
+  const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
+  return localDate.toISOString().slice(0, 10);
+}
+
+function addDaysToLocalIso(baseIsoDate: string, days: number) {
+  const [year, month, day] = baseIsoDate.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + days);
+
+  const resolvedYear = date.getFullYear();
+  const resolvedMonth = `${date.getMonth() + 1}`.padStart(2, "0");
+  const resolvedDay = `${date.getDate()}`.padStart(2, "0");
+
+  return `${resolvedYear}-${resolvedMonth}-${resolvedDay}`;
+}

@@ -208,6 +208,51 @@ const detailTranslations: Record<string, string> = {
     "Користувач із таким логіном або email уже існує.",
   "School user not found": "Користувача школи не знайдено.",
   "School group not found": "Групу школи не знайдено.",
+  "Weekly menu not found": "Тижневе меню не знайдено.",
+  "Menu access denied": "Немає доступу до цього меню.",
+  "Weekly menu end date cannot be before start date":
+    "Дата завершення меню не може бути раніше дати початку.",
+  "School users cannot change the number of dishes in a day":
+    "Користувач школи не може змінювати кількість страв у межах дня.",
+  "Only template weekly menus can be published":
+    "Розсилати можна лише збережені тижневі меню.",
+  "Only archived weekly menus can be deleted":
+    "Повністю видалити можна лише меню з архіву.",
+  "Only template weekly menus can be archived":
+    "Архівувати можна лише шаблони тижневих меню.",
+  "Only school menu copies can be revoked":
+    "Відкликати можна лише меню, розіслане школі.",
+  "Only schools can archive their own menus locally":
+    "Локально архівувати меню може лише школа.",
+  "Only schools can restore their own archived menus":
+    "Повернути меню з архіву може лише школа.",
+  "School archived weekly menus cannot be hard-deleted":
+    "Меню школи не можна видалити остаточно.",
+  "Weekly menu is revoked": "Це меню відкликано адміністратором.",
+  "School is inactive": "Школа неактивна.",
+  "Dish card not found": "Техкарту не знайдено.",
+  "Dish card version does not belong to menu item dish card":
+    "Версія техкарти не відповідає вибраній техкарті.",
+  "Product ingredient not found": "Інгредієнт продукту не знайдено.",
+  "File name is required": "Не вдалося визначити назву файлу.",
+  "Only .xlsx files are supported": "Підтримуються лише файли формату .xlsx.",
+  "Workbook is empty": "Excel-файл порожній.",
+  "File is not a valid .xlsx workbook": "Файл не є коректною книгою .xlsx.",
+  "Could not read the .xlsx workbook": "Не вдалося прочитати Excel-файл.",
+  "Workbook does not contain menu worksheets":
+    "У файлі не знайдено аркушів із меню.",
+  "Workbook does not contain importable menu sheets":
+    "У файлі не знайдено меню, які можна імпортувати.",
+  "Import preview not found": "Попередній перегляд імпорту не знайдено.",
+  "Import preview has expired; upload the workbook again":
+    "Термін дії попереднього перегляду минув. Завантажте файл ще раз.",
+  "Import preview was already committed": "Цей файл уже було імпортовано.",
+  "Import preview is already being committed":
+    "Імпорт цього файлу вже виконується.",
+  "Import preview is already being committed or was committed":
+    "Імпорт цього файлу вже виконується або був завершений.",
+  "Import preview contains errors and cannot be committed":
+    "У файлі є критичні помилки, тому його не можна імпортувати.",
 };
 
 export function getApiErrorMessage(
