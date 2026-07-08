@@ -3,12 +3,17 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { toast } from "sonner";
 
 import { useSchool } from "@/entities/school/api/SchoolQueries";
 import { useSchoolUsers } from "@/entities/school-user/api/SchoolUserQueries";
+import { useWeeklyMenus } from "@/entities/weekly-menu/api/WeeklyMenuQueries";
+import type { WeeklyMenu } from "@/entities/weekly-menu/model/WeeklyMenu";
+import { useRevokeWeeklyMenu } from "@/features/weekly-menu-editor/model/UseWeeklyMenuMutations";
 import { DeleteSchoolAction } from "@/features/school-management/ui/DeleteSchoolAction";
 import { EditSchoolForm } from "@/features/school-management/ui/EditSchoolForm";
 import { CreateSchoolUserForm } from "@/features/school-user-management/ui/CreateSchoolUserForm";
+import { getApiErrorMessage } from "@/shared/api/HttpClient";
 import { formatDate } from "@/shared/lib/FormatDate";
 import { PaginationControls } from "@/shared/ui/PaginationControls";
 import { RequestError } from "@/shared/ui/RequestError";
@@ -92,7 +97,14 @@ export function SchoolDetails({ schoolId }: { schoolId: string }) {
         </div>
       </section>
 
-      <SchoolGroupsPanel mode="admin" schoolId={schoolId} />
+      <details className="mt-5">
+        <summary className="cursor-pointer border border-[var(--nf-line-strong)] bg-[var(--nf-panel-head)] px-4 py-3 text-sm font-bold text-slate-900">
+          Групи школи
+        </summary>
+        <SchoolGroupsPanel mode="admin" schoolId={schoolId} />
+      </details>
+
+      <SchoolMenusPanel schoolId={schoolId} />
 
       <section className="nf-panel mt-5">
         <div className="nf-panel-header">
@@ -191,4 +203,153 @@ export function SchoolDetails({ schoolId }: { schoolId: string }) {
       </section>
     </main>
   );
+}
+
+function SchoolMenusPanel({ schoolId }: { schoolId: string }) {
+  const activeMenus = useWeeklyMenus({
+    offset: 0,
+    limit: 100,
+    school_id: schoolId,
+  });
+  const archivedMenus = useWeeklyMenus({
+    offset: 0,
+    limit: 100,
+    school_id: schoolId,
+    status: "archived",
+  });
+  const revokedMenus = useWeeklyMenus({
+    offset: 0,
+    limit: 100,
+    school_id: schoolId,
+    status: "revoked",
+  });
+
+  const menus = [
+    ...(activeMenus.data?.items ?? []),
+    ...(archivedMenus.data?.items ?? []),
+    ...(revokedMenus.data?.items ?? []),
+  ].sort((left, right) => right.updated_at.localeCompare(left.updated_at));
+  const isPending =
+    activeMenus.isPending || archivedMenus.isPending || revokedMenus.isPending;
+  const errors = [
+    activeMenus.isError ? activeMenus.error : null,
+    archivedMenus.isError ? archivedMenus.error : null,
+    revokedMenus.isError ? revokedMenus.error : null,
+  ].filter(Boolean);
+
+  return (
+    <section className="nf-panel mt-5">
+      <div className="nf-panel-header">
+        <div>
+          <h2 className="nf-panel-title">Меню школи</h2>
+          <p className="mt-0.5 text-xs text-slate-600">
+            Опубліковані, локально архівовані та відкликані меню цієї школи.
+          </p>
+        </div>
+      </div>
+      <div className="nf-panel-body">
+        {isPending ? (
+          <p role="status" className="text-sm text-slate-600">
+            Завантажуємо меню школи…
+          </p>
+        ) : null}
+
+        {errors.map((error, index) => (
+          <RequestError
+            key={index}
+            error={error}
+            onRetry={() => {
+              void activeMenus.refetch();
+              void archivedMenus.refetch();
+              void revokedMenus.refetch();
+            }}
+          />
+        ))}
+
+        {!isPending && errors.length === 0 && menus.length === 0 ? (
+          <div className="nf-empty">Для цієї школи ще немає меню.</div>
+        ) : null}
+
+        {menus.length ? (
+          <div className="nf-table-wrap">
+            <table className="nf-table">
+              <thead>
+                <tr>
+                  <th>Меню</th>
+                  <th className="w-36">Статус</th>
+                  <th className="w-44">Оновлено</th>
+                  <th className="w-40">Дія</th>
+                </tr>
+              </thead>
+              <tbody>
+                {menus.map((menu) => (
+                  <SchoolMenuRow key={menu.id} menu={menu} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function SchoolMenuRow({ menu }: { menu: WeeklyMenu }) {
+  const revokeMenu = useRevokeWeeklyMenu(menu.id);
+
+  const handleRevoke = async () => {
+    if (!window.confirm(`Відкликати меню "${menu.title}" у школи?`)) {
+      return;
+    }
+
+    try {
+      await revokeMenu.mutateAsync();
+      toast.success("Меню відкликано у школи.");
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
+    }
+  };
+
+  return (
+    <tr>
+      <td>
+        <div className="font-medium text-slate-900">{menu.title}</div>
+        <div className="mt-1 text-xs text-slate-600">
+          {menu.meal_type === "lunch" ? "Обід" : "Сніданок"}
+          {menu.cycle_week ? ` · цикл ${menu.cycle_week}` : ""}
+        </div>
+      </td>
+      <td>{getMenuStatusLabel(menu)}</td>
+      <td className="whitespace-nowrap text-xs text-slate-600">
+        {formatDate(menu.updated_at)}
+      </td>
+      <td>
+        {menu.status === "revoked" ? (
+          <span className="text-xs text-slate-500">Відкликано</span>
+        ) : (
+          <button
+            type="button"
+            className="nf-button nf-button-danger"
+            disabled={revokeMenu.isPending}
+            onClick={() => void handleRevoke()}
+          >
+            {revokeMenu.isPending ? "Відкликаємо…" : "Відкликати"}
+          </button>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+function getMenuStatusLabel(menu: WeeklyMenu) {
+  if (menu.status === "published") {
+    return "Опубліковано";
+  }
+  if (menu.status === "archived") {
+    return "Архів школи";
+  }
+  if (menu.status === "revoked") {
+    return "Відкликано";
+  }
+  return "Чернетка";
 }
