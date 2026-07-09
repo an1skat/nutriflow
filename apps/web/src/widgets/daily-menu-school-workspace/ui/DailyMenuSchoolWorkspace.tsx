@@ -5,7 +5,6 @@ import {
   Check,
   ChevronDown,
   Save,
-  Search,
   Utensils,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -303,7 +302,7 @@ export function DailyMenuSchoolWorkspace() {
         <div className="space-y-5">
           <section className="nf-panel">
             <div className="nf-panel-body flex flex-wrap items-end justify-between gap-4">
-              <div className="min-w-[240px] flex-1">
+              <div className="min-w-60 flex-1">
                 <label htmlFor="daily-menu-source" className="nf-label">
                   Тижневе меню
                 </label>
@@ -568,7 +567,7 @@ function DishPicker({
     <div ref={pickerRef} className="relative">
       <button
         type="button"
-        className="flex min-h-11 w-full items-center justify-between gap-3 border border-slate-400 bg-white px-3 py-2 text-left hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[var(--nf-brand)]"
+        className="flex min-h-11 w-full items-center justify-between gap-3 border border-slate-400 bg-white px-3 py-2 text-left hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-(--nf-brand)"
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         onClick={() => {
@@ -587,11 +586,7 @@ function DishPicker({
 
       {isOpen ? (
         <div className="absolute left-0 right-0 z-30 mt-1 border border-slate-400 bg-white shadow-lg">
-          <div className="relative border-b border-slate-200 p-2">
-            <Search
-              className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-slate-400"
-              aria-hidden
-            />
+          <div className="flex items-center gap-2 p-1">
             <input
               autoFocus
               type="search"
