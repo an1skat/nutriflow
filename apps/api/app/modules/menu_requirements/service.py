@@ -132,6 +132,15 @@ async def generate_menu_requirements(
 
     now = datetime.now(UTC)
     requirements: list[MenuRequirement] = []
+    eligible_group_ids = [group.id for group, _, _ in prepared]
+    stale_requirements = await MenuRequirement.find(
+        MenuRequirement.weekly_menu_id == menu.id,
+        MenuRequirement.weekday == weekday,
+        {"school_group_id": {"$nin": eligible_group_ids}},
+    ).to_list()
+    for stale_requirement in stale_requirements:
+        await stale_requirement.delete()
+
     for group, dishes, ingredient_rows in prepared:
         requirement = await MenuRequirement.find_one(
             MenuRequirement.weekly_menu_id == menu.id,
