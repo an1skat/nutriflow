@@ -4,7 +4,7 @@ import { WeeklyMenuArchiveWorkspace } from "@/widgets/weekly-menu-admin-workspac
 export default function AdminMenuArchivePage() {
   return (
     <AccessGuard
-      allowedRoles={["OWNER", "ADMIN", "TECHNOLOGIST"]}
+      allowedRoles={["OWNER", "TECHNOLOGIST"]}
       requiredPermissions={["menus.manage"]}
     >
       <WeeklyMenuArchiveWorkspace />

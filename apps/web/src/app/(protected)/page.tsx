@@ -72,7 +72,8 @@ export default function HomePage() {
                     Школи та користувачі
                   </Link>
                 ) : null}
-                {hasPermission(user, "menus.manage") ? (
+                {user.role !== "ADMIN" &&
+                hasPermission(user, "menus.manage") ? (
                   <Link href="/admin/menus" className="nf-link block">
                     Тижневе меню
                   </Link>

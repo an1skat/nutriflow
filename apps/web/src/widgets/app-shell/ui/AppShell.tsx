@@ -19,7 +19,10 @@ import { useState, type ComponentType, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { useCurrentUser } from "@/entities/session/api/SessionQueries";
-import type { AdminPermission } from "@/entities/session/model/Session";
+import type {
+  AdminPermission,
+  UserRole,
+} from "@/entities/session/model/Session";
 import {
   hasPermission,
   isBackofficeUser,
@@ -33,6 +36,7 @@ type NavigationItem = {
   icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
   ownerOnly?: boolean;
   requiredPermission?: AdminPermission;
+  excludedRoles?: readonly UserRole[];
   schoolOnly?: boolean;
   technologistOnly?: boolean;
 };
@@ -60,6 +64,7 @@ const navigation: NavigationItem[] = [
     label: "Тижневе меню",
     icon: CalendarDays,
     requiredPermission: "menus.manage",
+    excludedRoles: ["ADMIN"],
   },
   {
     href: "/admin/menu-changes",
@@ -118,6 +123,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const visibleNavigation = navigation.filter(
     (item) =>
       (!item.ownerOnly || user.role === "OWNER") &&
+      (!item.excludedRoles || !item.excludedRoles.includes(user.role)) &&
       (!item.requiredPermission ||
         (isBackofficeUser(user) &&
           hasPermission(user, item.requiredPermission))) &&
