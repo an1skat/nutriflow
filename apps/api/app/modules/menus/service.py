@@ -205,6 +205,10 @@ async def update_weekly_menu(
             raise MenuAccessDeniedError("School users can only update daily menu data")
         if "days" in data.model_fields_set:
             _ensure_school_menu_shape_is_stable(menu, data.days or [])
+            await _ensure_school_servings_belong_to_school(
+                menu.school_id,
+                data.days or [],
+            )
 
     if "title" in data.model_fields_set:
         menu.title = data.title
@@ -1167,6 +1171,28 @@ def _ensure_school_menu_shape_is_stable(
             raise MenuValidationError(
                 "School users cannot add, remove, or reorder dishes",
             )
+
+
+async def _ensure_school_servings_belong_to_school(
+    school_id: PydanticObjectId | None,
+    days: list[DailyMenuPayload],
+) -> None:
+    if school_id is None:
+        raise MenuValidationError("School menu must belong to a school")
+
+    school = await School.get(school_id)
+    if school is None:
+        raise MenuValidationError("School not found")
+    groups_by_id = {group.id: group for group in school.groups}
+
+    for day in days:
+        for item in day.items:
+            for serving in item.servings:
+                group = groups_by_id.get(serving.school_group_id)
+                if group is None:
+                    raise MenuValidationError("School group not found")
+                if serving.age_group != group.age_group:
+                    raise MenuValidationError("School group age group does not match")
 
 
 def _build_import_preview_response(

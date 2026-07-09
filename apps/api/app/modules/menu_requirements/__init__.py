@@ -1,0 +1,1 @@
+"""Daily menu requirement generation."""

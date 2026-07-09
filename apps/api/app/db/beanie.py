@@ -5,6 +5,7 @@ from beanie import Document, init_beanie
 
 from app.db.mongo import get_database
 from app.modules.identity.models import RefreshSession, School, User
+from app.modules.menu_requirements.models import MenuRequirement
 from app.modules.menus.models import MenuChangeRequest, MenuImportPreviewSession, WeeklyMenu
 from app.modules.recipe.models import (
     Allergen,
@@ -27,6 +28,7 @@ def get_document_models() -> list[type[Document]]:
         DishCard,
         DishCardVersion,
         WeeklyMenu,
+        MenuRequirement,
         MenuChangeRequest,
         MenuImportPreviewSession,
     ]

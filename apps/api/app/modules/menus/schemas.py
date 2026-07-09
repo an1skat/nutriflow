@@ -92,6 +92,13 @@ class DailyMenuItemPayload(DecimalResponseModel):
             return []
         return sorted({item.strip().upper() for item in value if item and item.strip()})
 
+    @model_validator(mode="after")
+    def validate_servings(self) -> Self:
+        group_ids = [serving.school_group_id for serving in self.servings]
+        if len(group_ids) != len(set(group_ids)):
+            raise ValueError("Daily menu item servings must be unique by school group")
+        return self
+
 
 class DailyMenuPayload(DecimalResponseModel):
     weekday: Weekday

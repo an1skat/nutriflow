@@ -112,6 +112,10 @@ class DailyMenuItem(BaseModel):
 
     @model_validator(mode="after")
     def validate_reference_shape(self) -> Self:
+        serving_group_ids = [serving.school_group_id for serving in self.servings]
+        if len(serving_group_ids) != len(set(serving_group_ids)):
+            raise ValueError("Daily menu item servings must be unique by school group")
+
         if self.kind == MenuItemKind.PRODUCT:
             if self.dish_card_id is not None or self.dish_card_version_id is not None:
                 raise ValueError("Product menu item cannot reference a dish card")
