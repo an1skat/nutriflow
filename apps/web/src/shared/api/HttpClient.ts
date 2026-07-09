@@ -234,6 +234,20 @@ const detailTranslations: Record<string, string> = {
   "Dish card version does not belong to menu item dish card":
     "Версія техкарти не відповідає вибраній техкарті.",
   "Product ingredient not found": "Інгредієнт продукту не знайдено.",
+  "Menu requirement not found": "Меню-вимогу не знайдено.",
+  "Daily menu not found": "Денне меню не знайдено.",
+  "Only school users can access menu requirements":
+    "Меню-вимоги доступні лише користувачам школи.",
+  "Menu requirements can only be generated from a published menu":
+    "Меню-вимогу можна сформувати лише з опублікованого меню.",
+  "At least one dish must have a children count greater than zero":
+    "Вкажіть кількість дітей більше нуля хоча б для однієї страви.",
+  "Daily menu date is required to generate a menu requirement":
+    "Для формування меню-вимоги потрібно вказати дату дня.",
+  "School is inactive or missing":
+    "Школа неактивна або її не знайдено.",
+  "School group age group does not match":
+    "Вікова категорія групи не відповідає даним меню.",
   "File name is required": "Не вдалося визначити назву файлу.",
   "Only .xlsx files are supported": "Підтримуються лише файли формату .xlsx.",
   "Workbook is empty": "Excel-файл порожній.",

@@ -4,9 +4,11 @@ import {
   AlertTriangle,
   Check,
   ChevronDown,
+  FileSpreadsheet,
   Save,
   Utensils,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -30,6 +32,7 @@ import {
   replaceDailyMenuDish,
   saveDailyMenuDraft,
 } from "@/features/daily-menu/model/DailyMenuDraftStorage";
+import { useGenerateMenuRequirements } from "@/features/menu-requirement-generation/model/UseGenerateMenuRequirements";
 import { useUpdateWeeklyMenu } from "@/features/weekly-menu-editor/model/UseWeeklyMenuMutations";
 import {
   AGE_GROUP_LABELS,
@@ -42,6 +45,7 @@ import { formatDate } from "@/shared/lib/FormatDate";
 import { RequestError } from "@/shared/ui/RequestError";
 
 export function DailyMenuSchoolWorkspace() {
+  const router = useRouter();
   const menus = useWeeklyMenus({
     offset: 0,
     limit: 100,
@@ -52,6 +56,7 @@ export function DailyMenuSchoolWorkspace() {
   const effectiveMenuId = selectedMenuId ?? menus.data?.items[0]?.id ?? "";
   const selectedMenu = useWeeklyMenu(effectiveMenuId);
   const updateWeeklyMenu = useUpdateWeeklyMenu(effectiveMenuId);
+  const generateMenuRequirements = useGenerateMenuRequirements();
   const [days, setDays] = useState<DailyMenu[]>([]);
   const [activeWeekday, setActiveWeekday] = useState<
     DailyMenu["weekday"] | null
@@ -106,6 +111,10 @@ export function DailyMenuSchoolWorkspace() {
   }, [isDirty]);
 
   const activeDay = days.find((day) => day.weekday === activeWeekday) ?? null;
+  const canGenerateActiveDay =
+    activeDay?.items.some((item) =>
+      item.servings.some((serving) => serving.children_count > 0),
+    ) ?? false;
   const dishCatalog = useMemo(
     () => createDishCatalog(selectedMenu.data),
     [selectedMenu.data],
@@ -180,11 +189,11 @@ export function DailyMenuSchoolWorkspace() {
     setIsDirty(true);
   };
 
-  const saveChanges = async () => {
+  const saveChanges = async (): Promise<WeeklyMenu | null> => {
     const menu = selectedMenu.data;
 
     if (!menu) {
-      return;
+      return null;
     }
 
     const localSavedAt = saveDailyMenuDraft(menu.id, menu.updated_at, days);
@@ -201,8 +210,37 @@ export function DailyMenuSchoolWorkspace() {
       toast.success(
         "Зміни збережено. Якщо страву замінено, технолог отримав повідомлення.",
       );
+      return updatedMenu;
     } catch (error) {
       setSavedAt(localSavedAt);
+      toast.error(getApiErrorMessage(error));
+      return null;
+    }
+  };
+
+  const generateRequirement = async () => {
+    const menu = selectedMenu.data;
+
+    if (!menu || !activeDay || !canGenerateActiveDay) {
+      return;
+    }
+    if (isDirty && !(await saveChanges())) {
+      return;
+    }
+
+    try {
+      const response = await generateMenuRequirements.mutateAsync({
+        weekly_menu_id: menu.id,
+        weekday: activeDay.weekday,
+      });
+      const groupsCount = response.items.length;
+      toast.success(
+        groupsCount === 1
+          ? "Меню-вимогу сформовано."
+          : `Сформовано меню-вимоги для ${groupsCount} груп.`,
+      );
+      router.push("/menu-requirements");
+    } catch (error) {
       toast.error(getApiErrorMessage(error));
     }
   };
@@ -249,17 +287,44 @@ export function DailyMenuSchoolWorkspace() {
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            className="nf-button nf-button-primary shrink-0"
-            onClick={() => void saveChanges()}
-            disabled={
-              !selectedMenu.data || !days.length || updateWeeklyMenu.isPending
-            }
-          >
-            <Save className="size-4" aria-hidden />
-            {updateWeeklyMenu.isPending ? "Зберігаємо…" : "Зберегти зміни"}
-          </button>
+          <div className="flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              className="nf-button nf-button-secondary shrink-0"
+              onClick={() => void saveChanges()}
+              disabled={
+                !selectedMenu.data ||
+                !days.length ||
+                updateWeeklyMenu.isPending ||
+                generateMenuRequirements.isPending
+              }
+            >
+              <Save className="size-4" aria-hidden />
+              {updateWeeklyMenu.isPending ? "Зберігаємо…" : "Зберегти зміни"}
+            </button>
+            <button
+              type="button"
+              className="nf-button nf-button-primary shrink-0"
+              onClick={() => void generateRequirement()}
+              disabled={
+                !selectedMenu.data ||
+                !activeDay ||
+                !canGenerateActiveDay ||
+                updateWeeklyMenu.isPending ||
+                generateMenuRequirements.isPending
+              }
+              title={
+                canGenerateActiveDay
+                  ? undefined
+                  : "Вкажіть кількість дітей більше нуля хоча б для однієї страви"
+              }
+            >
+              <FileSpreadsheet className="size-4" aria-hidden />
+              {generateMenuRequirements.isPending
+                ? "Формуємо…"
+                : "Сформувати меню-вимогу"}
+            </button>
+          </div>
         </div>
       </section>
 

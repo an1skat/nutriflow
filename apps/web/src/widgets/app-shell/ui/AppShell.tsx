@@ -6,6 +6,7 @@ import {
   CalendarDays,
   ClipboardCheck,
   ClipboardList,
+  FileSpreadsheet,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -88,6 +89,12 @@ const navigation: NavigationItem[] = [
     href: "/daily-menu",
     label: "Денне меню",
     icon: ClipboardList,
+    schoolOnly: true,
+  },
+  {
+    href: "/menu-requirements",
+    label: "Меню-вимога",
+    icon: FileSpreadsheet,
     schoolOnly: true,
   },
   {
