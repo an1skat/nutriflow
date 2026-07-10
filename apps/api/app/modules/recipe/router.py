@@ -138,6 +138,9 @@ async def require_recipe_catalog_read(current_user: CurrentUser) -> User:
     if current_user.role == UserRole.OWNER:
         return current_user
 
+    if current_user.role == UserRole.SCHOOL_USER:
+        return current_user
+
     if current_user.role in {UserRole.ADMIN, UserRole.TECHNOLOGIST} and (
         await user_has_any_permission(
             current_user,

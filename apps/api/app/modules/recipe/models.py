@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
@@ -153,6 +154,66 @@ class PortionVariant(BaseModel):
         if self.age_group is None and self.portion_grams is None:
             raise ValueError("Portion variant must define age_group or portion_grams")
         return self
+
+
+def parse_menu_yield_grams(value: str) -> Decimal | None:
+    normalized = str(value).strip().lower().replace("\u00a0", " ")
+    normalized = re.sub(r"\s*(?:г|гр|g)\s*$", "", normalized).strip()
+    normalized = normalized.replace(",", ".")
+
+    if not re.fullmatch(r"\d+(?:\.\d+)?", normalized):
+        return None
+
+    amount = Decimal(normalized)
+    if amount < 0:
+        return None
+    return amount
+
+
+def find_portion_variant_by_yield(
+    portion_variants: list[PortionVariant],
+    yield_amount: str,
+    *,
+    preferred_variant_id: PydanticObjectId | None = None
+) -> PortionVariant | None:
+    target = parse_menu_yield_grams(yield_amount)
+
+    if target is None:
+        if preferred_variant_id is None:
+            return None
+        
+        return next(
+            (
+                variant
+                for variant in portion_variants
+                if variant.id == preferred_variant_id
+            ),
+            None
+        )
+    
+    for attribute in ("output_grams", "portion_grams"):
+        matches = [
+            variant
+            for variant in portion_variants
+            if getattr(variant, attribute) == target
+        ]
+
+        if preferred_variant_id is not None:
+            preferred = next(
+                (
+                    variant
+                    for variant in matches
+                    if variant.id == preferred_variant_id
+                ),
+                None,
+            )
+            if preferred is not None:
+                return preferred
+        
+        if matches:
+            return matches[0]
+        
+    return None
 
 
 class IngredientAmount(BaseModel):

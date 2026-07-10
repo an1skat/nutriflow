@@ -59,6 +59,7 @@ from app.modules.recipe.models import (
     DishCard,
     DishCardVersion,
     Ingredient,
+    find_portion_variant_by_yield,
     normalize_lookup_text,
 )
 
@@ -925,6 +926,16 @@ async def _resolve_item_references(item: DailyMenuItem) -> None:
     version = await DishCardVersion.get(item.dish_card_version_id)
     if version is None or version.dish_card_id != dish_card.id:
         raise MenuValidationError("Dish card version does not belong to menu item dish card")
+    
+    for portion in item.portions:
+        variant = find_portion_variant_by_yield(
+            version.portion_variants,
+            portion.yield_amount,
+            preferred_variant_id=portion.dish_card_portion_variant_id
+        )
+        portion.dish_card_portion_variant_id = (
+            variant.id if variant is not None else None
+        )
 
     if not item.allergen_codes:
         item.allergen_codes = await _resolve_allergen_codes(version)
@@ -1284,14 +1295,74 @@ async def _hydrate_preview_references(preview: ParsedWeeklyMenuPreview) -> None:
                         else:
                             item.dish_card_id = dish_card.id
                             item.dish_card_version_id = dish_card.current_version_id
-                            if not item.allergen_codes and dish_card.current_version_id is not None:
+
+                            version = None
+                            if dish_card.current_version_id is not None:
                                 if dish_card.current_version_id not in version_cache:
                                     version_cache[
                                         dish_card.current_version_id
-                                    ] = await DishCardVersion.get(dish_card.current_version_id)
-                                version = version_cache[dish_card.current_version_id]
-                                if version is not None:
-                                    item.allergen_codes = await _resolve_allergen_codes(version)
+                                    ] = await DishCardVersion.get(
+                                        dish_card.current_version_id
+                                    )
+
+                                version = version_cache[
+                                    dish_card.current_version_id
+                                ]
+
+                            if version is None:
+                                preview.diagnostics.append(
+                                    _import_diagnostic(
+                                        level=MenuImportDiagnosticLevel.ERROR,
+                                        code="dish_card_version_not_found",
+                                        message=(
+                                            f'Recipe card "{recipe_card_number}" '
+                                            "has no current version"
+                                        ),
+                                        sheet_name=preview_item.sheet_name,
+                                        row_number=row_number,
+                                        column_number=1,
+                                    )
+                                )
+                            else:
+                                for portion_index, portion in enumerate(
+                                    item.portions
+                                ):
+                                    variant = find_portion_variant_by_yield(
+                                        version.portion_variants,
+                                        portion.yield_amount,
+                                        preferred_variant_id=(
+                                            portion.dish_card_portion_variant_id
+                                        ),
+                                    )
+
+                                    if variant is None:
+                                        preview.diagnostics.append(
+                                            _import_diagnostic(
+                                                level=(
+                                                    MenuImportDiagnosticLevel.ERROR
+                                                ),
+                                                code="portion_variant_not_found",
+                                                message=(
+                                                    f'Dish "{item.name}" has no '
+                                                    "portion variant for output "
+                                                    f"{portion.yield_amount} g"
+                                                ),
+                                                sheet_name=preview_item.sheet_name,
+                                                row_number=row_number,
+                                                column_number=(
+                                                    4 + portion_index * 5
+                                                ),
+                                            )
+                                        )
+                                    else:
+                                        portion.dish_card_portion_variant_id = (
+                                            variant.id
+                                        )
+
+                                if not item.allergen_codes:
+                                    item.allergen_codes = (
+                                        await _resolve_allergen_codes(version)
+                                    )
 
                 unknown_codes = [
                     code for code in item.allergen_codes if code not in known_allergen_codes
