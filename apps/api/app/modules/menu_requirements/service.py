@@ -1,5 +1,8 @@
+import asyncio
 import hashlib
 import json
+import re
+from calendar import monthrange
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -16,9 +19,29 @@ from app.modules.menu_requirements.models import (
     MenuRequirementDish,
     MenuRequirementIngredientRow,
 )
+from app.modules.menu_requirements.schemas import (
+    MenuRequirementAggregateStatus,
+    MenuRequirementCalendarDayResponse,
+    MenuRequirementCalendarMonthResponse,
+    MenuRequirementCalendarResponse,
+    MenuRequirementCalendarWeekResponse,
+    MenuRequirementDishKeyReliability,
+    MenuRequirementReportBreakdownItemResponse,
+    MenuRequirementReportCellResponse,
+    MenuRequirementReportDishResponse,
+    MenuRequirementReportGranularity,
+    MenuRequirementReportGroupResponse,
+    MenuRequirementReportIngredientRowResponse,
+    MenuRequirementReportResponse,
+)
+from app.modules.menu_requirements.xlsx import (
+    build_menu_requirement_report_workbook,
+    build_menu_requirement_workbook,
+)
 from app.modules.menus.models import (
     DailyMenu,
     DailyMenuItem,
+    MealType,
     MenuItemKind,
     Weekday,
     WeeklyMenu,
@@ -29,8 +52,12 @@ from app.modules.recipe.models import (
     DishCardVersionStatus,
     Ingredient,
     IngredientAmount,
+    find_portion_variant_by_yield,
     normalize_lookup_text,
 )
+
+MAX_REPORT_RANGE_DAYS = 45
+CALENDAR_WEEK_SPILLOVER_DAYS = 4
 
 
 class MenuRequirementNotFoundError(ValueError):
@@ -66,11 +93,36 @@ class DishCalculation:
     ingredient_lines: list[IngredientLine]
 
 
+@dataclass(frozen=True)
+class MenuRequirementRecord:
+    requirement: MenuRequirement
+    school_name: str
+    school_admin_owner_id: PydanticObjectId | None
+    school_admin_owner_username: str | None
+
+
+@dataclass(frozen=True)
+class AggregateDishKey:
+    key: str
+    reliability: MenuRequirementDishKeyReliability
+
+
+@dataclass(frozen=True)
+class ExpectedMenuDay:
+    service_date: Date
+    weekly_menu_id: PydanticObjectId
+    weekday: Weekday
+    meal_type: MealType
+    menu_title: str
+    day: DailyMenu
+
+
 async def generate_menu_requirements(
     weekly_menu_id: PydanticObjectId,
     weekday: Weekday,
+    service_date: Date,
     current_user: User,
-) -> list[MenuRequirement]:
+) -> list[MenuRequirementRecord]:
     _ensure_school_user(current_user)
     menu = await WeeklyMenu.get(weekly_menu_id)
     if menu is None:
@@ -86,7 +138,7 @@ async def generate_menu_requirements(
     if day is None:
         raise MenuRequirementNotFoundError("Daily menu not found")
 
-    service_date = resolve_service_date(menu, day)
+    resolved_service_date = resolve_service_date(menu, day, service_date)
     school = await School.get(menu.school_id)
     if school is None or not school.is_active:
         raise MenuRequirementAccessDeniedError("School is inactive or missing")
@@ -155,7 +207,7 @@ async def generate_menu_requirements(
                 menu_title=menu.title,
                 meal_type=menu.meal_type,
                 weekday=weekday,
-                service_date=service_date,
+                service_date=resolved_service_date,
                 school_group_id=group.id,
                 school_group_name=group.name,
                 age_group=group.age_group,
@@ -172,7 +224,7 @@ async def generate_menu_requirements(
             requirement.source_menu_id = menu.source_menu_id
             requirement.menu_title = menu.title
             requirement.meal_type = menu.meal_type
-            requirement.service_date = service_date
+            requirement.service_date = resolved_service_date
             requirement.school_group_name = group.name
             requirement.age_group = group.age_group
             requirement.dishes = dishes
@@ -185,7 +237,8 @@ async def generate_menu_requirements(
             await requirement.save()
         requirements.append(requirement)
 
-    return sorted(requirements, key=lambda item: item.school_group_name.casefold())
+    records = await _build_requirement_records(requirements)
+    return sorted(records, key=lambda item: item.requirement.school_group_name.casefold())
 
 
 async def list_menu_requirements(
@@ -196,9 +249,11 @@ async def list_menu_requirements(
     weekly_menu_id: PydanticObjectId | None = None,
     school_group_id: PydanticObjectId | None = None,
     service_date: Date | None = None,
-) -> tuple[list[MenuRequirement], int]:
-    _ensure_school_user(current_user)
-    filters: dict[str, Any] = {"school_id": current_user.school_id}
+) -> tuple[list[MenuRequirementRecord], int]:
+    filters: dict[str, Any] = {}
+    allowed_school_ids = await _allowed_school_ids(current_user)
+    if allowed_school_ids is not None:
+        filters["school_id"] = {"$in": allowed_school_ids}
     if weekly_menu_id is not None:
         filters["weekly_menu_id"] = weekly_menu_id
     if school_group_id is not None:
@@ -206,28 +261,237 @@ async def list_menu_requirements(
     if service_date is not None:
         filters["service_date"] = service_date
 
-    cursor = MenuRequirement.find(filters)
-    total = await cursor.count()
-    items = (
-        await cursor.sort("-service_date", "+school_group_name")
-        .skip(offset)
-        .limit(limit)
-        .to_list()
-    )
-    return items, total
+    requirements = await MenuRequirement.find(filters).to_list()
+    records = await _build_requirement_records(requirements)
+    records.sort(key=_requirement_record_sort_key)
+    return records[offset : offset + limit], len(records)
 
 
 async def get_menu_requirement(
     requirement_id: PydanticObjectId,
     current_user: User,
-) -> MenuRequirement:
-    _ensure_school_user(current_user)
+) -> MenuRequirementRecord:
     requirement = await MenuRequirement.get(requirement_id)
     if requirement is None:
         raise MenuRequirementNotFoundError("Menu requirement not found")
-    if requirement.school_id != current_user.school_id:
+    if not await _can_access_school(current_user, requirement.school_id):
         raise MenuRequirementAccessDeniedError("School access denied")
-    return requirement
+    records = await _build_requirement_records([requirement])
+    return records[0]
+
+
+async def update_menu_requirement(
+    requirement_id: PydanticObjectId,
+    current_user: User,
+    ingredient_rows: list[Any],
+) -> MenuRequirementRecord:
+    _ensure_requirement_editor(current_user)
+    requirement = await MenuRequirement.get(requirement_id)
+    if requirement is None:
+        raise MenuRequirementNotFoundError("Menu requirement not found")
+
+    requirement.ingredient_rows = _build_updated_ingredient_rows(
+        requirement,
+        ingredient_rows,
+    )
+    requirement.revision += 1
+    requirement.updated_at = datetime.now(UTC)
+    await requirement.save()
+
+    records = await _build_requirement_records([requirement])
+    return records[0]
+
+
+async def delete_menu_requirement(
+    requirement_id: PydanticObjectId,
+    current_user: User,
+) -> None:
+    _ensure_requirement_editor(current_user)
+    requirement = await MenuRequirement.get(requirement_id)
+    if requirement is None:
+        raise MenuRequirementNotFoundError("Menu requirement not found")
+    if not await _can_access_school(current_user, requirement.school_id):
+        raise MenuRequirementAccessDeniedError("School access denied")
+
+    await requirement.delete()
+
+
+async def get_menu_requirement_calendar(
+    school_id: PydanticObjectId,
+    year: int,
+    current_user: User,
+    *,
+    meal_type: MealType | None = None,
+    school_group_id: PydanticObjectId | None = None,
+) -> MenuRequirementCalendarResponse:
+    school = await _get_accessible_school(current_user, school_id)
+    _ensure_school_group_exists(school, school_group_id)
+
+    year_date_from = Date(year, 1, 1)
+    year_date_to = Date(year, 12, 31)
+    date_from = year_date_from - timedelta(days=CALENDAR_WEEK_SPILLOVER_DAYS)
+    date_to = year_date_to + timedelta(days=CALENDAR_WEEK_SPILLOVER_DAYS)
+    expected_days = await _expected_menu_days(
+        school_id,
+        date_from=date_from,
+        date_to=date_to,
+        meal_type=meal_type,
+        school_group_id=school_group_id,
+    )
+    requirements = await _find_requirements_for_report(
+        school_id,
+        date_from=date_from,
+        date_to=date_to,
+        meal_type=meal_type,
+        school_group_id=school_group_id,
+    )
+    requirement_statuses = await _requirement_statuses(requirements)
+
+    generated_dates = {requirement.service_date for requirement in requirements}
+    stale_dates = {
+        requirement.service_date
+        for requirement in requirements
+        if requirement_statuses.get(requirement.id)
+        == MenuRequirementAggregateStatus.STALE
+    }
+    expected_dates = set(expected_days)
+    day_summaries = _build_calendar_day_summaries(
+        expected_days,
+        requirements,
+        requirement_statuses=requirement_statuses,
+        school=school,
+        school_group_id=school_group_id,
+    )
+
+    months = [
+        _build_calendar_month(
+            year,
+            month,
+            expected_dates=expected_dates,
+            generated_dates=generated_dates,
+            stale_dates=stale_dates,
+            day_summaries=day_summaries,
+        )
+        for month in range(1, 13)
+    ]
+    return MenuRequirementCalendarResponse(
+        school_id=school.id,
+        school_name=school.name,
+        year=year,
+        months=months,
+    )
+
+
+async def get_menu_requirement_report(
+    school_id: PydanticObjectId,
+    date_from: Date,
+    date_to: Date,
+    granularity: MenuRequirementReportGranularity,
+    current_user: User,
+    *,
+    meal_type: MealType | None = None,
+    school_group_id: PydanticObjectId | None = None,
+) -> MenuRequirementReportResponse:
+    _validate_report_range(date_from, date_to)
+    school = await _get_accessible_school(current_user, school_id)
+    _ensure_school_group_exists(school, school_group_id)
+
+    expected_days = await _expected_menu_days(
+        school_id,
+        date_from=date_from,
+        date_to=date_to,
+        meal_type=meal_type,
+        school_group_id=school_group_id,
+    )
+    requirements = await _find_requirements_for_report(
+        school_id,
+        date_from=date_from,
+        date_to=date_to,
+        meal_type=meal_type,
+        school_group_id=school_group_id,
+    )
+    requirement_statuses = await _requirement_statuses(requirements)
+    generated_dates = {requirement.service_date for requirement in requirements}
+    expected_dates = set(expected_days)
+    missing_dates = sorted(expected_dates - generated_dates)
+    stale_dates = sorted(
+        {
+            requirement.service_date
+            for requirement in requirements
+            if requirement_statuses.get(requirement.id)
+            == MenuRequirementAggregateStatus.STALE
+        }
+    )
+
+    groups = _build_report_groups(
+        requirements,
+        requirement_statuses=requirement_statuses,
+        missing_dates=missing_dates,
+        expected_days=expected_days,
+        school=school,
+    )
+
+    return MenuRequirementReportResponse(
+        school_id=school.id,
+        school_name=school.name,
+        date_from=date_from,
+        date_to=date_to,
+        granularity=granularity,
+        meal_type=meal_type,
+        school_group_id=school_group_id,
+        status=_aggregate_status(missing_dates=missing_dates, stale_dates=stale_dates),
+        missing_dates=missing_dates,
+        stale_dates=stale_dates,
+        groups=groups,
+    )
+
+
+async def export_menu_requirement_workbook(
+    requirement_id: PydanticObjectId,
+    current_user: User,
+) -> tuple[str, bytes]:
+    record = await get_menu_requirement(requirement_id, current_user)
+    content = await asyncio.to_thread(
+        build_menu_requirement_workbook,
+        record.requirement,
+        school_name=record.school_name,
+    )
+    requirement = record.requirement
+    filename = _xlsx_filename(
+        "menu-requirement",
+        requirement.service_date.isoformat(),
+        requirement.school_group_name,
+    )
+    return filename, content
+
+
+async def export_menu_requirement_report_workbook(
+    school_id: PydanticObjectId,
+    date_from: Date,
+    date_to: Date,
+    granularity: MenuRequirementReportGranularity,
+    current_user: User,
+    *,
+    meal_type: MealType | None = None,
+    school_group_id: PydanticObjectId | None = None,
+) -> tuple[str, bytes]:
+    report = await get_menu_requirement_report(
+        school_id,
+        date_from,
+        date_to,
+        granularity,
+        current_user,
+        meal_type=meal_type,
+        school_group_id=school_group_id,
+    )
+    content = await asyncio.to_thread(build_menu_requirement_report_workbook, report)
+    filename = _xlsx_filename(
+        "menu-requirement",
+        report.school_name,
+        report.date_from.isoformat(),
+        report.date_to.isoformat(),
+    )
+    return filename, content
 
 
 def build_ingredient_rows(
@@ -301,14 +565,16 @@ def convert_to_grams(value: Decimal, unit: str) -> Decimal:
     raise MenuRequirementValidationError(f'Unit "{unit}" cannot be converted to grams')
 
 
-def resolve_service_date(menu: WeeklyMenu, day: DailyMenu) -> Date:
+def resolve_service_date(
+    menu: WeeklyMenu,
+    day: DailyMenu,
+    requested_date: Date,
+) -> Date:
     if day.date is not None:
         return day.date
     if menu.starts_on is not None:
         return menu.starts_on + timedelta(days=list(Weekday).index(day.weekday))
-    raise MenuRequirementValidationError(
-        "Daily menu date is required to generate a menu requirement"
-    )
+    return requested_date
 
 
 def hash_daily_menu(day: DailyMenu) -> str:
@@ -321,15 +587,870 @@ def hash_daily_menu(day: DailyMenu) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def _validate_report_range(date_from: Date, date_to: Date) -> None:
+    if date_from > date_to:
+        raise MenuRequirementValidationError("date_from cannot be after date_to")
+    if (date_to - date_from).days + 1 > MAX_REPORT_RANGE_DAYS:
+        raise MenuRequirementValidationError(
+            f"Menu requirement report range cannot exceed {MAX_REPORT_RANGE_DAYS} days"
+        )
+
+
+async def _get_accessible_school(
+    current_user: User,
+    school_id: PydanticObjectId,
+) -> School:
+    if not await _can_access_school(current_user, school_id):
+        raise MenuRequirementAccessDeniedError("School access denied")
+    school = await School.get(school_id)
+    if school is None:
+        raise MenuRequirementNotFoundError("School not found")
+    return school
+
+
+def _ensure_school_group_exists(
+    school: School,
+    school_group_id: PydanticObjectId | None,
+) -> None:
+    if school_group_id is None:
+        return
+    if not any(group.id == school_group_id for group in school.groups):
+        raise MenuRequirementNotFoundError("School group not found")
+
+
+async def _find_requirements_for_report(
+    school_id: PydanticObjectId,
+    *,
+    date_from: Date,
+    date_to: Date,
+    meal_type: MealType | None,
+    school_group_id: PydanticObjectId | None,
+) -> list[MenuRequirement]:
+    filters: dict[str, Any] = {
+        "school_id": school_id,
+        "service_date": {"$gte": date_from, "$lte": date_to},
+    }
+    if meal_type is not None:
+        filters["meal_type"] = meal_type.value
+    if school_group_id is not None:
+        filters["school_group_id"] = school_group_id
+
+    return await MenuRequirement.find(filters).to_list()
+
+
+async def _expected_menu_days(
+    school_id: PydanticObjectId,
+    *,
+    date_from: Date,
+    date_to: Date,
+    meal_type: MealType | None,
+    school_group_id: PydanticObjectId | None,
+) -> dict[Date, list[ExpectedMenuDay]]:
+    filters: dict[str, Any] = {
+        "school_id": school_id,
+        "status": WeeklyMenuStatus.PUBLISHED.value,
+    }
+    if meal_type is not None:
+        filters["meal_type"] = meal_type.value
+
+    menus = await WeeklyMenu.find(filters).to_list()
+    expected: dict[Date, list[ExpectedMenuDay]] = defaultdict(list)
+    for menu in menus:
+        for day in menu.days:
+            service_date = _menu_day_service_date(menu, day)
+            if service_date is None or service_date < date_from or service_date > date_to:
+                continue
+            if school_group_id is not None and not _day_has_group_serving(
+                day,
+                school_group_id,
+            ):
+                continue
+            expected[service_date].append(
+                ExpectedMenuDay(
+                    service_date=service_date,
+                    weekly_menu_id=menu.id,
+                    weekday=day.weekday,
+                    meal_type=menu.meal_type,
+                    menu_title=menu.title,
+                    day=day,
+                )
+            )
+    return dict(expected)
+
+
+def _menu_day_service_date(menu: WeeklyMenu, day: DailyMenu) -> Date | None:
+    if day.date is not None:
+        return day.date
+    if menu.starts_on is not None:
+        return menu.starts_on + timedelta(days=list(Weekday).index(day.weekday))
+    return None
+
+
+def _day_has_group_serving(day: DailyMenu, school_group_id: PydanticObjectId) -> bool:
+    return any(
+        serving.school_group_id == school_group_id and serving.children_count > 0
+        for item in day.items
+        for serving in item.servings
+    )
+
+
+async def _requirement_statuses(
+    requirements: list[MenuRequirement],
+) -> dict[PydanticObjectId, MenuRequirementAggregateStatus]:
+    if not requirements:
+        return {}
+
+    menu_ids = list({requirement.weekly_menu_id for requirement in requirements})
+    menus = await WeeklyMenu.find({"_id": {"$in": menu_ids}}).to_list()
+    menus_by_id = {menu.id: menu for menu in menus}
+
+    statuses: dict[PydanticObjectId, MenuRequirementAggregateStatus] = {}
+    for requirement in requirements:
+        menu = menus_by_id.get(requirement.weekly_menu_id)
+        day = (
+            next(
+                (
+                    candidate
+                    for candidate in menu.days
+                    if candidate.weekday == requirement.weekday
+                ),
+                None,
+            )
+            if menu is not None
+            else None
+        )
+        statuses[requirement.id] = (
+            MenuRequirementAggregateStatus.STALE
+            if day is None or hash_daily_menu(day) != requirement.source_day_hash
+            else MenuRequirementAggregateStatus.COMPLETE
+        )
+    return statuses
+
+
+def _build_calendar_month(
+    year: int,
+    month: int,
+    *,
+    expected_dates: set[Date],
+    generated_dates: set[Date],
+    stale_dates: set[Date],
+    day_summaries: dict[Date, MenuRequirementCalendarDayResponse] | None = None,
+) -> MenuRequirementCalendarMonthResponse:
+    last_day = monthrange(year, month)[1]
+    date_from = Date(year, month, 1)
+    date_to = Date(year, month, last_day)
+    month_working_dates = {
+        date_from + timedelta(days=offset)
+        for offset in range((date_to - date_from).days + 1)
+        if (date_from + timedelta(days=offset)).weekday() < 5
+    }
+    expected = expected_dates & month_working_dates
+    generated = generated_dates & month_working_dates
+    missing = expected - generated
+    stale = stale_dates & month_working_dates
+    resolved_day_summaries = day_summaries or {}
+
+    weeks = []
+    for index, (block_from, block_to) in enumerate(
+        _month_workweek_blocks(date_from, date_to),
+        start=1,
+    ):
+        block_dates = {
+            block_from + timedelta(days=offset)
+            for offset in range((block_to - block_from).days + 1)
+        }
+        block_expected = expected_dates & block_dates
+        block_generated = generated_dates & block_dates
+        block_missing = block_expected - block_generated
+        block_stale = stale_dates & block_dates
+        weeks.append(
+            MenuRequirementCalendarWeekResponse(
+                week_index=index,
+                date_from=block_from,
+                date_to=block_to,
+                generated_days=len(block_generated),
+                missing_days=len(block_missing),
+                stale_days=len(block_stale),
+                status=_aggregate_status(
+                    missing_dates=sorted(block_missing),
+                    stale_dates=sorted(block_stale),
+                ),
+                days=[
+                    resolved_day_summaries.get(
+                        service_date,
+                        _empty_calendar_day(service_date),
+                    )
+                    for service_date in sorted(block_dates)
+                ],
+            )
+        )
+
+    return MenuRequirementCalendarMonthResponse(
+        month=month,
+        date_from=date_from,
+        date_to=date_to,
+        total_days=last_day,
+        working_days=len(expected),
+        generated_days=len(generated),
+        missing_days=len(missing),
+        stale_days=len(stale),
+        status=_aggregate_status(
+            missing_dates=sorted(missing),
+            stale_dates=sorted(stale),
+        ),
+        weeks=weeks,
+    )
+
+
+def _build_calendar_day_summaries(
+    expected_days: dict[Date, list[ExpectedMenuDay]],
+    requirements: list[MenuRequirement],
+    *,
+    requirement_statuses: dict[PydanticObjectId, MenuRequirementAggregateStatus],
+    school: School,
+    school_group_id: PydanticObjectId | None,
+) -> dict[Date, MenuRequirementCalendarDayResponse]:
+    groups_by_id = {group.id: group for group in school.groups}
+    expected_keys_by_date: dict[
+        Date,
+        set[tuple[PydanticObjectId, Weekday, PydanticObjectId]],
+    ] = defaultdict(set)
+    generated_keys_by_date: dict[
+        Date,
+        set[tuple[PydanticObjectId, Weekday, PydanticObjectId]],
+    ] = defaultdict(set)
+    stale_keys_by_date: dict[
+        Date,
+        set[tuple[PydanticObjectId, Weekday, PydanticObjectId]],
+    ] = defaultdict(set)
+
+    for service_date, menu_days in expected_days.items():
+        for menu_day in menu_days:
+            for group in _eligible_groups(menu_day.day, groups_by_id):
+                if school_group_id is not None and group.id != school_group_id:
+                    continue
+                expected_keys_by_date[service_date].add(
+                    (menu_day.weekly_menu_id, menu_day.weekday, group.id)
+                )
+
+    for requirement in requirements:
+        key = (
+            requirement.weekly_menu_id,
+            requirement.weekday,
+            requirement.school_group_id,
+        )
+        generated_keys_by_date[requirement.service_date].add(key)
+        if (
+            requirement_statuses.get(requirement.id)
+            == MenuRequirementAggregateStatus.STALE
+        ):
+            stale_keys_by_date[requirement.service_date].add(key)
+
+    summaries: dict[Date, MenuRequirementCalendarDayResponse] = {}
+    for service_date in (
+        set(expected_keys_by_date)
+        | set(generated_keys_by_date)
+        | set(stale_keys_by_date)
+    ):
+        expected_keys = expected_keys_by_date[service_date]
+        generated_keys = generated_keys_by_date[service_date]
+        missing_keys = expected_keys - generated_keys
+        stale_keys = stale_keys_by_date[service_date]
+        summaries[service_date] = MenuRequirementCalendarDayResponse(
+            service_date=service_date,
+            expected_requirements=len(expected_keys),
+            generated_requirements=len(generated_keys),
+            missing_requirements=len(missing_keys),
+            stale_requirements=len(stale_keys),
+            status=_aggregate_status(
+                missing_dates=[service_date] if missing_keys else [],
+                stale_dates=[service_date] if stale_keys else [],
+            ),
+        )
+    return summaries
+
+
+def _empty_calendar_day(service_date: Date) -> MenuRequirementCalendarDayResponse:
+    return MenuRequirementCalendarDayResponse(
+        service_date=service_date,
+        expected_requirements=0,
+        generated_requirements=0,
+        missing_requirements=0,
+        stale_requirements=0,
+        status=MenuRequirementAggregateStatus.COMPLETE,
+    )
+
+
+def _month_workweek_blocks(date_from: Date, date_to: Date) -> list[tuple[Date, Date]]:
+    blocks: list[tuple[Date, Date]] = []
+    current = date_from - timedelta(days=date_from.weekday())
+    if current + timedelta(days=4) < date_from:
+        current += timedelta(days=7)
+
+    while current <= date_to:
+        blocks.append((current, current + timedelta(days=4)))
+        current += timedelta(days=7)
+    return blocks
+
+
+def _aggregate_status(
+    *,
+    missing_dates: list[Date],
+    stale_dates: list[Date],
+) -> MenuRequirementAggregateStatus:
+    if missing_dates and stale_dates:
+        return MenuRequirementAggregateStatus.MIXED
+    if missing_dates:
+        return MenuRequirementAggregateStatus.MISSING
+    if stale_dates:
+        return MenuRequirementAggregateStatus.STALE
+    return MenuRequirementAggregateStatus.COMPLETE
+
+
+def _build_report_groups(
+    requirements: list[MenuRequirement],
+    *,
+    requirement_statuses: dict[PydanticObjectId, MenuRequirementAggregateStatus],
+    missing_dates: list[Date],
+    expected_days: dict[Date, list[ExpectedMenuDay]],
+    school: School,
+) -> list[MenuRequirementReportGroupResponse]:
+    groups_by_id = {group.id: group for group in school.groups}
+    group_states: dict[PydanticObjectId, dict[str, Any]] = {}
+
+    for requirement in sorted(
+        requirements,
+        key=lambda item: (
+            item.school_group_name.casefold(),
+            item.service_date,
+            item.meal_type.value,
+        ),
+    ):
+        group_state = group_states.setdefault(
+            requirement.school_group_id,
+            {
+                "school_group_id": requirement.school_group_id,
+                "school_group_name": requirement.school_group_name,
+                "age_group": requirement.age_group,
+                "dishes": {},
+                "rows": {},
+            },
+        )
+        dish_keys_by_item_id: dict[PydanticObjectId, str] = {}
+
+        for dish in sorted(requirement.dishes, key=lambda item: item.position):
+            aggregate_key = _requirement_dish_aggregate_key(dish)
+            dish_state = group_state["dishes"].setdefault(
+                aggregate_key.key,
+                {
+                    "aggregate_key": aggregate_key.key,
+                    "name": dish.name,
+                    "kind": dish.kind,
+                    "recipe_card_number": dish.recipe_card_number,
+                    "yield_amount": dish.yield_amount,
+                    "key_reliability": aggregate_key.reliability,
+                    "children_count_total": 0,
+                    "sort": (requirement.service_date, dish.position, dish.name.casefold()),
+                },
+            )
+            dish_state["children_count_total"] += dish.children_count
+            dish_keys_by_item_id[dish.menu_item_id] = aggregate_key.key
+
+        dishes_by_item_id = {dish.menu_item_id: dish for dish in requirement.dishes}
+        requirement_status = requirement_statuses.get(
+            requirement.id,
+            MenuRequirementAggregateStatus.COMPLETE,
+        )
+        for row in requirement.ingredient_rows:
+            if not row.cells:
+                continue
+            row_state = group_state["rows"].setdefault(
+                row.key,
+                {
+                    "key": row.key,
+                    "ingredient_id": row.ingredient_id,
+                    "ingredient_name": row.ingredient_name,
+                    "cells": {},
+                    "issue_total_raw_g": Decimal("0"),
+                    "issue_total_rounded_g": 0,
+                },
+            )
+            if row_state["ingredient_id"] is None and row.ingredient_id is not None:
+                row_state["ingredient_id"] = row.ingredient_id
+            row_state["issue_total_raw_g"] += row.issue_total_raw_g
+            row_state["issue_total_rounded_g"] += row.issue_total_rounded_g
+
+            for cell in row.cells:
+                dish = dishes_by_item_id.get(cell.menu_item_id)
+                dish_key = dish_keys_by_item_id.get(cell.menu_item_id)
+                if dish is None or dish_key is None:
+                    continue
+
+                issue_total_raw = cell.net_per_person_g * dish.children_count
+                issue_total_rounded = _ceil_decimal(issue_total_raw)
+                cell_state = row_state["cells"].setdefault(
+                    dish_key,
+                    {
+                        "dish_key": dish_key,
+                        "net_per_person_g": Decimal("0"),
+                        "issue_total_raw_g": Decimal("0"),
+                        "issue_total_rounded_g": 0,
+                        "breakdown": [],
+                    },
+                )
+                cell_state["net_per_person_g"] += cell.net_per_person_g
+                cell_state["issue_total_raw_g"] += issue_total_raw
+                cell_state["issue_total_rounded_g"] += issue_total_rounded
+                cell_state["breakdown"].append(
+                    MenuRequirementReportBreakdownItemResponse(
+                        requirement_id=requirement.id,
+                        service_date=requirement.service_date,
+                        school_group_id=requirement.school_group_id,
+                        school_group_name=requirement.school_group_name,
+                        menu_title=requirement.menu_title,
+                        net_per_person_g=cell.net_per_person_g,
+                        children_count=dish.children_count,
+                        issue_total_raw_g=issue_total_raw,
+                        issue_total_rounded_g=issue_total_rounded,
+                        status=requirement_status,
+                    )
+                )
+
+    for group_id, group_state in group_states.items():
+        school_group = groups_by_id.get(group_id)
+        if school_group is None:
+            continue
+        for row_state in group_state["rows"].values():
+            for cell_state in row_state["cells"].values():
+                _append_missing_breakdowns(
+                    cell_state,
+                    missing_dates=missing_dates,
+                    expected_days=expected_days,
+                    school_group=school_group,
+                )
+
+    return [
+        _report_group_from_state(group_state)
+        for group_state in sorted(
+            group_states.values(),
+            key=lambda item: item["school_group_name"].casefold(),
+        )
+    ]
+
+
+def _report_group_from_state(group_state: dict[str, Any]) -> MenuRequirementReportGroupResponse:
+    dishes = [
+        MenuRequirementReportDishResponse(
+            aggregate_key=dish_state["aggregate_key"],
+            name=dish_state["name"],
+            kind=dish_state["kind"],
+            recipe_card_number=dish_state["recipe_card_number"],
+            yield_amount=dish_state["yield_amount"],
+            key_reliability=dish_state["key_reliability"],
+            children_count_total=dish_state["children_count_total"],
+        )
+        for dish_state in sorted(
+            group_state["dishes"].values(),
+            key=lambda item: item["sort"],
+        )
+    ]
+    dish_order = {dish.aggregate_key: index for index, dish in enumerate(dishes)}
+    rows = []
+    for row_state in sorted(
+        group_state["rows"].values(),
+        key=lambda item: (item["ingredient_name"].casefold(), item["key"]),
+    ):
+        cells = [
+            MenuRequirementReportCellResponse(
+                dish_key=cell_state["dish_key"],
+                net_per_person_g=cell_state["net_per_person_g"],
+                issue_total_raw_g=cell_state["issue_total_raw_g"],
+                issue_total_rounded_g=cell_state["issue_total_rounded_g"],
+                breakdown=sorted(
+                    cell_state["breakdown"],
+                    key=lambda item: (
+                        item.service_date,
+                        item.menu_title or "",
+                    ),
+                ),
+            )
+            for cell_state in sorted(
+                row_state["cells"].values(),
+                key=lambda item: dish_order.get(item["dish_key"], 10_000),
+            )
+        ]
+        per_person_total = sum(
+            (cell.net_per_person_g for cell in cells),
+            start=Decimal("0"),
+        )
+        rows.append(
+            MenuRequirementReportIngredientRowResponse(
+                key=row_state["key"],
+                ingredient_id=row_state["ingredient_id"],
+                ingredient_name=row_state["ingredient_name"],
+                cells=cells,
+                per_person_total_g=per_person_total,
+                issue_total_raw_g=row_state["issue_total_raw_g"],
+                issue_total_rounded_g=row_state["issue_total_rounded_g"],
+            )
+        )
+
+    return MenuRequirementReportGroupResponse(
+        school_group_id=group_state["school_group_id"],
+        school_group_name=group_state["school_group_name"],
+        age_group=group_state["age_group"],
+        dishes=dishes,
+        ingredient_rows=rows,
+    )
+
+
+def _append_missing_breakdowns(
+    cell_state: dict[str, Any],
+    *,
+    missing_dates: list[Date],
+    expected_days: dict[Date, list[ExpectedMenuDay]],
+    school_group: SchoolGroup,
+) -> None:
+    existing_dates = {
+        item.service_date
+        for item in cell_state["breakdown"]
+        if item.status != MenuRequirementAggregateStatus.MISSING
+    }
+    for missing_date in missing_dates:
+        if missing_date in existing_dates:
+            continue
+        expected_day = next(
+            (
+                item
+                for item in expected_days.get(missing_date, [])
+                if _expected_day_contains_dish(
+                    item,
+                    school_group=school_group,
+                    dish_key=cell_state["dish_key"],
+                )
+            ),
+            None,
+        )
+        if expected_day is None:
+            continue
+        cell_state["breakdown"].append(
+            MenuRequirementReportBreakdownItemResponse(
+                requirement_id=None,
+                service_date=missing_date,
+                school_group_id=school_group.id,
+                school_group_name=school_group.name,
+                menu_title=expected_day.menu_title,
+                net_per_person_g=None,
+                children_count=None,
+                issue_total_raw_g=None,
+                issue_total_rounded_g=None,
+                status=MenuRequirementAggregateStatus.MISSING,
+            )
+        )
+
+
+def _expected_day_contains_dish(
+    expected_day: ExpectedMenuDay,
+    *,
+    school_group: SchoolGroup,
+    dish_key: str,
+) -> bool:
+    for item in expected_day.day.items:
+        serving = next(
+            (
+                candidate
+                for candidate in item.servings
+                if candidate.school_group_id == school_group.id
+                and candidate.children_count > 0
+            ),
+            None,
+        )
+        if serving is None:
+            continue
+        key = _daily_item_aggregate_key(item, school_group)
+        if key is not None and key.key == dish_key:
+            return True
+    return False
+
+
+def _requirement_dish_aggregate_key(dish: MenuRequirementDish) -> AggregateDishKey:
+    if dish.kind == MenuItemKind.PRODUCT:
+        return _aggregate_key(
+            kind=dish.kind,
+            yield_amount=dish.yield_amount,
+            identity_parts=[
+                _id_or_name_part(
+                    "product_ingredient",
+                    dish.product_ingredient_id,
+                    dish.name,
+                )
+            ],
+        )
+
+    return _aggregate_key(
+        kind=dish.kind,
+        yield_amount=dish.yield_amount,
+        identity_parts=[
+            _id_or_name_part("dish_card", dish.dish_card_id, dish.name),
+            _id_or_name_part(
+                "dish_card_version",
+                dish.dish_card_version_id,
+                dish.name,
+            ),
+            _id_or_name_part("portion_variant", dish.portion_variant_id, dish.yield_amount),
+        ],
+    )
+
+
+def _daily_item_aggregate_key(
+    item: DailyMenuItem,
+    school_group: SchoolGroup,
+) -> AggregateDishKey | None:
+    portion = next(
+        (
+            candidate
+            for candidate in item.portions
+            if candidate.age_group == school_group.age_group
+        ),
+        None,
+    )
+    if portion is None:
+        return None
+
+    if item.kind == MenuItemKind.PRODUCT:
+        return _aggregate_key(
+            kind=item.kind,
+            yield_amount=portion.yield_amount,
+            identity_parts=[
+                _id_or_name_part(
+                    "product_ingredient",
+                    item.product_ingredient_id,
+                    item.product_name_snapshot or item.name,
+                )
+            ],
+        )
+
+    return _aggregate_key(
+        kind=item.kind,
+        yield_amount=portion.yield_amount,
+        identity_parts=[
+            _id_or_name_part("dish_card", item.dish_card_id, item.name),
+            _id_or_name_part("dish_card_version", item.dish_card_version_id, item.name),
+            _id_or_name_part(
+                "portion_variant",
+                portion.dish_card_portion_variant_id,
+                portion.yield_amount,
+            ),
+        ],
+    )
+
+
+def _aggregate_key(
+    *,
+    kind: MenuItemKind,
+    yield_amount: str,
+    identity_parts: list[tuple[str, bool]],
+) -> AggregateDishKey:
+    parts = [kind.value, *[part for part, _reliable in identity_parts]]
+    parts.append(f"yield={_normalize_key_text(yield_amount)}")
+    return AggregateDishKey(
+        key="|".join(parts),
+        reliability=(
+            MenuRequirementDishKeyReliability.STABLE
+            if all(reliable for _part, reliable in identity_parts)
+            else MenuRequirementDishKeyReliability.NAME_FALLBACK
+        ),
+    )
+
+
+def _id_or_name_part(
+    label: str,
+    value: PydanticObjectId | None,
+    fallback: str,
+) -> tuple[str, bool]:
+    if value is not None:
+        return f"{label}_id={value}", True
+    return f"{label}_name={_normalize_key_text(fallback)}", False
+
+
+def _normalize_key_text(value: str) -> str:
+    return normalize_lookup_text(value.strip().replace(",", "."))
+
+
+def _ceil_decimal(value: Decimal) -> int:
+    return int(value.to_integral_value(rounding=ROUND_CEILING))
+
+
 def ingredient_key(ingredient_id: PydanticObjectId | None, name: str) -> str:
     if ingredient_id is not None:
         return f"ingredient:{ingredient_id}"
     return f"snapshot:{normalize_lookup_text(name)}"
 
 
+def _xlsx_filename(*parts: str) -> str:
+    stem = "-".join(part.strip() for part in parts if part.strip())
+    safe_stem = re.sub(r"[^\w.-]+", "-", stem, flags=re.UNICODE).strip("-.")
+    return f"{safe_stem or 'menu-requirement'}.xlsx"
+
+
 def _ensure_school_user(current_user: User) -> None:
     if current_user.role != UserRole.SCHOOL_USER or current_user.school_id is None:
         raise MenuRequirementAccessDeniedError("Only school users can access menu requirements")
+
+
+def _ensure_requirement_editor(current_user: User) -> None:
+    if current_user.role not in {UserRole.OWNER, UserRole.TECHNOLOGIST}:
+        raise MenuRequirementAccessDeniedError(
+            "Only owner and technologist can edit menu requirements"
+        )
+
+
+def _build_updated_ingredient_rows(
+    requirement: MenuRequirement,
+    row_updates: list[Any],
+) -> list[MenuRequirementIngredientRow]:
+    rows_by_key = {row.key: row for row in requirement.ingredient_rows}
+    row_keys = set(rows_by_key)
+    update_keys = [row.key for row in row_updates]
+    if _duplicates(update_keys):
+        raise MenuRequirementValidationError("Ingredient rows contain duplicate keys")
+    if set(update_keys) != row_keys:
+        raise MenuRequirementValidationError("Ingredient rows do not match requirement rows")
+
+    dish_ids = {dish.menu_item_id for dish in requirement.dishes}
+    children_by_dish = {
+        dish.menu_item_id: dish.children_count
+        for dish in requirement.dishes
+    }
+
+    updated_rows: list[MenuRequirementIngredientRow] = []
+    for row_update in row_updates:
+        original = rows_by_key[row_update.key]
+        cell_ids = [cell.menu_item_id for cell in row_update.cells]
+        if _duplicates(cell_ids):
+            raise MenuRequirementValidationError("Ingredient row contains duplicate dish cells")
+        if not set(cell_ids).issubset(dish_ids):
+            raise MenuRequirementValidationError("Ingredient row references unknown dish")
+
+        cells = [
+            MenuRequirementCell(
+                menu_item_id=cell.menu_item_id,
+                net_per_person_g=cell.net_per_person_g,
+            )
+            for cell in row_update.cells
+            if cell.net_per_person_g != Decimal("0")
+        ]
+        per_person_total = sum(
+            (cell.net_per_person_g for cell in cells),
+            start=Decimal("0"),
+        )
+        issue_total_raw = sum(
+            (
+                cell.net_per_person_g * children_by_dish[cell.menu_item_id]
+                for cell in cells
+            ),
+            start=Decimal("0"),
+        )
+        updated_rows.append(
+            MenuRequirementIngredientRow(
+                key=original.key,
+                ingredient_id=original.ingredient_id,
+                ingredient_name=row_update.ingredient_name,
+                cells=cells,
+                per_person_total_g=per_person_total,
+                issue_total_raw_g=issue_total_raw,
+                issue_total_rounded_g=int(
+                    issue_total_raw.to_integral_value(rounding=ROUND_CEILING)
+                ),
+            )
+        )
+
+    return updated_rows
+
+
+def _duplicates(values: list[Any]) -> set[Any]:
+    seen: set[Any] = set()
+    duplicates: set[Any] = set()
+    for value in values:
+        if value in seen:
+            duplicates.add(value)
+        seen.add(value)
+    return duplicates
+
+
+async def _allowed_school_ids(
+    current_user: User,
+) -> list[PydanticObjectId] | None:
+    if current_user.role == UserRole.SCHOOL_USER:
+        if current_user.school_id is None:
+            raise MenuRequirementAccessDeniedError("School access denied")
+        return [current_user.school_id]
+    if current_user.role == UserRole.ADMIN:
+        schools = await School.find(School.admin_owner_id == current_user.id).to_list()
+        return [school.id for school in schools]
+    if current_user.role in {UserRole.OWNER, UserRole.TECHNOLOGIST}:
+        return None
+    raise MenuRequirementAccessDeniedError("Menu requirement access denied")
+
+
+async def _can_access_school(
+    current_user: User,
+    school_id: PydanticObjectId,
+) -> bool:
+    allowed_school_ids = await _allowed_school_ids(current_user)
+    return allowed_school_ids is None or school_id in allowed_school_ids
+
+
+async def _build_requirement_records(
+    requirements: list[MenuRequirement],
+) -> list[MenuRequirementRecord]:
+    school_ids = {requirement.school_id for requirement in requirements}
+    schools = await School.find({"_id": {"$in": list(school_ids)}}).to_list()
+    schools_by_id = {school.id: school for school in schools}
+    owner_ids = {
+        school.admin_owner_id
+        for school in schools
+        if school.admin_owner_id is not None
+    }
+    owners = await User.find({"_id": {"$in": list(owner_ids)}}).to_list()
+    owner_names = {owner.id: owner.username for owner in owners}
+
+    records: list[MenuRequirementRecord] = []
+    for requirement in requirements:
+        school = schools_by_id.get(requirement.school_id)
+        if school is None:
+            records.append(
+                MenuRequirementRecord(
+                    requirement=requirement,
+                    school_name="Невідома школа",
+                    school_admin_owner_id=None,
+                    school_admin_owner_username=None,
+                )
+            )
+            continue
+        records.append(
+            MenuRequirementRecord(
+                requirement=requirement,
+                school_name=school.name,
+                school_admin_owner_id=school.admin_owner_id,
+                school_admin_owner_username=owner_names.get(school.admin_owner_id),
+            )
+        )
+    return records
+
+
+def _requirement_record_sort_key(
+    record: MenuRequirementRecord,
+) -> tuple[str, str, int, str, str]:
+    requirement = record.requirement
+    owner_name = record.school_admin_owner_username or "\uffff"
+    return (
+        owner_name.casefold(),
+        record.school_name.casefold(),
+        -requirement.service_date.toordinal(),
+        requirement.meal_type.value,
+        requirement.school_group_name.casefold(),
+    )
 
 
 def _eligible_groups(
@@ -356,6 +1477,7 @@ async def _build_dish_calculations(
     catalog_by_name: dict[str, Ingredient],
 ) -> list[DishCalculation]:
     calculations: list[DishCalculation] = []
+
     for item in sorted(day.items, key=lambda candidate: candidate.position):
         serving = next(
             (
@@ -369,12 +1491,40 @@ async def _build_dish_calculations(
             continue
 
         portion = next(
-            (candidate for candidate in item.portions if candidate.age_group == group.age_group),
+            (
+                candidate
+                for candidate in item.portions
+                if candidate.age_group == group.age_group
+            ),
             None,
         )
         if portion is None:
             raise MenuRequirementValidationError(
-                f'Portion for group "{group.name}" is missing in dish "{item.name}"'
+                f'Portion for group "{group.name}" '
+                f'is missing in dish "{item.name}"'
+            )
+
+        resolved_portion_variant_id = (
+            portion.dish_card_portion_variant_id
+        )
+
+        if item.kind == MenuItemKind.PRODUCT:
+            lines = await _product_ingredient_lines(
+                item,
+                portion.yield_amount,
+                catalog_by_id=catalog_by_id,
+                catalog_by_name=catalog_by_name,
+            )
+        else:
+            (
+                resolved_portion_variant_id,
+                lines,
+            ) = await _dish_card_ingredient_lines(
+                item,
+                portion.dish_card_portion_variant_id,
+                portion.yield_amount,
+                catalog_by_id=catalog_by_id,
+                catalog_by_name=catalog_by_name,
             )
 
         dish = MenuRequirementDish(
@@ -385,26 +1535,18 @@ async def _build_dish_calculations(
             recipe_card_number=item.recipe_card_number,
             dish_card_id=item.dish_card_id,
             dish_card_version_id=item.dish_card_version_id,
-            portion_variant_id=portion.dish_card_portion_variant_id,
+            portion_variant_id=resolved_portion_variant_id,
             product_ingredient_id=item.product_ingredient_id,
             yield_amount=portion.yield_amount,
             children_count=serving.children_count,
         )
-        if item.kind == MenuItemKind.PRODUCT:
-            lines = await _product_ingredient_lines(
-                item,
-                portion.yield_amount,
-                catalog_by_id=catalog_by_id,
-                catalog_by_name=catalog_by_name,
+
+        calculations.append(
+            DishCalculation(
+                dish=dish,
+                ingredient_lines=lines,
             )
-        else:
-            lines = await _dish_card_ingredient_lines(
-                item,
-                portion.dish_card_portion_variant_id,
-                catalog_by_id=catalog_by_id,
-                catalog_by_name=catalog_by_name,
-            )
-        calculations.append(DishCalculation(dish=dish, ingredient_lines=lines))
+        )
 
     return calculations
 
@@ -412,17 +1554,14 @@ async def _build_dish_calculations(
 async def _dish_card_ingredient_lines(
     item: DailyMenuItem,
     portion_variant_id: PydanticObjectId | None,
+    yield_amount: str,
     *,
     catalog_by_id: dict[PydanticObjectId, Ingredient],
     catalog_by_name: dict[str, Ingredient],
-) -> list[IngredientLine]:
+) -> tuple[PydanticObjectId, list[IngredientLine]]:
     if item.dish_card_version_id is None:
         raise MenuRequirementValidationError(
             f'Dish "{item.name}" must reference a dish card version'
-        )
-    if portion_variant_id is None:
-        raise MenuRequirementValidationError(
-            f'Dish "{item.name}" must reference a portion variant'
         )
 
     version = await DishCardVersion.get(item.dish_card_version_id)
@@ -430,6 +1569,7 @@ async def _dish_card_ingredient_lines(
         raise MenuRequirementValidationError(
             f'Dish card version for "{item.name}" was not found'
         )
+
     if version.status not in {
         DishCardVersionStatus.CONFIRMED,
         DishCardVersionStatus.ARCHIVED,
@@ -437,21 +1577,34 @@ async def _dish_card_ingredient_lines(
         raise MenuRequirementValidationError(
             f'Dish card version for "{item.name}" is not confirmed'
         )
-    if not any(variant.id == portion_variant_id for variant in version.portion_variants):
+
+    # Даже если в старом меню ID равен null, пытаемся
+    # восстановить вариант по выходу блюда.
+    variant = find_portion_variant_by_yield(
+        version.portion_variants,
+        yield_amount,
+        preferred_variant_id=portion_variant_id,
+    )
+
+    if variant is None:
         raise MenuRequirementValidationError(
-            f'Portion variant for "{item.name}" was not found'
+            f'Dish "{item.name}" has no portion variant '
+            f"for output {yield_amount} g"
         )
 
     amounts = [
         amount
         for amount in version.ingredient_amounts
-        if amount.portion_variant_id == portion_variant_id
+        if amount.portion_variant_id == variant.id
     ]
+
     if not amounts:
         raise MenuRequirementValidationError(
-            f'Dish "{item.name}" has no ingredients for the selected portion'
+            f'Dish "{item.name}" has no ingredients '
+            "for the selected portion"
         )
-    return [
+
+    return variant.id, [
         _ingredient_line(
             amount,
             catalog_by_id=catalog_by_id,
