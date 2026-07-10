@@ -285,8 +285,8 @@ export function WeeklyMenuEditorForm({
                   onClick={() => setActiveDayIndex(index)}
                   className={`border px-3 py-2 text-left ${
                     index === safeActiveDayIndex
-                      ? "border-[var(--nf-brand-dark)] bg-[var(--nf-brand)] text-white"
-                      : "border-[var(--nf-line)] bg-white hover:bg-slate-50"
+                      ? "border-(--nf-brand-dark) bg-(--nf-brand) text-white"
+                      : "border-(--nf-line) bg-white hover:bg-slate-50"
                   }`}
                 >
                   <div className="text-sm font-bold">
@@ -307,7 +307,7 @@ export function WeeklyMenuEditorForm({
           </div>
 
           {allowStructureEdits && remainingWeekdays.length ? (
-            <div className="flex flex-wrap gap-2 border border-dashed border-[var(--nf-line)] p-3">
+            <div className="flex flex-wrap gap-2 border border-dashed border-(--nf-line) p-3">
               {remainingWeekdays.map((weekday) => (
                 <button
                   key={weekday}
@@ -428,11 +428,11 @@ function DailyMenuDayEditor({
 
   return (
     <div className="space-y-4">
-      <details className="border border-[var(--nf-line)] bg-slate-50">
+      <details className="border border-(--nf-line) bg-slate-50">
         <summary className="cursor-pointer px-4 py-3 text-sm font-bold text-slate-800">
           Додатково для дня
         </summary>
-        <div className="grid gap-4 border-t border-[var(--nf-line)] p-4 lg:grid-cols-[220px_minmax(0,1fr)_auto]">
+        <div className="grid gap-4 border-t border-(--nf-line) p-4 lg:grid-cols-[220px_minmax(0,1fr)_auto]">
           <div>
             <label className="nf-label" htmlFor={`day-date-${dayIndex}`}>
               Дата дня
@@ -531,10 +531,10 @@ function DailyMenuDayEditor({
               className={`border bg-white ${
                 hasItemErrors
                   ? "border-red-300"
-                  : "border-[var(--nf-line-strong)]"
+                  : "border-(--nf-line-strong)"
               }`}
             >
-              <header className="flex flex-wrap items-center justify-between gap-3 bg-[var(--nf-panel-head)]">
+              <header className="flex flex-wrap items-center justify-between gap-3 bg-(--nf-panel-head)">
                 <button
                   type="button"
                   className="flex min-h-16 min-w-0 flex-1 items-center justify-between gap-3 px-4 py-3 text-left"
@@ -591,7 +591,7 @@ function DailyMenuDayEditor({
               {isItemOpen ? (
                 <div
                   id={itemPanelId}
-                  className="border-t border-[var(--nf-line)]"
+                  className="border-t border-(--nf-line)"
                 >
                   <div className="grid gap-4 p-4 lg:grid-cols-3">
                     <div className="lg:col-span-3">
@@ -854,11 +854,11 @@ function DailyMenuDayEditor({
                     </div>
                   </div>
 
-                  <details className="mx-4 mb-4 border border-[var(--nf-line)]">
+                  <details className="mx-4 mb-4 border border-(--nf-line)">
                     <summary className="cursor-pointer px-4 py-3 text-sm font-bold text-slate-800">
                       Додаткові поля позиції
                     </summary>
-                    <div className="grid gap-4 border-t border-[var(--nf-line)] p-4 lg:grid-cols-2">
+                    <div className="grid gap-4 border-t border-(--nf-line) p-4 lg:grid-cols-2">
                       <div>
                         <label
                           className="nf-label"
@@ -989,7 +989,7 @@ function DishCardLookupField({
           {selectedLabel ? (
             <p className="text-xs text-slate-600">Обрано: {selectedLabel}</p>
           ) : null}
-          <div className="max-h-56 overflow-y-auto border border-[var(--nf-line)] bg-white">
+          <div className="max-h-56 overflow-y-auto border border-(--nf-line) bg-white">
             {dishCards.isPending ? (
               <div className="px-3 py-2 text-sm text-slate-600">
                 Завантажуємо техкарти…
@@ -1000,7 +1000,7 @@ function DishCardLookupField({
                 key={dishCard.id}
                 type="button"
                 disabled={readOnly}
-                className="block w-full border-b border-[var(--nf-line)] px-3 py-2 text-left last:border-b-0 hover:bg-slate-50"
+                className="block w-full border-b border-(--nf-line) px-3 py-2 text-left last:border-b-0 hover:bg-slate-50"
                 onClick={() =>
                   applyDishCardSelection(form, dayIndex, itemIndex, dishCard)
                 }
@@ -1079,7 +1079,7 @@ function IngredientLookupField({
           {item?.product_ingredient_id ? (
             <p className="text-xs text-slate-600">Обрано: {item.name}</p>
           ) : null}
-          <div className="max-h-56 overflow-y-auto border border-[var(--nf-line)] bg-white">
+          <div className="max-h-56 overflow-y-auto border border-(--nf-line) bg-white">
             {ingredients.isPending ? (
               <div className="px-3 py-2 text-sm text-slate-600">
                 Завантажуємо інгредієнти…
@@ -1090,7 +1090,7 @@ function IngredientLookupField({
                 key={ingredient.id}
                 type="button"
                 disabled={readOnly}
-                className="block w-full border-b border-[var(--nf-line)] px-3 py-2 text-left last:border-b-0 hover:bg-slate-50"
+                className="block w-full border-b border-(--nf-line) px-3 py-2 text-left last:border-b-0 hover:bg-slate-50"
                 onClick={() =>
                   applyIngredientSelection(
                     form,
@@ -1147,6 +1147,10 @@ function MenuItemReferenceSync({
     item?.kind === "dish_card" ? (item.dish_card_id ?? "") : "";
   const versionId =
     item?.kind === "dish_card" ? (item.dish_card_version_id ?? "") : "";
+  const portionYieldSignature =
+    item?.portions
+      .map((portion) => portion.yield_amount.trim())
+      .join("|") ?? "";
 
   const dishCard = useQuery({
     ...dishCardQueryOptions(dishCardId),
@@ -1249,6 +1253,7 @@ function MenuItemReferenceSync({
     itemIndex,
     resolveReferences,
     item?.kind,
+    portionYieldSignature,
     allergenOptions,
   ]);
 
@@ -1287,7 +1292,7 @@ function AllergenCheckboxList({
     return (
       <div
         id={itemId}
-        className="flex flex-wrap gap-2 rounded border border-dashed border-[var(--nf-line)] bg-slate-50 p-3"
+        className="flex flex-wrap gap-2 rounded border border-dashed border-(--nf-line) bg-slate-50 p-3"
       >
         {(selectedOptions.length ? selectedOptions : selectedCodes).map(
           (item) => {
@@ -1295,7 +1300,7 @@ function AllergenCheckboxList({
               return (
                 <span
                   key={item}
-                  className="rounded-full border border-[var(--nf-line)] bg-white px-2.5 py-1 text-sm text-slate-700"
+                  className="rounded-full border border-(--nf-line) bg-white px-2.5 py-1 text-sm text-slate-700"
                 >
                   {item}
                 </span>
@@ -1305,7 +1310,7 @@ function AllergenCheckboxList({
             return (
               <span
                 key={item.id}
-                className="rounded-full border border-[var(--nf-line)] bg-white px-2.5 py-1 text-sm text-slate-700"
+                className="rounded-full border border-(--nf-line) bg-white px-2.5 py-1 text-sm text-slate-700"
               >
                 <span className="font-medium text-slate-900">{item.code}</span>{" "}
                 {item.name}
@@ -1321,7 +1326,7 @@ function AllergenCheckboxList({
     return (
       <div
         id={itemId}
-        className="rounded border border-dashed border-[var(--nf-line)] px-3 py-2 text-sm text-slate-500"
+        className="rounded border border-dashed border-(--nf-line) px-3 py-2 text-sm text-slate-500"
       >
         Довідник алергенів поки недоступний.
       </div>
@@ -1331,7 +1336,7 @@ function AllergenCheckboxList({
   return (
     <div
       id={itemId}
-      className="max-h-56 space-y-2 overflow-y-auto rounded border border-[var(--nf-line)] bg-slate-50 p-3"
+      className="max-h-56 space-y-2 overflow-y-auto rounded border border-(--nf-line) bg-slate-50 p-3"
     >
       {options.map((allergen) => {
         const checked = selectedCodeSet.has(allergen.code);
@@ -1457,7 +1462,65 @@ function applyIngredientSelection(
     shouldDirty: true,
   });
 }
+function normalizeGramAmount(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
 
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/\s*(?:г|гр|g)\s*$/u, "")
+    .replace(",", ".");
+
+  if (!/^\d+(?:\.\d+)?$/.test(normalized)) {
+    return null;
+  }
+
+  return Number(normalized);
+}
+
+function findPortionVariantByYield(
+  variants: PortionVariant[],
+  yieldAmount: string,
+  preferredVariantId: string | null,
+) {
+  const target = normalizeGramAmount(yieldAmount);
+
+  if (target === null) {
+    return (
+      variants.find(
+        (variant) => variant.id === preferredVariantId,
+      ) ?? null
+    );
+  }
+
+  const outputMatches = variants.filter(
+    (variant) =>
+      normalizeGramAmount(variant.output_grams) === target,
+  );
+
+  const portionMatches = variants.filter(
+    (variant) =>
+      normalizeGramAmount(variant.portion_grams) === target,
+  );
+
+  for (const matches of [outputMatches, portionMatches]) {
+    const preferred = matches.find(
+      (variant) => variant.id === preferredVariantId,
+    );
+
+    if (preferred) {
+      return preferred;
+    }
+
+    if (matches[0]) {
+      return matches[0];
+    }
+  }
+
+  return null;
+}
 function syncNutritionFromVersion(
   form: UseFormReturn<WeeklyMenuFormValues>,
   dayIndex: number,
@@ -1466,12 +1529,11 @@ function syncNutritionFromVersion(
   version: DishCardVersion,
 ) {
   item.portions.forEach((portion, portionIndex) => {
-    const variant =
-      version.portion_variants.find(
-        (candidate) => candidate.age_group === portion.age_group,
-      ) ??
-      version.portion_variants[portionIndex] ??
-      null;
+    const variant = findPortionVariantByYield(
+      version.portion_variants,
+      portion.yield_amount,
+      portion.dish_card_portion_variant_id,
+    );
 
     applyVariantToPortion(
       form,
@@ -1479,7 +1541,7 @@ function syncNutritionFromVersion(
       itemIndex,
       portionIndex,
       portion.yield_amount,
-      variant,
+      variant ?? undefined,
     );
   });
 }
@@ -1550,7 +1612,7 @@ function ReadonlyFieldValue({
 
   return (
     <div
-      className={`rounded border border-dashed border-[var(--nf-line)] bg-slate-50 px-3 py-2 text-sm ${
+      className={`rounded border border-dashed border-(--nf-line) bg-slate-50 px-3 py-2 text-sm ${
         multiline ? "whitespace-pre-wrap" : ""
       } ${hasValue ? "text-slate-700" : "text-slate-500"}`}
     >

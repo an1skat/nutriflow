@@ -1,17 +1,32 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   Check,
   ChevronDown,
   FileSpreadsheet,
+  Filter,
+  Package,
   Save,
   Utensils,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import {
+  dishCardVersionQueryOptions,
+  useDishCards,
+  useIngredients,
+} from "@/entities/recipe/api/RecipeQueries";
+import type {
+  DishCard,
+  DishCardVersion,
+  Ingredient,
+  PortionVariant,
+} from "@/entities/recipe/model/Recipe";
 import { useOwnSchoolGroups } from "@/entities/school-group/api/SchoolGroupQueries";
 import type { SchoolGroup } from "@/entities/school-group/model/SchoolGroup";
 import {
@@ -29,7 +44,6 @@ import {
   clearDailyMenuDraft,
   loadDailyMenuDraft,
   prepareDailyMenuDays,
-  replaceDailyMenuDish,
   saveDailyMenuDraft,
 } from "@/features/daily-menu/model/DailyMenuDraftStorage";
 import { useGenerateMenuRequirements } from "@/features/menu-requirement-generation/model/UseGenerateMenuRequirements";
@@ -42,10 +56,25 @@ import {
 } from "@/features/weekly-menu-editor/model/WeeklyMenuFormSchema";
 import { getApiErrorMessage } from "@/shared/api/HttpClient";
 import { formatDate } from "@/shared/lib/FormatDate";
+import { useConfirm } from "@/shared/ui/ConfirmDialog";
 import { RequestError } from "@/shared/ui/RequestError";
 
+type CatalogFilter = "dish_cards" | "products" | "all";
+
+type CatalogSelection =
+  | {
+      kind: "dish_card";
+      dishCard: DishCard;
+    }
+  | {
+      kind: "product";
+      ingredient: Ingredient;
+    };
+
 export function DailyMenuSchoolWorkspace() {
+  const confirm = useConfirm();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const menus = useWeeklyMenus({
     offset: 0,
     limit: 100,
@@ -115,27 +144,41 @@ export function DailyMenuSchoolWorkspace() {
     activeDay?.items.some((item) =>
       item.servings.some((serving) => serving.children_count > 0),
     ) ?? false;
-  const dishCatalog = useMemo(
-    () => createDishCatalog(selectedMenu.data),
-    [selectedMenu.data],
-  );
+  const changeMenu = async (menuId: string) => {
+    if (isDirty) {
+      const confirmed = await confirm({
+        title: "Перейти без збереження?",
+        description:
+          "Є незбережені зміни. Якщо перейти до іншого меню, поточні правки залишаться тільки в локальній чернетці.",
+        confirmLabel: "Перейти",
+      });
 
-  const changeMenu = (menuId: string) => {
-    if (
-      isDirty &&
-      !window.confirm(
-        "Є незбережені зміни. Перейти до іншого меню без збереження?",
-      )
-    ) {
-      return;
+      if (!confirmed) {
+        return;
+      }
     }
 
     initializedMenuKey.current = null;
     setSelectedMenuId(menuId);
   };
 
-  const changeDish = (itemId: string, selectedDish: DailyMenuItem) => {
+  const changeDish = async (itemId: string, selectedItem: CatalogSelection) => {
     if (!activeDay) {
+      return;
+    }
+
+    const currentItem = activeDay.items.find((item) => item.id === itemId);
+
+    if (!currentItem) {
+      return;
+    }
+
+    const nextItem =
+      selectedItem.kind === "product"
+        ? buildProductMenuItem(currentItem, selectedItem.ingredient)
+        : await buildDishCardMenuItem(currentItem, selectedItem.dishCard);
+
+    if (!nextItem) {
       return;
     }
 
@@ -146,14 +189,38 @@ export function DailyMenuSchoolWorkspace() {
           : {
               ...day,
               items: day.items.map((item) =>
-                item.id === itemId
-                  ? replaceDailyMenuDish(item, selectedDish, activeGroups)
-                  : item,
+                item.id === itemId ? nextItem : item,
               ),
             },
       ),
     );
     setIsDirty(true);
+  };
+
+  const buildDishCardMenuItem = async (
+    currentItem: DailyMenuItem,
+    dishCard: DishCard,
+  ): Promise<DailyMenuItem | null> => {
+    if (!dishCard.current_version_id) {
+      toast.error("У цієї техкарти немає підтвердженої поточної версії.");
+      return null;
+    }
+
+    try {
+      const version = await queryClient.ensureQueryData(
+        dishCardVersionQueryOptions(dishCard.current_version_id),
+      );
+
+      if (version.status !== "confirmed" && version.status !== "archived") {
+        toast.error("Поточна версія техкарти ще не підтверджена.");
+        return null;
+      }
+
+      return buildDishCardReplacement(currentItem, dishCard, version);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
+      return null;
+    }
   };
 
   const changeChildrenCount = (
@@ -232,6 +299,7 @@ export function DailyMenuSchoolWorkspace() {
       const response = await generateMenuRequirements.mutateAsync({
         weekly_menu_id: menu.id,
         weekday: activeDay.weekday,
+        service_date: resolveDayDate(menu, activeDay),
       });
       const groupsCount = response.items.length;
       toast.success(
@@ -375,7 +443,7 @@ export function DailyMenuSchoolWorkspace() {
                   id="daily-menu-source"
                   className="nf-input max-w-xl"
                   value={effectiveMenuId}
-                  onChange={(event) => changeMenu(event.target.value)}
+                  onChange={(event) => void changeMenu(event.target.value)}
                 >
                   {menus.data?.items.map((menu) => (
                     <option key={menu.id} value={menu.id}>
@@ -431,7 +499,6 @@ export function DailyMenuSchoolWorkspace() {
               day={activeDay}
               displayDate={resolveDayDate(selectedMenu.data, activeDay)}
               groups={activeGroups}
-              dishCatalog={dishCatalog}
               onDishChange={changeDish}
               onChildrenCountChange={changeChildrenCount}
             />
@@ -446,15 +513,13 @@ function DayMenuPanel({
   day,
   displayDate,
   groups,
-  dishCatalog,
   onDishChange,
   onChildrenCountChange,
 }: {
   day: DailyMenu;
   displayDate: string;
   groups: SchoolGroup[];
-  dishCatalog: DailyMenuItem[];
-  onDishChange: (itemId: string, dish: DailyMenuItem) => void;
+  onDishChange: (itemId: string, item: CatalogSelection) => Promise<void>;
   onChildrenCountChange: (
     itemId: string,
     group: SchoolGroup,
@@ -487,8 +552,9 @@ function DayMenuPanel({
               key={item.id}
               item={item}
               groups={groups}
-              dishCatalog={dishCatalog}
-              onDishChange={(dish) => onDishChange(item.id, dish)}
+              onDishChange={(selectedItem) =>
+                void onDishChange(item.id, selectedItem)
+              }
               onChildrenCountChange={(group, count) =>
                 onChildrenCountChange(item.id, group, count)
               }
@@ -506,14 +572,12 @@ function DayMenuPanel({
 function DishRow({
   item,
   groups,
-  dishCatalog,
   onDishChange,
   onChildrenCountChange,
 }: {
   item: DailyMenuItem;
   groups: SchoolGroup[];
-  dishCatalog: DailyMenuItem[];
-  onDishChange: (dish: DailyMenuItem) => void;
+  onDishChange: (item: CatalogSelection) => void;
   onChildrenCountChange: (group: SchoolGroup, count: number) => void;
 }) {
   return (
@@ -527,7 +591,6 @@ function DishRow({
         </div>
         <DishPicker
           selectedItem={item}
-          dishes={dishCatalog}
           onSelect={onDishChange}
         />
         <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(140px,0.55fr)_1fr]">
@@ -594,24 +657,28 @@ function DishRow({
 
 function DishPicker({
   selectedItem,
-  dishes,
   onSelect,
 }: {
   selectedItem: DailyMenuItem;
-  dishes: DailyMenuItem[];
-  onSelect: (dish: DailyMenuItem) => void;
+  onSelect: (item: CatalogSelection) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<CatalogFilter>("dish_cards");
   const pickerRef = useRef<HTMLDivElement>(null);
-  const normalizedQuery = query.trim().toLocaleLowerCase("uk-UA");
-  const visibleDishes = dishes.filter((dish) =>
-    [dish.name, dish.recipe_card_number, dish.source_text]
-      .filter(Boolean)
-      .some((value) =>
-        value?.toLocaleLowerCase("uk-UA").includes(normalizedQuery),
-      ),
-  );
+  const shouldLoadDishCards = isOpen && filter !== "products";
+  const shouldLoadIngredients = isOpen && filter !== "dish_cards";
+  const dishCards = useDishCards(query, shouldLoadDishCards);
+  const ingredients = useIngredients(query, shouldLoadIngredients);
+  const visibleDishCards = shouldLoadDishCards ? (dishCards.data?.items ?? []) : [];
+  const visibleIngredients = shouldLoadIngredients ? (ingredients.data?.items ?? []) : [];
+  const isPending =
+    (shouldLoadDishCards && dishCards.isPending) ||
+    (shouldLoadIngredients && ingredients.isPending);
+  const hasError =
+    (shouldLoadDishCards && dishCards.isError) ||
+    (shouldLoadIngredients && ingredients.isError);
+  const resultCount = visibleDishCards.length + visibleIngredients.length;
 
   useEffect(() => {
     if (!isOpen) {
@@ -651,6 +718,32 @@ function DishPicker({
 
       {isOpen ? (
         <div className="absolute left-0 right-0 z-30 mt-1 border border-slate-400 bg-white shadow-lg">
+          <div className="border-b border-slate-200 p-2">
+            <div className="mb-2 flex items-center gap-2 text-xs font-bold text-slate-600">
+              <Filter className="size-4" aria-hidden />
+              <span>Фільтр каталогу</span>
+            </div>
+            <div className="grid gap-1 sm:grid-cols-3">
+              <CatalogFilterButton
+                active={filter === "dish_cards"}
+                onClick={() => setFilter("dish_cards")}
+              >
+                Тільки страви
+              </CatalogFilterButton>
+              <CatalogFilterButton
+                active={filter === "products"}
+                onClick={() => setFilter("products")}
+              >
+                Пром. вироб.
+              </CatalogFilterButton>
+              <CatalogFilterButton
+                active={filter === "all"}
+                onClick={() => setFilter("all")}
+              >
+                Усі
+              </CatalogFilterButton>
+            </div>
+          </div>
           <div className="flex items-center gap-2 p-1">
             <input
               autoFocus
@@ -662,27 +755,48 @@ function DishPicker({
             />
           </div>
           <div className="max-h-64 overflow-y-auto py-1" role="listbox">
-            {visibleDishes.map((dish) => {
-              const isSelected = getDishKey(dish) === getDishKey(selectedItem);
+            {isPending ? (
+              <p className="px-3 py-5 text-center text-sm text-slate-500">
+                Завантажуємо каталог…
+              </p>
+            ) : null}
+            {hasError ? (
+              <p className="px-3 py-5 text-center text-sm text-red-700">
+                Не вдалося завантажити каталог.
+              </p>
+            ) : null}
+            {visibleDishCards.length ? (
+              <CatalogSectionTitle>Страви з ТК</CatalogSectionTitle>
+            ) : null}
+            {visibleDishCards.map((dishCard) => {
+              const isSelected = selectedItem.dish_card_id === dishCard.id;
+              const canSelect = Boolean(dishCard.current_version_id);
 
               return (
                 <button
-                  key={getDishKey(dish)}
+                  key={`dish-card:${dishCard.id}`}
                   type="button"
                   role="option"
                   aria-selected={isSelected}
-                  className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left hover:bg-slate-100"
+                  disabled={!canSelect}
+                  className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left hover:bg-slate-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
                   onClick={() => {
-                    onSelect(dish);
+                    if (!canSelect) {
+                      return;
+                    }
+                    onSelect({ kind: "dish_card", dishCard });
                     setIsOpen(false);
                   }}
                 >
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-bold text-slate-900">
-                      {dish.name}
+                      {dishCard.name}
                     </span>
                     <span className="mt-0.5 block text-xs text-slate-500">
-                      {getTechnicalCardLabel(dish)}
+                      ТК № {dishCard.card_number}
+                      {dishCard.current_version_id
+                        ? ""
+                        : " · немає підтвердженої версії"}
                     </span>
                   </span>
                   {isSelected ? (
@@ -691,15 +805,87 @@ function DishPicker({
                 </button>
               );
             })}
-            {visibleDishes.length === 0 ? (
+            {visibleIngredients.length ? (
+              <CatalogSectionTitle>Інгредієнти / пром. вироб.</CatalogSectionTitle>
+            ) : null}
+            {visibleIngredients.map((ingredient) => {
+              const isSelected =
+                selectedItem.kind === "product" &&
+                selectedItem.product_ingredient_id === ingredient.id;
+
+              return (
+                <button
+                  key={`ingredient:${ingredient.id}`}
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left hover:bg-slate-100"
+                  onClick={() => {
+                    onSelect({ kind: "product", ingredient });
+                    setIsOpen(false);
+                  }}
+                >
+                  <span className="flex min-w-0 items-start gap-2">
+                    <Package
+                      className="mt-0.5 size-4 shrink-0 text-slate-500"
+                      aria-hidden
+                    />
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-bold text-slate-900">
+                        {ingredient.name}
+                      </span>
+                      <span className="mt-0.5 block text-xs text-slate-500">
+                        пром. вироб. · одиниця: {ingredient.unit}
+                      </span>
+                    </span>
+                  </span>
+                  {isSelected ? (
+                    <Check className="mt-0.5 size-4 shrink-0" aria-hidden />
+                  ) : null}
+                </button>
+              );
+            })}
+            {!isPending && !hasError && resultCount === 0 ? (
               <p className="px-3 py-5 text-center text-sm text-slate-500">
-                Страв за цим запитом не знайдено.
+                За цим запитом нічого не знайдено.
               </p>
             ) : null}
           </div>
         </div>
       ) : null}
     </div>
+  );
+}
+
+function CatalogFilterButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      className={`border px-2 py-1.5 text-xs font-bold ${
+        active
+          ? "border-(--nf-brand) bg-emerald-50 text-emerald-900"
+          : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+      }`}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
+
+function CatalogSectionTitle({ children }: { children: ReactNode }) {
+  return (
+    <p className="border-y border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+      {children}
+    </p>
   );
 }
 
@@ -728,34 +914,107 @@ function NutritionSummary({ portions }: { portions: MenuPortion[] }) {
   );
 }
 
-function createDishCatalog(menu: WeeklyMenu | undefined): DailyMenuItem[] {
-  if (!menu) {
-    return [];
-  }
+function buildDishCardReplacement(
+  currentItem: DailyMenuItem,
+  dishCard: DishCard,
+  version: DishCardVersion,
+): DailyMenuItem {
+  return {
+    ...currentItem,
+    kind: "dish_card",
+    source_text: dishCard.source ?? null,
+    recipe_card_number: dishCard.card_number,
+    dish_card_id: dishCard.id,
+    dish_card_version_id: version.id,
+    product_ingredient_id: null,
+    product_name_snapshot: null,
+    name: dishCard.name,
+    allergen_codes: [],
+    portions: currentItem.portions.map((portion) =>
+      buildDishCardPortion(portion, version.portion_variants),
+    ),
+  };
+}
 
-  const uniqueDishes = new Map<string, DailyMenuItem>();
+function buildDishCardPortion(
+  portion: MenuPortion,
+  variants: PortionVariant[],
+): MenuPortion {
+  const variant = findPortionVariant(portion, variants);
 
-  for (const day of menu.days) {
-    for (const item of day.items) {
-      const key = getDishKey(item);
+  return {
+    ...portion,
+    yield_amount: variant?.output_grams ?? portion.yield_amount,
+    dish_card_portion_variant_id: variant?.id ?? null,
+    nutrition: {
+      kcal: variant?.nutrition.kcal ?? null,
+      proteins: variant?.nutrition.proteins ?? null,
+      fats: variant?.nutrition.fats ?? null,
+      carbs: variant?.nutrition.carbs ?? null,
+    },
+  };
+}
 
-      if (!uniqueDishes.has(key)) {
-        uniqueDishes.set(key, item);
-      }
-    }
-  }
+function buildProductMenuItem(
+  currentItem: DailyMenuItem,
+  ingredient: Ingredient,
+): DailyMenuItem {
+  return {
+    ...currentItem,
+    kind: "product",
+    source_text: "пром. вироб.",
+    recipe_card_number: null,
+    dish_card_id: null,
+    dish_card_version_id: null,
+    product_ingredient_id: ingredient.id,
+    product_name_snapshot: ingredient.name,
+    name: ingredient.name,
+    allergen_codes: [],
+    portions: currentItem.portions.map((portion) => ({
+      ...portion,
+      dish_card_portion_variant_id: null,
+      nutrition: {
+        kcal: null,
+        proteins: null,
+        fats: null,
+        carbs: null,
+      },
+    })),
+  };
+}
 
-  return [...uniqueDishes.values()].sort((left, right) =>
-    left.name.localeCompare(right.name, "uk"),
+function findPortionVariant(
+  portion: MenuPortion,
+  variants: PortionVariant[],
+): PortionVariant | undefined {
+  const targetYield = normalizeGramAmount(portion.yield_amount);
+  const byYield = targetYield
+    ? variants.find(
+        (variant) =>
+          normalizeGramAmount(variant.output_grams) === targetYield ||
+          normalizeGramAmount(variant.portion_grams) === targetYield,
+      )
+    : undefined;
+
+  return (
+    byYield ??
+    variants.find((variant) => variant.age_group === portion.age_group) ??
+    variants[0]
   );
 }
 
-function getDishKey(item: DailyMenuItem): string {
-  return (
-    item.dish_card_version_id ??
-    item.dish_card_id ??
-    `${item.kind}:${item.recipe_card_number ?? ""}:${item.name.toLocaleLowerCase("uk-UA")}`
-  );
+function normalizeGramAmount(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const numeric = Number(value.trim().replace(",", "."));
+
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+
+  return `${numeric}`;
 }
 
 function getTechnicalCardLabel(item: DailyMenuItem): string {

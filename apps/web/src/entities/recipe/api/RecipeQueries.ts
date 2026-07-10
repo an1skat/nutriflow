@@ -32,18 +32,20 @@ export function allergensQueryOptions(query: string) {
   });
 }
 
-export function ingredientsQueryOptions(query: string) {
+export function ingredientsQueryOptions(query: string, enabled = true) {
   return queryOptions({
     queryKey: recipeQueryKeys.ingredients(query),
     queryFn: () => fetchIngredients(query),
+    enabled,
     staleTime: 60_000,
   });
 }
 
-export function dishCardsQueryOptions(query: string) {
+export function dishCardsQueryOptions(query: string, enabled = true) {
   return queryOptions({
     queryKey: recipeQueryKeys.dishCards(query),
     queryFn: () => fetchDishCards(query),
+    enabled,
     staleTime: 60_000,
   });
 }
@@ -76,12 +78,12 @@ export function useAllergens(query: string) {
   return useQuery(allergensQueryOptions(query));
 }
 
-export function useIngredients(query: string) {
-  return useQuery(ingredientsQueryOptions(query));
+export function useIngredients(query: string, enabled = true) {
+  return useQuery(ingredientsQueryOptions(query, enabled));
 }
 
-export function useDishCards(query: string) {
-  return useQuery(dishCardsQueryOptions(query));
+export function useDishCards(query: string, enabled = true) {
+  return useQuery(dishCardsQueryOptions(query, enabled));
 }
 
 export function useDishCard(dishCardId: string) {

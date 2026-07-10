@@ -19,9 +19,17 @@ export function useGenerateMenuRequirements() {
           requirement,
         );
       }
-      await queryClient.invalidateQueries({
-        queryKey: menuRequirementQueryKeys.lists(),
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: menuRequirementQueryKeys.lists(),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: menuRequirementQueryKeys.calendars(),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: menuRequirementQueryKeys.reports(),
+        }),
+      ]);
     },
   });
 }
