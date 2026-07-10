@@ -3,13 +3,20 @@ import { toApiPaginationParams } from "@/shared/api/Pagination";
 
 import {
   generateMenuRequirementsResponseSchema,
+  menuRequirementCalendarSchema,
   menuRequirementListSchema,
+  menuRequirementReportSchema,
   menuRequirementSchema,
   type GenerateMenuRequirementsPayload,
   type GenerateMenuRequirementsResponse,
+  type MenuRequirementCalendar,
+  type MenuRequirementCalendarRequest,
   type MenuRequirement,
   type MenuRequirementList,
   type MenuRequirementListRequest,
+  type MenuRequirementReport,
+  type MenuRequirementReportRequest,
+  type UpdateMenuRequirementPayload,
 } from "../model/MenuRequirement";
 
 export async function fetchMenuRequirements(
@@ -35,6 +42,39 @@ export async function fetchMenuRequirement(
   return menuRequirementSchema.parse(response.data);
 }
 
+export async function fetchMenuRequirementCalendar(
+  request: MenuRequirementCalendarRequest,
+): Promise<MenuRequirementCalendar> {
+  const response = await apiClient.get<unknown>(
+    "/menu-requirements/calendar",
+    {
+      params: {
+        school_id: request.school_id,
+        year: request.year,
+        meal_type: request.meal_type,
+        school_group_id: request.school_group_id,
+      },
+    },
+  );
+  return menuRequirementCalendarSchema.parse(response.data);
+}
+
+export async function fetchMenuRequirementReport(
+  request: MenuRequirementReportRequest,
+): Promise<MenuRequirementReport> {
+  const response = await apiClient.get<unknown>("/menu-requirements/report", {
+    params: {
+      school_id: request.school_id,
+      date_from: request.date_from,
+      date_to: request.date_to,
+      granularity: request.granularity,
+      meal_type: request.meal_type,
+      school_group_id: request.school_group_id,
+    },
+  });
+  return menuRequirementReportSchema.parse(response.data);
+}
+
 export async function generateMenuRequirements(
   payload: GenerateMenuRequirementsPayload,
 ): Promise<GenerateMenuRequirementsResponse> {
@@ -46,4 +86,26 @@ export async function generateMenuRequirements(
     },
   );
   return generateMenuRequirementsResponseSchema.parse(response.data);
+}
+
+export async function updateMenuRequirement(
+  requirementId: string,
+  payload: UpdateMenuRequirementPayload,
+): Promise<MenuRequirement> {
+  const response = await apiClient.patch<unknown>(
+    `/menu-requirements/${requirementId}`,
+    payload,
+    {
+      headers: getCsrfHeaders(),
+    },
+  );
+  return menuRequirementSchema.parse(response.data);
+}
+
+export async function deleteMenuRequirement(
+  requirementId: string,
+): Promise<void> {
+  await apiClient.delete(`/menu-requirements/${requirementId}`, {
+    headers: getCsrfHeaders(),
+  });
 }
