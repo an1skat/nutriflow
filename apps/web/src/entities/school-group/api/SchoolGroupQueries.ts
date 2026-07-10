@@ -34,6 +34,7 @@ export function adminSchoolGroupsQueryOptions(
   return queryOptions({
     queryKey: schoolGroupQueryKeys.adminList(schoolId, request),
     queryFn: () => fetchAdminSchoolGroups(schoolId, request),
+    enabled: schoolId.length > 0,
     placeholderData: keepPreviousData,
   });
 }
@@ -77,6 +78,7 @@ export function useSchoolGroups(
       scope.mode === "admin"
         ? fetchAdminSchoolGroups(scope.schoolId, request)
         : fetchOwnSchoolGroups(request),
+    enabled: scope.mode === "own" || scope.schoolId.length > 0,
     placeholderData: keepPreviousData,
   });
 }

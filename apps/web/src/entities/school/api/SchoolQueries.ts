@@ -36,8 +36,11 @@ export function schoolQueryOptions(schoolId: string) {
   });
 }
 
-export function useSchools(request: PageRequest) {
-  return useQuery(schoolsQueryOptions(request));
+export function useSchools(request: PageRequest, enabled = true) {
+  return useQuery({
+    ...schoolsQueryOptions(request),
+    enabled,
+  });
 }
 
 export function useSchool(schoolId: string) {

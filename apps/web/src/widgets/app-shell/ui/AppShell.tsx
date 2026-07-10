@@ -95,7 +95,12 @@ const navigation: NavigationItem[] = [
     href: "/menu-requirements",
     label: "Меню-вимога",
     icon: FileSpreadsheet,
-    schoolOnly: true,
+  },
+  {
+    href: "/menu-requirements/calendar",
+    label: "Календар вимог",
+    icon: CalendarDays,
+    excludedRoles: ["SCHOOL_USER"],
   },
   {
     href: "/school/groups",
@@ -206,6 +211,8 @@ export function AppShell({ children }: { children: ReactNode }) {
               const isActive =
                 item.href === "/"
                   ? pathname === "/"
+                  : item.href === "/menu-requirements"
+                    ? pathname === item.href
                   : pathname === item.href ||
                     pathname.startsWith(`${item.href}/`);
               const Icon = item.icon;
