@@ -65,6 +65,25 @@ export function useDeleteWeeklyMenu(menuId: string) {
   });
 }
 
+export function useDeleteWeeklyMenus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (menuIds: string[]) =>
+      Promise.all(menuIds.map((menuId) => deleteWeeklyMenu(menuId))),
+    onSuccess: async (_result, menuIds) => {
+      for (const menuId of menuIds) {
+        queryClient.removeQueries({
+          queryKey: weeklyMenuQueryKeys.detail(menuId),
+        });
+      }
+      await queryClient.invalidateQueries({
+        queryKey: weeklyMenuQueryKeys.lists(),
+      });
+    },
+  });
+}
+
 export function useArchiveWeeklyMenu(menuId: string) {
   const queryClient = useQueryClient();
 
@@ -145,6 +164,23 @@ export function useRestoreWeeklyMenu(menuId: string) {
     mutationFn: () => restoreWeeklyMenu(menuId),
     onSuccess: async (menu) => {
       queryClient.setQueryData(weeklyMenuQueryKeys.detail(menuId), menu);
+      await queryClient.invalidateQueries({
+        queryKey: weeklyMenuQueryKeys.lists(),
+      });
+    },
+  });
+}
+
+export function useRestoreWeeklyMenus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (menuIds: string[]) =>
+      Promise.all(menuIds.map((menuId) => restoreWeeklyMenu(menuId))),
+    onSuccess: async (menus) => {
+      for (const menu of menus) {
+        queryClient.setQueryData(weeklyMenuQueryKeys.detail(menu.id), menu);
+      }
       await queryClient.invalidateQueries({
         queryKey: weeklyMenuQueryKeys.lists(),
       });
