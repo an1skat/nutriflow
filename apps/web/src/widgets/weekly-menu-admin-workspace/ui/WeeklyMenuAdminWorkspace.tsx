@@ -26,6 +26,7 @@ import { WeeklyMenuEditorForm } from "@/features/weekly-menu-editor/ui/WeeklyMen
 import { WeeklyMenuExcelTools } from "@/features/weekly-menu-excel/ui/WeeklyMenuExcelTools";
 import { getApiErrorMessage } from "@/shared/api/HttpClient";
 import { formatDate } from "@/shared/lib/FormatDate";
+import { useConfirm } from "@/shared/ui/ConfirmDialog";
 import { RequestError } from "@/shared/ui/RequestError";
 import { useWeeklyMenus } from "@/entities/weekly-menu/api/WeeklyMenuQueries";
 import type { WeeklyMenu } from "@/entities/weekly-menu/model/WeeklyMenu";
@@ -33,6 +34,7 @@ import type { WeeklyMenu } from "@/entities/weekly-menu/model/WeeklyMenu";
 import { WeeklyMenuPicker } from "./WeeklyMenuPicker";
 
 export function WeeklyMenuAdminWorkspace() {
+  const confirm = useConfirm();
   const currentUser = useCurrentUser();
   const user = currentUser.data;
   const menus = useWeeklyMenus({
@@ -340,11 +342,14 @@ export function WeeklyMenuAdminWorkspace() {
       return;
     }
 
-    if (
-      !window.confirm(
-        `Архівувати меню "${selectedMenu.title}" і відкликати його в усіх школах?`,
-      )
-    ) {
+    const confirmed = await confirm({
+      title: "Архівувати тижневе меню?",
+      description: `Меню "${selectedMenu.title}" буде перенесено в архів і відкликано в усіх школах.`,
+      confirmLabel: "Архівувати",
+      variant: "danger",
+    });
+
+    if (!confirmed) {
       return;
     }
 
@@ -370,11 +375,14 @@ export function WeeklyMenuAdminWorkspace() {
       return;
     }
 
-    if (
-      !window.confirm(
-        `Відкликати меню "${selectedMenu.title}" у вибраних школах?`,
-      )
-    ) {
+    const confirmed = await confirm({
+      title: "Відкликати меню у вибраних школах?",
+      description: `Меню "${selectedMenu.title}" буде відкликано у школах: ${effectiveSelectedRevokeCopyIds.length}.`,
+      confirmLabel: "Відкликати",
+      variant: "danger",
+    });
+
+    if (!confirmed) {
       return;
     }
 

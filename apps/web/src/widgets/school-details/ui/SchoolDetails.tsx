@@ -15,6 +15,7 @@ import { CreateSchoolUserForm } from '@/features/school-user-management/ui/Creat
 import { useRevokeWeeklyMenu } from '@/features/weekly-menu-editor/model/UseWeeklyMenuMutations'
 import { getApiErrorMessage } from '@/shared/api/HttpClient'
 import { formatDate } from '@/shared/lib/FormatDate'
+import { useConfirm } from '@/shared/ui/ConfirmDialog'
 import { PaginationControls } from '@/shared/ui/PaginationControls'
 import { RequestError } from '@/shared/ui/RequestError'
 import { StatusBadge } from '@/shared/ui/StatusBadge'
@@ -327,10 +328,18 @@ function SchoolMenuRow({
 	menu: WeeklyMenu
 	onPreview: () => void
 }) {
+	const confirm = useConfirm()
 	const revokeMenu = useRevokeWeeklyMenu(menu.id)
 
 	const handleRevoke = async () => {
-		if (!window.confirm(`Відкликати меню "${menu.title}" у школи?`)) {
+		const confirmed = await confirm({
+			title: 'Відкликати меню у школи?',
+			description: `Меню "${menu.title}" буде відкликано у цієї школи.`,
+			confirmLabel: 'Відкликати',
+			variant: 'danger'
+		})
+
+		if (!confirmed) {
 			return
 		}
 

@@ -15,11 +15,13 @@ import {
 } from "@/features/weekly-menu-editor/model/UseWeeklyMenuMutations";
 import { getApiErrorMessage } from "@/shared/api/HttpClient";
 import { formatDate } from "@/shared/lib/FormatDate";
+import { useConfirm } from "@/shared/ui/ConfirmDialog";
 import { RequestError } from "@/shared/ui/RequestError";
 
 import { WeeklyMenuSchoolTable } from "./WeeklyMenuSchoolTable";
 
 export function WeeklyMenuSchoolWorkspace() {
+  const confirm = useConfirm();
   const menus = useWeeklyMenus({
     offset: 0,
     limit: 100,
@@ -40,7 +42,13 @@ export function WeeklyMenuSchoolWorkspace() {
       return;
     }
 
-    if (!window.confirm(`Архівувати меню "${selectedMenu.data.title}" у школі?`)) {
+    const confirmed = await confirm({
+      title: "Архівувати меню у школі?",
+      description: `Меню "${selectedMenu.data.title}" буде приховано в архіві цієї школи.`,
+      confirmLabel: "Архівувати",
+    });
+
+    if (!confirmed) {
       return;
     }
 

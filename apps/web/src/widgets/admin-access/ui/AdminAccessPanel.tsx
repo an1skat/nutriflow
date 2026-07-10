@@ -18,6 +18,7 @@ import {
 import { CreateAdminUserForm } from "@/features/admin-access-management/ui/CreateAdminUserForm";
 import { getApiErrorMessage } from "@/shared/api/HttpClient";
 import { formatDate } from "@/shared/lib/FormatDate";
+import { useConfirm } from "@/shared/ui/ConfirmDialog";
 import { PaginationControls } from "@/shared/ui/PaginationControls";
 import { RequestError } from "@/shared/ui/RequestError";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
@@ -108,6 +109,7 @@ export function AdminAccessPanel() {
 }
 
 function AdminUserAccessRow({ admin }: { admin: AdminUser }) {
+  const confirm = useConfirm();
   const updateAdmin = useUpdateAdminUser(admin.id);
   const deleteAdmin = useDeleteAdminUser(admin.id);
 
@@ -141,7 +143,14 @@ function AdminUserAccessRow({ admin }: { admin: AdminUser }) {
   };
 
   const handleDelete = async () => {
-    if (!window.confirm(`Видалити адміністратора ${admin.username}?`)) {
+    const confirmed = await confirm({
+      title: "Видалити адміністратора?",
+      description: `Адміністратор ${admin.username} буде видалений із системи.`,
+      confirmLabel: "Видалити",
+      variant: "danger",
+    });
+
+    if (!confirmed) {
       return;
     }
 

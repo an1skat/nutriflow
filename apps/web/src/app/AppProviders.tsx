@@ -7,6 +7,7 @@ import { Toaster } from "sonner";
 
 import { replaceAuthenticatedUser } from "@/features/auth/model/UseSession";
 import { subscribeToSessionExpired } from "@/shared/api/HttpClient";
+import { ConfirmDialogProvider } from "@/shared/ui/ConfirmDialog";
 
 export function AppProviders({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -33,7 +34,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {children}
+      <ConfirmDialogProvider>{children}</ConfirmDialogProvider>
       <Toaster
         position="top-right"
         richColors
