@@ -1,13 +1,29 @@
-import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import type { ReactElement } from "react";
+import { describe, expect, it, vi } from "vitest";
 
 import type { MenuRequirement } from "@/entities/menu-requirement/model/MenuRequirement";
+import type { AuthUser } from "@/entities/session/model/Session";
+import { ConfirmDialogProvider } from "@/shared/ui/ConfirmDialog";
 
-import { MenuRequirementTable } from "./MenuRequirementSchoolWorkspace";
+import {
+  filterRequirementsForUser,
+  MenuRequirementTable,
+  RequirementNavigator,
+} from "./MenuRequirementSchoolWorkspace";
 
 const requirement: MenuRequirement = {
   id: "requirement-1",
   school_id: "school-1",
+  school_name: "Ліцей №1",
+  school_admin_owner_id: "admin-1",
+  school_admin_owner_username: "admin.one",
   weekly_menu_id: "menu-1",
   source_menu_id: "source-1",
   menu_title: "Меню на тиждень",
@@ -76,9 +92,44 @@ const requirement: MenuRequirement = {
   updated_at: "2026-07-06T12:00:00Z",
 };
 
+const otherRequirement: MenuRequirement = {
+  ...requirement,
+  id: "requirement-2",
+  school_id: "school-2",
+  school_name: "Гімназія №2",
+  school_admin_owner_id: "admin-2",
+  school_admin_owner_username: "admin.two",
+  school_group_id: "group-2",
+  school_group_name: "2-Б",
+};
+
+const schoolUser: AuthUser = {
+  id: "school-user-1",
+  username: "school.one",
+  email: null,
+  role: "SCHOOL_USER",
+  school_id: "school-1",
+  permissions: [],
+  is_active: true,
+};
+
+const adminUser: AuthUser = {
+  id: "admin-1",
+  username: "admin.one",
+  email: "admin.one@example.com",
+  role: "ADMIN",
+  school_id: null,
+  permissions: [],
+  is_active: true,
+};
+
+function renderWithConfirm(ui: ReactElement) {
+  return render(<ConfirmDialogProvider>{ui}</ConfirmDialogProvider>);
+}
+
 describe("MenuRequirementTable", () => {
   it("renders dish cells, totals, and missing ingredient markers", () => {
-    render(<MenuRequirementTable requirement={requirement} />);
+    renderWithConfirm(<MenuRequirementTable requirement={requirement} />);
 
     expect(screen.getByRole("columnheader", { name: /Суп/ })).toHaveTextContent(
       "Дітей: 3",
@@ -95,5 +146,99 @@ describe("MenuRequirementTable", () => {
 
     const sugarRow = screen.getByRole("row", { name: /Цукор/ });
     expect(within(sugarRow).getAllByText("—")).toHaveLength(2);
+    expect(
+      screen.getByRole("button", { name: "Експорт меню-вимоги" }),
+    ).toBeInTheDocument();
+  });
+
+  it("hides school and administrator hierarchy for a school user", () => {
+    renderWithConfirm(
+      <MenuRequirementTable
+        requirement={requirement}
+        showSchoolName={false}
+      />,
+    );
+
+    expect(screen.queryByText("Ліцей №1")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Адміністратор:/)).not.toBeInTheDocument();
+    expect(screen.getByText("1-А")).toBeInTheDocument();
+  });
+
+  it("confirms and calls delete for users with delete access", async () => {
+    const onDelete = vi.fn().mockResolvedValue(undefined);
+
+    renderWithConfirm(
+      <MenuRequirementTable
+        requirement={requirement}
+        deletable
+        onDelete={onDelete}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Видалити/ }));
+
+    const dialog = screen.getByRole("dialog", {
+      name: "Видалити меню-вимогу?",
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Видалити" }));
+
+    await waitFor(() => expect(onDelete).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe("RequirementNavigator", () => {
+  it("shows a flat requirement list without schools or administrators to a school user", () => {
+    render(
+      <RequirementNavigator
+        requirements={[requirement]}
+        viewerRole="SCHOOL_USER"
+        selectedId={requirement.id}
+        onSelect={() => undefined}
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Меню-вимоги" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Ліцей №1")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Адміністратор:/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Оберіть школу, день і групу."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("groups schools without showing administrator hierarchy to an admin", () => {
+    render(
+      <RequirementNavigator
+        requirements={[requirement]}
+        viewerRole="ADMIN"
+        selectedId={requirement.id}
+        onSelect={() => undefined}
+      />,
+    );
+
+    expect(screen.getByText("Ліцей №1")).toBeInTheDocument();
+    expect(screen.queryByText(/Адміністратор:/)).not.toBeInTheDocument();
+    expect(screen.queryByText("admin.one")).not.toBeInTheDocument();
+  });
+});
+
+describe("filterRequirementsForUser", () => {
+  it("keeps only the current school requirements for a school user", () => {
+    expect(
+      filterRequirementsForUser(
+        [requirement, otherRequirement],
+        schoolUser,
+      ).map((item) => item.id),
+    ).toEqual(["requirement-1"]);
+  });
+
+  it("keeps only the assigned administrator requirements for an admin", () => {
+    expect(
+      filterRequirementsForUser(
+        [requirement, otherRequirement],
+        adminUser,
+      ).map((item) => item.id),
+    ).toEqual(["requirement-1"]);
   });
 });

@@ -3,7 +3,9 @@ import { MenuRequirementSchoolWorkspace } from "@/widgets/menu-requirement-schoo
 
 export default function MenuRequirementsPage() {
   return (
-    <AccessGuard allowedRoles={["SCHOOL_USER"]}>
+    <AccessGuard
+      allowedRoles={["OWNER", "ADMIN", "TECHNOLOGIST", "SCHOOL_USER"]}
+    >
       <MenuRequirementSchoolWorkspace />
     </AccessGuard>
   );
