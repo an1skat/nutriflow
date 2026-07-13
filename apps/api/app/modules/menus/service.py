@@ -19,6 +19,7 @@ from app.modules.menu_requirements.service import (
     generate_menu_requirements,
     resolve_service_date,
 )
+from app.modules.menus.import_references import hydrate_preview_references
 from app.modules.menus.models import (
     DailyMenu,
     DailyMenuItem,
@@ -30,13 +31,16 @@ from app.modules.menus.models import (
     MenuImportDiagnostic,
     MenuImportDiagnosticLevel,
     MenuImportPreviewSession,
-    MenuItemKind,
     MenuItemServingCount,
     MenuNutrition,
     MenuPortion,
     Weekday,
     WeeklyMenu,
     WeeklyMenuStatus,
+)
+from app.modules.menus.reference_resolver import (
+    MenuReferenceError,
+    resolve_menu_item_references,
 )
 from app.modules.menus.schemas import (
     CreateWeeklyMenuRequest,
@@ -61,14 +65,6 @@ from app.modules.menus.xlsx import (
 )
 from app.modules.menus.xlsx import (
     preview_weekly_menu_workbook as preview_xlsx_weekly_menu_workbook,
-)
-from app.modules.recipe.models import (
-    Allergen,
-    DishCard,
-    DishCardVersion,
-    Ingredient,
-    find_portion_variant_by_yield,
-    normalize_lookup_text,
 )
 
 
@@ -982,29 +978,35 @@ async def _preview_weekly_menu_workbook_with_references(
         sheet_name=sheet_name,
         title=title,
     )
-    await _hydrate_preview_references(preview)
+    await hydrate_preview_references(preview)
     return preview
 
 
 async def _to_daily_menus(data: list[DailyMenuPayload]) -> list[DailyMenu]:
-    days: list[DailyMenu] = []
-
-    for day in data:
-        items = [await _to_daily_menu_item(item) for item in day.items]
-        days.append(
-            DailyMenu(
-                weekday=day.weekday,
-                date=day.date,
-                items=sorted(items, key=lambda item: item.position),
-                notes=day.notes,
-            )
+    days = [
+        DailyMenu(
+            weekday=day.weekday,
+            date=day.date,
+            items=sorted(
+                [_to_daily_menu_item(item) for item in day.items],
+                key=lambda item: item.position,
+            ),
+            notes=day.notes,
         )
+        for day in data
+    ]
+    try:
+        await resolve_menu_item_references(
+            [item for day in days for item in day.items]
+        )
+    except MenuReferenceError as exc:
+        raise MenuValidationError(str(exc)) from exc
 
     return sorted(days, key=lambda day: list(Weekday).index(day.weekday))
 
 
-async def _to_daily_menu_item(data: DailyMenuItemPayload) -> DailyMenuItem:
-    item = DailyMenuItem(
+def _to_daily_menu_item(data: DailyMenuItemPayload) -> DailyMenuItem:
+    return DailyMenuItem(
         id=data.id or PydanticObjectId(),
         position=data.position,
         kind=data.kind,
@@ -1020,8 +1022,6 @@ async def _to_daily_menu_item(data: DailyMenuItemPayload) -> DailyMenuItem:
         servings=[_to_serving_count(serving) for serving in data.servings],
         notes=data.notes,
     )
-    await _resolve_item_references(item)
-    return item
 
 
 def _to_menu_portion(data: MenuPortionPayload) -> MenuPortion:
@@ -1039,105 +1039,6 @@ def _to_serving_count(data: MenuItemServingCountPayload) -> MenuItemServingCount
         age_group=data.age_group,
         children_count=data.children_count,
     )
-
-
-async def _resolve_item_references(item: DailyMenuItem) -> None:
-    if item.kind == MenuItemKind.PRODUCT:
-        if item.product_ingredient_id is not None:
-            ingredient = await Ingredient.get(item.product_ingredient_id)
-            if ingredient is None:
-                raise MenuValidationError("Product ingredient not found")
-            item.product_name_snapshot = ingredient.name
-            return
-
-        lookup_name = item.product_name_snapshot or item.name
-        if lookup_name:
-            ingredient = await _find_ingredient_by_name(lookup_name)
-            if ingredient is not None:
-                item.product_ingredient_id = ingredient.id
-                item.product_name_snapshot = ingredient.name
-        return
-
-    if item.dish_card_id is None and item.recipe_card_number:
-        dish_card = await _find_dish_card_by_number(item.recipe_card_number)
-        if dish_card is not None:
-            item.dish_card_id = dish_card.id
-            item.dish_card_version_id = item.dish_card_version_id or dish_card.current_version_id
-
-    if item.dish_card_id is None:
-        return
-
-    dish_card = await DishCard.get(item.dish_card_id)
-    if dish_card is None:
-        raise MenuValidationError("Dish card not found")
-
-    if item.dish_card_version_id is None:
-        item.dish_card_version_id = dish_card.current_version_id
-        if item.dish_card_version_id is None:
-            return
-
-    version = await DishCardVersion.get(item.dish_card_version_id)
-    if version is None or version.dish_card_id != dish_card.id:
-        raise MenuValidationError("Dish card version does not belong to menu item dish card")
-    
-    for portion in item.portions:
-        variant = find_portion_variant_by_yield(
-            version.portion_variants,
-            portion.yield_amount,
-            preferred_variant_id=portion.dish_card_portion_variant_id
-        )
-        portion.dish_card_portion_variant_id = (
-            variant.id if variant is not None else None
-        )
-
-    if not item.allergen_codes:
-        item.allergen_codes = await _resolve_allergen_codes(version)
-
-
-async def _find_dish_card_by_number(card_number: str) -> DishCard | None:
-    for candidate in _card_number_candidates(card_number):
-        dish_card = await DishCard.find_one(DishCard.card_number == candidate)
-        if dish_card is not None:
-            return dish_card
-    return None
-
-
-async def _find_ingredient_by_name(name: str) -> Ingredient | None:
-    normalized = normalize_lookup_text(name)
-    if not normalized:
-        return None
-
-    return await Ingredient.find_one(
-        {
-            "$or": [
-                {"normalized_name": normalized},
-                {"aliases": normalized},
-            ]
-        }
-    )
-
-
-async def _resolve_allergen_codes(version: DishCardVersion) -> list[str]:
-    resolved_codes: list[str] = []
-    seen_codes: set[str] = set()
-
-    for allergen_id in version.allergen_ids:
-        allergen = await Allergen.get(allergen_id)
-        if allergen is None or allergen.code in seen_codes:
-            continue
-        seen_codes.add(allergen.code)
-        resolved_codes.append(allergen.code)
-
-    return resolved_codes
-
-
-def _card_number_candidates(card_number: str) -> list[str]:
-    normalized = card_number.strip()
-    candidates = [normalized]
-    without_leading_zero = re.sub(r"\b0+(\d)", r"\1", normalized)
-    if without_leading_zero not in candidates:
-        candidates.append(without_leading_zero)
-    return candidates
 
 
 async def _authorize_menu_access(menu: WeeklyMenu, current_user: User) -> None:
@@ -1549,181 +1450,6 @@ def _build_import_preview_response(
     )
 
 
-async def _hydrate_preview_references(preview: ParsedWeeklyMenuPreview) -> None:
-    if not preview.menus:
-        return
-
-    known_allergen_codes = await _load_known_allergen_codes()
-    dish_card_cache: dict[str, DishCard | None] = {}
-    version_cache: dict[PydanticObjectId, DishCardVersion | None] = {}
-    ingredient_cache: dict[str, Ingredient | None] = {}
-
-    for preview_item in preview.menus:
-        for day in preview_item.menu.days:
-            for item in day.items:
-                row_number = preview_item.item_rows.get((day.weekday.value, item.position))
-                if item.kind == MenuItemKind.PRODUCT:
-                    lookup_name = item.product_name_snapshot or item.name
-                    normalized_name = normalize_lookup_text(lookup_name)
-                    ingredient = None
-                    if normalized_name:
-                        if normalized_name not in ingredient_cache:
-                            ingredient_cache[normalized_name] = await _find_ingredient_by_name(
-                                lookup_name
-                            )
-                        ingredient = ingredient_cache[normalized_name]
-                    if ingredient is None:
-                        preview.diagnostics.append(
-                            _import_diagnostic(
-                                level=MenuImportDiagnosticLevel.WARNING,
-                                code="ingredient_not_found",
-                                message=f'Ingredient "{lookup_name}" was not found',
-                                sheet_name=preview_item.sheet_name,
-                                row_number=row_number,
-                                column_number=3,
-                            )
-                        )
-                    else:
-                        item.product_ingredient_id = ingredient.id
-                        item.product_name_snapshot = ingredient.name
-                else:
-                    recipe_card_number = (item.recipe_card_number or "").strip()
-                    if recipe_card_number:
-                        if recipe_card_number not in dish_card_cache:
-                            dish_card_cache[recipe_card_number] = await _find_dish_card_by_number(
-                                recipe_card_number
-                            )
-                        dish_card = dish_card_cache[recipe_card_number]
-                        if dish_card is None:
-                            preview.diagnostics.append(
-                                _import_diagnostic(
-                                    level=MenuImportDiagnosticLevel.ERROR,
-                                    code="dish_card_not_found",
-                                    message=f'Recipe card "{recipe_card_number}" was not found',
-                                    sheet_name=preview_item.sheet_name,
-                                    row_number=row_number,
-                                    column_number=1,
-                                )
-                            )
-                        else:
-                            item.dish_card_id = dish_card.id
-                            item.dish_card_version_id = dish_card.current_version_id
-
-                            version = None
-                            if dish_card.current_version_id is not None:
-                                if dish_card.current_version_id not in version_cache:
-                                    version_cache[
-                                        dish_card.current_version_id
-                                    ] = await DishCardVersion.get(
-                                        dish_card.current_version_id
-                                    )
-
-                                version = version_cache[
-                                    dish_card.current_version_id
-                                ]
-
-                            if version is None:
-                                preview.diagnostics.append(
-                                    _import_diagnostic(
-                                        level=MenuImportDiagnosticLevel.ERROR,
-                                        code="dish_card_version_not_found",
-                                        message=(
-                                            f'Recipe card "{recipe_card_number}" '
-                                            "has no current version"
-                                        ),
-                                        sheet_name=preview_item.sheet_name,
-                                        row_number=row_number,
-                                        column_number=1,
-                                    )
-                                )
-                            else:
-                                for portion_index, portion in enumerate(
-                                    item.portions
-                                ):
-                                    variant = find_portion_variant_by_yield(
-                                        version.portion_variants,
-                                        portion.yield_amount,
-                                        preferred_variant_id=(
-                                            portion.dish_card_portion_variant_id
-                                        ),
-                                    )
-
-                                    if variant is None:
-                                        preview.diagnostics.append(
-                                            _import_diagnostic(
-                                                level=(
-                                                    MenuImportDiagnosticLevel.ERROR
-                                                ),
-                                                code="portion_variant_not_found",
-                                                message=(
-                                                    f'Dish "{item.name}" has no '
-                                                    "portion variant for output "
-                                                    f"{portion.yield_amount} g"
-                                                ),
-                                                sheet_name=preview_item.sheet_name,
-                                                row_number=row_number,
-                                                column_number=(
-                                                    4 + portion_index * 5
-                                                ),
-                                            )
-                                        )
-                                    else:
-                                        portion.dish_card_portion_variant_id = (
-                                            variant.id
-                                        )
-
-                                if not item.allergen_codes:
-                                    item.allergen_codes = (
-                                        await _resolve_allergen_codes(version)
-                                    )
-
-                unknown_codes = [
-                    code for code in item.allergen_codes if code not in known_allergen_codes
-                ]
-                if unknown_codes:
-                    preview.diagnostics.append(
-                        _import_diagnostic(
-                            level=MenuImportDiagnosticLevel.WARNING,
-                            code="unknown_allergen_codes",
-                            message="Unknown allergen codes: " + ", ".join(unknown_codes),
-                            sheet_name=preview_item.sheet_name,
-                            row_number=row_number,
-                            column_number=2,
-                        )
-                    )
-
-
-async def _load_known_allergen_codes() -> set[str]:
-    allergens = await Allergen.find_all().to_list()
-    return {allergen.code for allergen in allergens}
-
-
-def _import_diagnostic(
-    *,
-    level: MenuImportDiagnosticLevel,
-    code: str,
-    message: str,
-    sheet_name: str,
-    row_number: int | None = None,
-    column_number: int | None = None,
-) -> MenuImportDiagnostic:
-    column_letter = _column_letter(column_number) if column_number is not None else None
-    cell = (
-        f"{column_letter}{row_number}"
-        if column_letter is not None and row_number is not None
-        else None
-    )
-    return MenuImportDiagnostic(
-        level=level,
-        code=code,
-        message=message,
-        sheet_name=sheet_name,
-        row_number=row_number,
-        column_letter=column_letter,
-        cell=cell,
-    )
-
-
 def _format_diagnostic_messages(diagnostics: list[MenuImportDiagnostic]) -> str:
     formatted: list[str] = []
     for diagnostic in diagnostics:
@@ -1741,12 +1467,3 @@ def _export_filename(menu: WeeklyMenu) -> str:
     if not slug:
         slug = f"weekly-menu-{menu.id}"
     return f"{slug}.xlsx"
-
-
-def _column_letter(column_number: int) -> str:
-    result = ""
-    current = column_number
-    while current > 0:
-        current, remainder = divmod(current - 1, 26)
-        result = chr(65 + remainder) + result
-    return result
