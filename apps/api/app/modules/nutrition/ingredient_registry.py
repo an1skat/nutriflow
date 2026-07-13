@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from decimal import ROUND_FLOOR, Decimal
 
-from app.modules.norm_compliance.domain import NormativeGroupCode, NormativeUnit
+from app.modules.nutrition.domain import NormativeGroupCode, NormativeUnit
 
 
 @dataclass(frozen=True)

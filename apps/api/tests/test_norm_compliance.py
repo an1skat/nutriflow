@@ -16,12 +16,6 @@ from app.modules.menus.models import (
     MenuPortion,
     Weekday,
 )
-from app.modules.norm_compliance.domain import (
-    NormativeContributionSnapshot,
-    NormativeContributionSource,
-    NormativeGroupCode,
-    NormativeUnit,
-)
 from app.modules.norm_compliance.registry import get_norm, get_norms
 from app.modules.norm_compliance.schemas import ComplianceStatus
 from app.modules.norm_compliance.service import (
@@ -33,6 +27,12 @@ from app.modules.norm_compliance.service import (
     _validate_complete_requirement_week,
     _validate_range,
     calculate_numeric_status,
+)
+from app.modules.nutrition.domain import (
+    NormativeContributionSnapshot,
+    NormativeContributionSource,
+    NormativeGroupCode,
+    NormativeUnit,
 )
 
 pytestmark = pytest.mark.no_clean_database

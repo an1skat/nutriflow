@@ -47,15 +47,14 @@ from app.modules.menus.models import (
     WeeklyMenu,
     WeeklyMenuStatus,
 )
-from app.modules.norm_compliance.domain import (
-    NormativeContribution,
+from app.modules.nutrition.contributions import (
+    IngredientLine,
+    ingredient_contribution_snapshots,
+)
+from app.modules.nutrition.domain import (
     NormativeContributionBasis,
     NormativeContributionSnapshot,
     NormativeContributionSource,
-)
-from app.modules.norm_compliance.ingredient_registry import (
-    INGREDIENTS_NOT_COUNTED_SEPARATELY,
-    get_ingredient_norm_rule,
 )
 from app.modules.recipe.models import (
     DishCardVersion,
@@ -88,14 +87,6 @@ class IngredientCatalogEntry:
     key: str
     ingredient_id: PydanticObjectId | None
     name: str
-
-
-@dataclass(frozen=True)
-class IngredientLine:
-    key: str
-    ingredient_id: PydanticObjectId | None
-    name: str
-    net_per_person_g: Decimal
 
 
 @dataclass(frozen=True)
@@ -1675,7 +1666,7 @@ async def _dish_card_ingredient_lines(
         for amount in amounts
     ]
     explicit = _portion_variant_contribution_snapshots(variant, item.name)
-    fallback = _ingredient_contribution_snapshots(
+    fallback = ingredient_contribution_snapshots(
         lines,
         catalog_by_id=catalog_by_id,
         catalog_by_name=catalog_by_name,
@@ -1720,7 +1711,7 @@ async def _product_ingredient_lines(
             net_per_person_g=amount,
         )
     ]
-    snapshots = _ingredient_contribution_snapshots(
+    snapshots = ingredient_contribution_snapshots(
         lines,
         catalog_by_id=catalog_by_id,
         catalog_by_name=catalog_by_name,
@@ -1748,93 +1739,6 @@ def _portion_variant_contribution_snapshots(
         for contribution in variant.normative_contributions
         if contribution.basis == NormativeContributionBasis.PER_PORTION
     ]
-
-
-def _ingredient_contribution_snapshots(
-    lines: list[IngredientLine],
-    *,
-    catalog_by_id: dict[PydanticObjectId, Ingredient],
-    catalog_by_name: dict[str, Ingredient],
-    excluded_groups: set,
-    source_type: NormativeContributionSource,
-) -> list[NormativeContributionSnapshot]:
-    snapshots: list[NormativeContributionSnapshot] = []
-    for line in lines:
-        ingredient = (
-            catalog_by_id.get(line.ingredient_id) if line.ingredient_id is not None else None
-        )
-        if ingredient is None:
-            ingredient = catalog_by_name.get(normalize_lookup_text(line.name))
-        if ingredient is None:
-            continue
-        if (
-            source_type == NormativeContributionSource.INGREDIENT
-            and ingredient.normalized_name in INGREDIENTS_NOT_COUNTED_SEPARATELY
-        ):
-            continue
-
-        if not ingredient.normative_contributions:
-            rule = get_ingredient_norm_rule(ingredient.normalized_name)
-            amount = rule.contribution_amount(line.net_per_person_g) if rule is not None else None
-            if rule is not None and amount is not None and rule.group_code not in excluded_groups:
-                snapshots.append(
-                    NormativeContributionSnapshot(
-                        group_code=rule.group_code,
-                        amount=amount,
-                        unit=rule.unit,
-                        product_variant=rule.product_variant,
-                        source_type=source_type,
-                        source_id=str(ingredient.id),
-                        source_name=ingredient.name,
-                    )
-                )
-            continue
-
-        source_quantity = _source_quantity(line.net_per_person_g, ingredient.unit)
-        for contribution in ingredient.normative_contributions:
-            if contribution.group_code in excluded_groups:
-                continue
-            snapshots.append(
-                _scaled_ingredient_contribution(
-                    contribution,
-                    source_quantity=source_quantity,
-                    ingredient=ingredient,
-                    source_type=source_type,
-                )
-            )
-    return snapshots
-
-
-def _source_quantity(amount_g: Decimal, source_unit: str) -> Decimal:
-    return amount_g / Decimal("1000") if source_unit in {"kg", "кг"} else amount_g
-
-
-def _scaled_ingredient_contribution(
-    contribution: NormativeContribution,
-    *,
-    source_quantity: Decimal,
-    ingredient: Ingredient,
-    source_type: NormativeContributionSource,
-) -> NormativeContributionSnapshot:
-    multiplier = (
-        source_quantity
-        if contribution.basis == NormativeContributionBasis.PER_SOURCE_UNIT
-        else Decimal("1")
-    )
-    return NormativeContributionSnapshot(
-        group_code=contribution.group_code,
-        amount=contribution.amount * multiplier,
-        unit=contribution.unit,
-        portion_equivalent=(
-            contribution.portion_equivalent * multiplier
-            if contribution.portion_equivalent is not None
-            else None
-        ),
-        product_variant=contribution.product_variant,
-        source_type=source_type,
-        source_id=str(ingredient.id),
-        source_name=ingredient.name,
-    )
 
 
 def _ingredient_line(

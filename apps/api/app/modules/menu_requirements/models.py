@@ -8,7 +8,7 @@ from pymongo import ASCENDING, DESCENDING, IndexModel
 
 from app.modules.identity.models import AgeGroup, utc_now
 from app.modules.menus.models import MealType, MenuItemKind, Weekday
-from app.modules.norm_compliance.domain import NormativeContributionSnapshot
+from app.modules.nutrition.domain import NormativeContributionSnapshot
 from app.modules.recipe.models import AmountDecimal
 
 

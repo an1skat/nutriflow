@@ -6,6 +6,10 @@ from bson.decimal128 import Decimal128
 from pydantic import BaseModel, BeforeValidator, Field
 
 
+def normalize_lookup_text(value: str) -> str:
+    return " ".join(value.strip().lower().split())
+
+
 def _coerce_decimal(value: Any) -> Any:
     if isinstance(value, Decimal128):
         return value.to_decimal()

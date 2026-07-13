@@ -8,11 +8,7 @@ from beanie import PydanticObjectId
 
 from app.modules.identity.models import AgeGroup, School, SchoolGroup, User, UserRole
 from app.modules.menu_requirements.models import MenuRequirement
-from app.modules.menu_requirements.service import (
-    IngredientLine,
-    _ingredient_contribution_snapshots,
-    hash_daily_menu,
-)
+from app.modules.menu_requirements.service import hash_daily_menu
 from app.modules.menus.models import (
     DailyMenu,
     MealType,
@@ -20,14 +16,6 @@ from app.modules.menus.models import (
     Weekday,
     WeeklyMenu,
     WeeklyMenuStatus,
-)
-from app.modules.norm_compliance.domain import (
-    NormativeContributionSnapshot,
-    NormativeContributionSource,
-)
-from app.modules.norm_compliance.ingredient_registry import (
-    INGREDIENTS_NOT_COUNTED_SEPARATELY,
-    get_ingredient_norm_rule,
 )
 from app.modules.norm_compliance.registry import NutritionNorm, get_norms
 from app.modules.norm_compliance.schemas import (
@@ -39,6 +27,18 @@ from app.modules.norm_compliance.schemas import (
     NormComplianceReportResponse,
     ToleranceInfoResponse,
     UnmappedItemResponse,
+)
+from app.modules.nutrition.contributions import (
+    IngredientLine,
+    ingredient_contribution_snapshots,
+)
+from app.modules.nutrition.domain import (
+    NormativeContributionSnapshot,
+    NormativeContributionSource,
+)
+from app.modules.nutrition.ingredient_registry import (
+    INGREDIENTS_NOT_COUNTED_SEPARATELY,
+    get_ingredient_norm_rule,
 )
 from app.modules.recipe.models import Ingredient, normalize_lookup_text
 
@@ -205,7 +205,7 @@ def _apply_manual_ingredient_rules_from_catalog(
                 for cell in row.cells
                 if cell.menu_item_id == dish.menu_item_id
             ]
-            dish.normative_contributions = _ingredient_contribution_snapshots(
+            dish.normative_contributions = ingredient_contribution_snapshots(
                 lines,
                 catalog_by_id=catalog_by_id,
                 catalog_by_name=catalog_by_name,
@@ -523,16 +523,12 @@ def _validate_range(date_from: Date, date_to: Date) -> None:
 async def _get_accessible_school(current_user: User, school_id: PydanticObjectId) -> School:
     if current_user.role not in {UserRole.OWNER, UserRole.ADMIN, UserRole.TECHNOLOGIST}:
         raise NormComplianceAccessDeniedError("Norm compliance access denied")
-    if current_user.role == UserRole.ADMIN:
-        school = await School.get(school_id)
-        if school is None:
-            raise NormComplianceNotFoundError("School not found")
-        if school.admin_owner_id != current_user.id:
-            raise NormComplianceAccessDeniedError("School access denied")
-        return school
     school = await School.get(school_id)
     if school is None:
         raise NormComplianceNotFoundError("School not found")
+    if current_user.role == UserRole.ADMIN:
+        if school.admin_owner_id != current_user.id:
+            raise NormComplianceAccessDeniedError("School access denied")
     return school
 
 
@@ -542,8 +538,6 @@ def _aggregate_status(statuses: list[ComplianceStatus]) -> ComplianceStatus:
         return ComplianceStatus.COMPLETE
     if len(unique) == 1:
         return next(iter(unique))
-    if unique == {ComplianceStatus.COMPLETE}:
-        return ComplianceStatus.COMPLETE
     return ComplianceStatus.MIXED
 
 

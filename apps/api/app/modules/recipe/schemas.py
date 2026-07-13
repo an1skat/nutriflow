@@ -6,7 +6,7 @@ from beanie import PydanticObjectId
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.modules.identity.models import AgeGroup
-from app.modules.norm_compliance.domain import NormativeContribution
+from app.modules.nutrition.domain import NormativeContribution
 from app.modules.recipe.models import (
     Allergen,
     AmountBasis,

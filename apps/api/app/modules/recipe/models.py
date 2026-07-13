@@ -17,7 +17,7 @@ from pydantic import (
 from pymongo import ASCENDING, IndexModel
 
 from app.modules.identity.models import AgeGroup, utc_now
-from app.modules.norm_compliance.domain import NormativeContribution
+from app.modules.nutrition.domain import NormativeContribution, normalize_lookup_text
 
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 Code = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
@@ -56,10 +56,6 @@ def _coerce_nutrition_decimal(value: Any) -> Any:
 
 
 NutritionDecimal = Annotated[Decimal, BeforeValidator(_coerce_nutrition_decimal)]
-
-
-def normalize_lookup_text(value: str) -> str:
-    return " ".join(value.strip().lower().split())
 
 
 class DishCardVersionStatus(StrEnum):

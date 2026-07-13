@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from app.modules.identity.models import AgeGroup
 from app.modules.menus.models import MealType
-from app.modules.norm_compliance.domain import (
+from app.modules.nutrition.domain import (
     NormAmountDecimal,
     NormativeContributionSource,
     NormativeGroupCode,

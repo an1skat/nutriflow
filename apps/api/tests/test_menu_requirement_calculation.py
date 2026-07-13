@@ -8,13 +8,13 @@ from app.modules.menu_requirements.models import MenuRequirementDish
 from app.modules.menu_requirements.service import (
     DishCalculation,
     IngredientCatalogEntry,
-    IngredientLine,
     MenuRequirementValidationError,
     build_ingredient_rows,
     convert_to_grams,
     resolve_service_date,
 )
 from app.modules.menus.models import DailyMenu, MenuItemKind, Weekday, WeeklyMenu
+from app.modules.nutrition.contributions import IngredientLine
 
 pytestmark = pytest.mark.no_clean_database
 

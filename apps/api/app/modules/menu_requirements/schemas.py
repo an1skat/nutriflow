@@ -14,7 +14,7 @@ from app.modules.menu_requirements.models import (
     MenuRequirementIngredientRow,
 )
 from app.modules.menus.models import MealType, MenuItemKind, Weekday
-from app.modules.norm_compliance.domain import NormativeContributionSnapshot
+from app.modules.nutrition.domain import NormativeContributionSnapshot
 from app.modules.recipe.models import AmountDecimal
 
 EditableIngredientName = Annotated[

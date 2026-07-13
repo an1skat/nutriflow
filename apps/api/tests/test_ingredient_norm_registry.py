@@ -9,24 +9,24 @@ from app.modules.menu_requirements.models import (
     MenuRequirementDish,
     MenuRequirementIngredientRow,
 )
-from app.modules.menu_requirements.service import (
-    IngredientLine,
-    _ingredient_contribution_snapshots,
-)
 from app.modules.menus.models import MenuItemKind
-from app.modules.norm_compliance.domain import (
+from app.modules.norm_compliance.service import (
+    _apply_manual_ingredient_rules_from_catalog,
+    _is_countable_contribution,
+)
+from app.modules.nutrition.contributions import (
+    IngredientLine,
+    ingredient_contribution_snapshots,
+)
+from app.modules.nutrition.domain import (
     NormativeContributionSnapshot,
     NormativeContributionSource,
     NormativeGroupCode,
     NormativeUnit,
 )
-from app.modules.norm_compliance.ingredient_registry import (
+from app.modules.nutrition.ingredient_registry import (
     INGREDIENT_NORM_RULES,
     INGREDIENTS_NOT_COUNTED_SEPARATELY,
-)
-from app.modules.norm_compliance.service import (
-    _apply_manual_ingredient_rules_from_catalog,
-    _is_countable_contribution,
 )
 from app.modules.recipe.models import Ingredient
 
@@ -168,7 +168,7 @@ def _snapshots(
         name=ingredient.name,
         net_per_person_g=amount,
     )
-    return _ingredient_contribution_snapshots(
+    return ingredient_contribution_snapshots(
         [line],
         catalog_by_id={ingredient.id: ingredient},
         catalog_by_name={ingredient.normalized_name: ingredient},

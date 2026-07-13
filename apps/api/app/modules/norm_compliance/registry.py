@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from app.modules.identity.models import AgeGroup
 from app.modules.menus.models import MealType
-from app.modules.norm_compliance.domain import NormativeGroupCode, NormativeUnit
+from app.modules.nutrition.domain import NormativeGroupCode, NormativeUnit
 
 
 @dataclass(frozen=True)
