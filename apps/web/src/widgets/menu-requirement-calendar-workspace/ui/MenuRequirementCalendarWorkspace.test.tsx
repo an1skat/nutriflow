@@ -13,6 +13,7 @@ import {
 } from "@/features/menu-requirement-export/api/MenuRequirementExportApi";
 
 import {
+  buildNormComplianceHref,
   RequirementPeriodNavigator,
   RequirementReportDialog,
   RequirementReportTable,
@@ -150,6 +151,22 @@ const calendarWeek: MenuRequirementCalendarWeek = {
   })),
 };
 
+const completeCalendarWeek: MenuRequirementCalendarWeek = {
+  ...calendarWeek,
+  generated_days: 5,
+  missing_days: 0,
+  stale_days: 0,
+  status: "complete",
+  days: calendarWeek.days.map((day) => ({
+    ...day,
+    expected_requirements: 3,
+    generated_requirements: 3,
+    missing_requirements: 0,
+    stale_requirements: 0,
+    status: "complete",
+  })),
+};
+
 const calendarMonth: MenuRequirementCalendarMonth = {
   month: 7,
   date_from: "2026-07-01",
@@ -161,6 +178,16 @@ const calendarMonth: MenuRequirementCalendarMonth = {
   stale_days: 0,
   status: "missing",
   weeks: [calendarWeek],
+};
+
+const completeCalendarMonth: MenuRequirementCalendarMonth = {
+  ...calendarMonth,
+  working_days: 5,
+  generated_days: 5,
+  missing_days: 0,
+  stale_days: 0,
+  status: "complete",
+  weeks: [completeCalendarWeek],
 };
 
 describe("RequirementReportTable", () => {
@@ -274,6 +301,149 @@ describe("RequirementPeriodNavigator", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("9 липня")).toBeInTheDocument();
     expect(screen.queryByText("Тиждень 2")).not.toBeInTheDocument();
+  });
+
+  it("offers norm compliance only for the selected concrete week", () => {
+    const href = buildNormComplianceHref({
+      schoolId: "school-1",
+      dateFrom: "2026-07-06",
+      dateTo: "2026-07-10",
+      mealType: "lunch",
+      schoolGroupId: "group-1",
+    });
+
+    const { rerender } = render(
+      <RequirementPeriodNavigator
+        {...defaultProps}
+        selectedMonth={calendarMonth}
+        selectedWeek={null}
+      />,
+    );
+    expect(
+      screen.queryByRole("link", { name: "Сформувати дотримання норм" }),
+    ).not.toBeInTheDocument();
+
+    rerender(
+      <RequirementPeriodNavigator
+        {...defaultProps}
+        selectedMonth={calendarMonth}
+        selectedWeek={calendarWeek}
+        normComplianceHref={href}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("link", { name: "Сформувати дотримання норм" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Сформувати дотримання норм" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Меню-вимога за тиждень" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByText(/сформуйте або оновіть меню-вимоги за всі 5 робочих днів/),
+    ).toBeInTheDocument();
+
+    rerender(
+      <RequirementPeriodNavigator
+        {...defaultProps}
+        selectedMonth={calendarMonth}
+        selectedWeek={completeCalendarWeek}
+        normComplianceHref={href}
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Сформувати дотримання норм" }),
+    ).toHaveAttribute(
+      "href",
+      "/norm-compliance?school_id=school-1&date_from=2026-07-06&date_to=2026-07-10&source=menu-requirements-calendar&meal_type=lunch&school_group_id=group-1",
+    );
+    expect(
+      screen.getByRole("button", { name: "Меню-вимога за тиждень" }),
+    ).toBeEnabled();
+  });
+
+  it("blocks an incomplete monthly report until every participating day is ready", () => {
+    const onOpenReport = vi.fn();
+    const { rerender } = render(
+      <RequirementPeriodNavigator
+        {...defaultProps}
+        selectedMonth={calendarMonth}
+        selectedWeek={null}
+        onOpenReport={onOpenReport}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Меню-вимога за місяць" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByText(/за всі дні, що беруть участь у цьому місяці/),
+    ).toBeInTheDocument();
+
+    rerender(
+      <RequirementPeriodNavigator
+        {...defaultProps}
+        selectedMonth={completeCalendarMonth}
+        selectedWeek={null}
+        onOpenReport={onOpenReport}
+      />,
+    );
+
+    const monthlyReportButton = screen.getByRole("button", {
+      name: "Меню-вимога за місяць",
+    });
+    expect(monthlyReportButton).toBeEnabled();
+    fireEvent.click(monthlyReportButton);
+    expect(onOpenReport).toHaveBeenCalledWith(
+      expect.objectContaining({ granularity: "month" }),
+    );
+  });
+
+  it("allows the owner to open incomplete reports and norm compliance", () => {
+    const onOpenReport = vi.fn();
+    const href = buildNormComplianceHref({
+      schoolId: "school-1",
+      dateFrom: calendarWeek.date_from,
+      dateTo: calendarWeek.date_to,
+    });
+    const { rerender } = render(
+      <RequirementPeriodNavigator
+        {...defaultProps}
+        selectedMonth={calendarMonth}
+        selectedWeek={calendarWeek}
+        onOpenReport={onOpenReport}
+        allowIncompleteReports
+        normComplianceHref={href}
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Сформувати дотримання норм" }),
+    ).toHaveAttribute("href", href);
+    const weeklyReportButton = screen.getByRole("button", {
+      name: "Меню-вимога за тиждень",
+    });
+    expect(weeklyReportButton).toBeEnabled();
+    fireEvent.click(weeklyReportButton);
+    expect(onOpenReport).toHaveBeenCalledWith(
+      expect.objectContaining({ granularity: "week" }),
+    );
+
+    rerender(
+      <RequirementPeriodNavigator
+        {...defaultProps}
+        selectedMonth={calendarMonth}
+        selectedWeek={null}
+        onOpenReport={onOpenReport}
+        allowIncompleteReports
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: "Меню-вимога за місяць" }),
+    ).toBeEnabled();
   });
 
   it("opens a daily report for the chosen day", () => {

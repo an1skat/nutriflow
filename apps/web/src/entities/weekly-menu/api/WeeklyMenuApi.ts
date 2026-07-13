@@ -7,6 +7,7 @@ import {
   weeklyMenuSchema,
   type PublishWeeklyMenuPayload,
   type PublishWeeklyMenuResponse,
+  type Weekday,
   type WeeklyMenu,
   type WeeklyMenuList,
   type WeeklyMenuListRequest,
@@ -92,6 +93,36 @@ export async function restoreSchoolWeeklyMenu(
 ): Promise<WeeklyMenu> {
   const response = await apiClient.post<unknown>(
     `/menus/weekly/${menuId}/school-restore`,
+    null,
+    {
+      headers: getCsrfHeaders(),
+    },
+  );
+
+  return weeklyMenuSchema.parse(response.data);
+}
+
+export async function closeWeeklyMenuDay(
+  menuId: string,
+  weekday: Weekday,
+): Promise<WeeklyMenu> {
+  const response = await apiClient.post<unknown>(
+    `/menus/weekly/${menuId}/days/${weekday}/close`,
+    null,
+    {
+      headers: getCsrfHeaders(),
+    },
+  );
+
+  return weeklyMenuSchema.parse(response.data);
+}
+
+export async function devReopenWeeklyMenuDay(
+  menuId: string,
+  weekday: Weekday,
+): Promise<WeeklyMenu> {
+  const response = await apiClient.post<unknown>(
+    `/menus/weekly/${menuId}/days/${weekday}/dev-reopen`,
     null,
     {
       headers: getCsrfHeaders(),

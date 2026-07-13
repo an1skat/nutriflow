@@ -5,6 +5,7 @@ import type {
   DailyMenu,
   DailyMenuItem,
   MenuPortion,
+  Weekday,
   WeeklyMenu,
 } from "@/entities/weekly-menu/model/WeeklyMenu";
 import {
@@ -13,6 +14,22 @@ import {
 } from "@/features/weekly-menu-editor/model/WeeklyMenuFormSchema";
 
 const DISPLAY_AGE_GROUPS: AgeGroup[] = ["6-11", "11-14", "14-18"];
+
+const JS_WEEKDAY_BY_MENU_WEEKDAY: Record<Weekday, number> = {
+  sunday: 0,
+  monday: 1,
+  tuesday: 2,
+  wednesday: 3,
+  thursday: 4,
+  friday: 5,
+  saturday: 6,
+};
+
+const menuDateFormatter = new Intl.DateTimeFormat("uk-UA", {
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+});
 
 const MENU_GRID_STYLE = {
   gridTemplateColumns:
@@ -279,18 +296,57 @@ function getMealTypeLabel(menu: WeeklyMenu): string {
   return menu.meal_type === "lunch" ? "Обід" : "Сніданок";
 }
 
+export function getMenuDateRangeLabel(menu: WeeklyMenu): string | null {
+  const alignedDates = menu.days
+    .map((day) => alignDateToWeekday(day.date, day.weekday))
+    .filter((date): date is Date => date !== null)
+    .sort((left, right) => left.getTime() - right.getTime());
+
+  if (!alignedDates.length) {
+    return null;
+  }
+
+  const first = alignedDates[0];
+  const last = alignedDates[alignedDates.length - 1];
+  return first.getTime() === last.getTime()
+    ? menuDateFormatter.format(first)
+    : `${menuDateFormatter.format(first)} – ${menuDateFormatter.format(last)}`;
+}
+
+function alignDateToWeekday(
+  value: string | null | undefined,
+  weekday: Weekday,
+): Date | null {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return null;
+  }
+
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  const daysUntilExpectedWeekday =
+    (JS_WEEKDAY_BY_MENU_WEEKDAY[weekday] - date.getDay() + 7) % 7;
+  date.setDate(date.getDate() + daysUntilExpectedWeekday);
+  return date;
+}
+
 export function WeeklyMenuSchoolTable({ menu }: { menu: WeeklyMenu }) {
+  const dateRangeLabel = getMenuDateRangeLabel(menu);
+
   return (
     <section className="nf-panel overflow-hidden">
       <div className="nf-panel-header items-start gap-4">
         <div>
           <p className="nf-eyebrow">{getMealTypeLabel(menu)}</p>
           <h2 className="nf-panel-title">{menu.title}</h2>
-          <p className="mt-1 text-xs text-slate-600">
-            {menu.cycle_week ? `Цикл ${menu.cycle_week}` : "Без циклу"}
-            {menu.starts_on ? ` · початок ${menu.starts_on}` : ""}
-            {menu.ends_on ? ` · кінець ${menu.ends_on}` : ""}
-          </p>
+          {dateRangeLabel ? (
+            <p className="mt-1 text-xs text-slate-600">
+              Тиждень: {dateRangeLabel}
+            </p>
+          ) : null}
         </div>
         {menu.source_sheet_name ? (
           <span className="border border-slate-200 bg-white px-2 py-1 text-xs font-bold text-slate-600">

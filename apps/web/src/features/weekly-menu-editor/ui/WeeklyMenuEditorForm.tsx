@@ -228,8 +228,8 @@ export function WeeklyMenuEditorForm({
               </p>
             ) : (
               <p className="mt-1 text-xs text-slate-500">
-                Необов’язково. Якщо поле порожнє, береться сьогоднішня дата з
-                пристрою: {effectiveStartDate}.
+                Для нового меню автоматично обирається найближчий наступний
+                понеділок: {effectiveStartDate}.
               </p>
             )}
           </div>

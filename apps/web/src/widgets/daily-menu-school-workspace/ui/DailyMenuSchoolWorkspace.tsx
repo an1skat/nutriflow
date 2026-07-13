@@ -7,8 +7,10 @@ import {
   ChevronDown,
   FileSpreadsheet,
   Filter,
+  Lock,
   Package,
   Save,
+  Unlock,
   Utensils,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -47,7 +49,11 @@ import {
   saveDailyMenuDraft,
 } from "@/features/daily-menu/model/DailyMenuDraftStorage";
 import { useGenerateMenuRequirements } from "@/features/menu-requirement-generation/model/UseGenerateMenuRequirements";
-import { useUpdateWeeklyMenu } from "@/features/weekly-menu-editor/model/UseWeeklyMenuMutations";
+import {
+  useCloseWeeklyMenuDay,
+  useDevReopenWeeklyMenuDay,
+  useUpdateWeeklyMenu,
+} from "@/features/weekly-menu-editor/model/UseWeeklyMenuMutations";
 import {
   AGE_GROUP_LABELS,
   WEEKDAY_LABELS,
@@ -85,6 +91,8 @@ export function DailyMenuSchoolWorkspace() {
   const effectiveMenuId = selectedMenuId ?? menus.data?.items[0]?.id ?? "";
   const selectedMenu = useWeeklyMenu(effectiveMenuId);
   const updateWeeklyMenu = useUpdateWeeklyMenu(effectiveMenuId);
+  const closeWeeklyMenuDay = useCloseWeeklyMenuDay(effectiveMenuId);
+  const devReopenWeeklyMenuDay = useDevReopenWeeklyMenuDay(effectiveMenuId);
   const generateMenuRequirements = useGenerateMenuRequirements();
   const [days, setDays] = useState<DailyMenu[]>([]);
   const [activeWeekday, setActiveWeekday] = useState<
@@ -140,10 +148,13 @@ export function DailyMenuSchoolWorkspace() {
   }, [isDirty]);
 
   const activeDay = days.find((day) => day.weekday === activeWeekday) ?? null;
+  const isActiveDayClosed = Boolean(activeDay?.closed_at);
+  const showDevReopen = process.env.NODE_ENV !== "production";
   const canGenerateActiveDay =
-    activeDay?.items.some((item) =>
+    !isActiveDayClosed &&
+    (activeDay?.items.some((item) =>
       item.servings.some((serving) => serving.children_count > 0),
-    ) ?? false;
+    ) ?? false);
   const changeMenu = async (menuId: string) => {
     if (isDirty) {
       const confirmed = await confirm({
@@ -163,7 +174,7 @@ export function DailyMenuSchoolWorkspace() {
   };
 
   const changeDish = async (itemId: string, selectedItem: CatalogSelection) => {
-    if (!activeDay) {
+    if (!activeDay || activeDay.closed_at) {
       return;
     }
 
@@ -228,7 +239,7 @@ export function DailyMenuSchoolWorkspace() {
     group: SchoolGroup,
     childrenCount: number,
   ) => {
-    if (!activeDay) {
+    if (!activeDay || activeDay.closed_at) {
       return;
     }
 
@@ -267,7 +278,7 @@ export function DailyMenuSchoolWorkspace() {
 
     try {
       const updatedMenu = await updateWeeklyMenu.mutateAsync(
-        buildDailyMenuUpdatePayload(days),
+        buildDailyMenuUpdatePayload(days, menu.days),
       );
       clearDailyMenuDraft(menu.id);
       initializedMenuKey.current = `${updatedMenu.id}:${updatedMenu.updated_at}`;
@@ -288,7 +299,7 @@ export function DailyMenuSchoolWorkspace() {
   const generateRequirement = async () => {
     const menu = selectedMenu.data;
 
-    if (!menu || !activeDay || !canGenerateActiveDay) {
+    if (!menu || !activeDay || activeDay.closed_at || !canGenerateActiveDay) {
       return;
     }
     if (isDirty && !(await saveChanges())) {
@@ -309,6 +320,82 @@ export function DailyMenuSchoolWorkspace() {
       );
       router.push("/menu-requirements");
     } catch (error) {
+      const serverDays = prepareDailyMenuDays(sortDays(menu.days), activeGroups);
+      setDays(serverDays);
+      setSavedAt(menu.updated_at);
+      setIsDirty(false);
+      toast.error(getApiErrorMessage(error));
+    }
+  };
+
+  const closeActiveDay = async () => {
+    const menu = selectedMenu.data;
+
+    if (!menu || !activeDay || activeDay.closed_at || !canGenerateActiveDay) {
+      return;
+    }
+
+    const confirmed = await confirm({
+      title: "Закрити день?",
+      description:
+        "День буде закрито за останніми збереженими даними. Незбережені локальні зміни зникнуть.",
+      confirmLabel: "Закрити день",
+      variant: "danger",
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    clearDailyMenuDraft(menu.id);
+
+    try {
+      const updatedMenu = await closeWeeklyMenuDay.mutateAsync(activeDay.weekday);
+      const nextDays = prepareDailyMenuDays(sortDays(updatedMenu.days), activeGroups);
+      initializedMenuKey.current = `${updatedMenu.id}:${updatedMenu.updated_at}`;
+      setDays(nextDays);
+      setActiveWeekday(activeDay.weekday);
+      setSavedAt(updatedMenu.updated_at);
+      setIsDirty(false);
+      toast.success("День закрито, меню-вимогу сформовано.");
+    } catch (error) {
+      const serverDays = prepareDailyMenuDays(sortDays(menu.days), activeGroups);
+      setDays(serverDays);
+      setSavedAt(menu.updated_at);
+      setIsDirty(false);
+      toast.error(getApiErrorMessage(error));
+    }
+  };
+
+  const reopenActiveDayForDev = async () => {
+    const menu = selectedMenu.data;
+
+    if (!menu || !activeDay || !activeDay.closed_at || !showDevReopen) {
+      return;
+    }
+
+    const confirmed = await confirm({
+      title: "Відкрити день повторно?",
+      description:
+        "Dev-дія зніме блокування з дня. Уже сформована меню-вимога не видаляється; після тестових правок сформуйте її повторно.",
+      confirmLabel: "Відкрити день",
+      variant: "danger",
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const updatedMenu = await devReopenWeeklyMenuDay.mutateAsync(activeDay.weekday);
+      const nextDays = prepareDailyMenuDays(sortDays(updatedMenu.days), activeGroups);
+      initializedMenuKey.current = `${updatedMenu.id}:${updatedMenu.updated_at}`;
+      setDays(nextDays);
+      setActiveWeekday(activeDay.weekday);
+      setSavedAt(updatedMenu.updated_at);
+      setIsDirty(false);
+      toast.success("День відкрито повторно для dev-тестування.");
+    } catch (error) {
       toast.error(getApiErrorMessage(error));
     }
   };
@@ -326,7 +413,9 @@ export function DailyMenuSchoolWorkspace() {
 
       <section
         className={`mb-5 border px-4 py-3 ${
-          isDirty
+          isActiveDayClosed
+            ? "border-slate-400 bg-slate-100 text-slate-700"
+            : isDirty
             ? "border-amber-400 bg-amber-50 text-amber-950"
             : "border-slate-300 bg-slate-50 text-slate-700"
         }`}
@@ -334,23 +423,27 @@ export function DailyMenuSchoolWorkspace() {
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-start gap-2">
-            {isDirty ? (
+            {isActiveDayClosed ? (
+              <Lock className="mt-0.5 size-4 shrink-0" aria-hidden />
+            ) : isDirty ? (
               <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
             ) : (
               <Check className="mt-0.5 size-4 shrink-0" aria-hidden />
             )}
             <div>
               <p className="text-sm font-bold">
-                {isDirty
+                {isActiveDayClosed
+                  ? "День закрито"
+                  : isDirty
                   ? "Є незбережені зміни"
                   : savedAt
                     ? "Усі зміни збережено"
                     : "Зміни ще не зберігалися"}
               </p>
               <p className="mt-0.5 text-xs">
-                Збереження не виконується автоматично. Кількість дітей
-                оновлюється без повідомлення технологу, а заміна страви
-                потрапляє у його окрему вкладку.
+                {isActiveDayClosed
+                  ? "Закритий день доступний тільки для перегляду. Редагування, збереження і повторне формування меню-вимоги вимкнені."
+                  : "Збереження не виконується автоматично. Кількість дітей оновлюється без повідомлення технологу, а заміна страви потрапляє у його окрему вкладку."}
                 {savedAt ? ` Останнє збереження: ${formatDate(savedAt)}.` : ""}
               </p>
             </div>
@@ -363,7 +456,10 @@ export function DailyMenuSchoolWorkspace() {
               disabled={
                 !selectedMenu.data ||
                 !days.length ||
+                isActiveDayClosed ||
                 updateWeeklyMenu.isPending ||
+                closeWeeklyMenuDay.isPending ||
+                devReopenWeeklyMenuDay.isPending ||
                 generateMenuRequirements.isPending
               }
             >
@@ -372,13 +468,60 @@ export function DailyMenuSchoolWorkspace() {
             </button>
             <button
               type="button"
+              className="nf-button nf-button-secondary shrink-0"
+              onClick={() => void closeActiveDay()}
+              disabled={
+                !selectedMenu.data ||
+                !activeDay ||
+                isActiveDayClosed ||
+                !canGenerateActiveDay ||
+                updateWeeklyMenu.isPending ||
+                closeWeeklyMenuDay.isPending ||
+                devReopenWeeklyMenuDay.isPending ||
+                generateMenuRequirements.isPending
+              }
+              title={
+                canGenerateActiveDay || isActiveDayClosed
+                  ? undefined
+                  : "Вкажіть кількість дітей більше нуля хоча б для однієї страви"
+              }
+            >
+              <Lock className="size-4" aria-hidden />
+              {closeWeeklyMenuDay.isPending ? "Закриваємо…" : "Закрити день"}
+            </button>
+            {showDevReopen && isActiveDayClosed ? (
+              <button
+                type="button"
+                className="nf-button nf-button-secondary shrink-0"
+                onClick={() => void reopenActiveDayForDev()}
+                disabled={
+                  !selectedMenu.data ||
+                  !activeDay ||
+                  updateWeeklyMenu.isPending ||
+                  closeWeeklyMenuDay.isPending ||
+                  devReopenWeeklyMenuDay.isPending ||
+                  generateMenuRequirements.isPending
+                }
+                title="Dev-only: зняти блокування з дня для тестування"
+              >
+                <Unlock className="size-4" aria-hidden />
+                {devReopenWeeklyMenuDay.isPending
+                  ? "Відкриваємо…"
+                  : "Відкрити день (dev)"}
+              </button>
+            ) : null}
+            <button
+              type="button"
               className="nf-button nf-button-primary shrink-0"
               onClick={() => void generateRequirement()}
               disabled={
                 !selectedMenu.data ||
                 !activeDay ||
+                isActiveDayClosed ||
                 !canGenerateActiveDay ||
                 updateWeeklyMenu.isPending ||
+                closeWeeklyMenuDay.isPending ||
+                devReopenWeeklyMenuDay.isPending ||
                 generateMenuRequirements.isPending
               }
               title={
@@ -468,6 +611,7 @@ export function DailyMenuSchoolWorkspace() {
           >
             {days.map((day) => {
               const isActive = day.weekday === activeDay?.weekday;
+              const isClosed = Boolean(day.closed_at);
 
               return (
                 <button
@@ -475,11 +619,17 @@ export function DailyMenuSchoolWorkspace() {
                   type="button"
                   role="tab"
                   aria-selected={isActive}
-                  className={`nf-tab shrink-0 ${isActive ? "nf-tab-active" : ""}`}
+                  className={`nf-tab shrink-0 ${isActive ? "nf-tab-active" : ""} ${
+                    isClosed ? "text-slate-400 line-through" : ""
+                  }`}
                   onClick={() => setActiveWeekday(day.weekday)}
                 >
                   {WEEKDAY_LABELS[day.weekday]}
-                  <span className="ml-2 font-normal text-slate-500">
+                  <span
+                    className={`ml-2 font-normal ${
+                      isClosed ? "text-slate-400" : "text-slate-500"
+                    }`}
+                  >
                     {formatMenuDate(resolveDayDate(selectedMenu.data, day))}
                   </span>
                 </button>
@@ -499,6 +649,7 @@ export function DailyMenuSchoolWorkspace() {
               day={activeDay}
               displayDate={resolveDayDate(selectedMenu.data, activeDay)}
               groups={activeGroups}
+              readOnly={Boolean(activeDay.closed_at)}
               onDishChange={changeDish}
               onChildrenCountChange={changeChildrenCount}
             />
@@ -513,12 +664,14 @@ function DayMenuPanel({
   day,
   displayDate,
   groups,
+  readOnly,
   onDishChange,
   onChildrenCountChange,
 }: {
   day: DailyMenu;
   displayDate: string;
   groups: SchoolGroup[];
+  readOnly: boolean;
   onDishChange: (itemId: string, item: CatalogSelection) => Promise<void>;
   onChildrenCountChange: (
     itemId: string,
@@ -527,7 +680,7 @@ function DayMenuPanel({
   ) => void;
 }) {
   return (
-    <section className="nf-panel">
+    <section className={`nf-panel ${readOnly ? "border-slate-300 bg-slate-100" : ""}`}>
       <div className="nf-panel-header">
         <div>
           <p className="nf-eyebrow">Обраний день</p>
@@ -536,7 +689,7 @@ function DayMenuPanel({
           </h2>
         </div>
         <span className="text-xs font-bold text-slate-600">
-          {day.items.length} страв
+          {readOnly ? "Закрито" : `${day.items.length} страв`}
         </span>
       </div>
       {day.notes ? (
@@ -552,6 +705,7 @@ function DayMenuPanel({
               key={item.id}
               item={item}
               groups={groups}
+              readOnly={readOnly}
               onDishChange={(selectedItem) =>
                 void onDishChange(item.id, selectedItem)
               }
@@ -561,9 +715,21 @@ function DayMenuPanel({
             />
           ))}
       </div>
-      <div className="border-t border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-950">
-        <strong>Важливо:</strong> після заповнення цього дня натисніть «Зберегти
-        зміни» вгорі сторінки.
+      <div
+        className={`border-t px-4 py-3 text-xs ${
+          readOnly
+            ? "border-slate-300 bg-slate-100 text-slate-600"
+            : "border-amber-300 bg-amber-50 text-amber-950"
+        }`}
+      >
+        {readOnly ? (
+          "День закрито. Дані зафіксовані за останнім збереженим станом."
+        ) : (
+          <>
+            <strong>Важливо:</strong> після заповнення цього дня натисніть
+            «Зберегти зміни» вгорі сторінки.
+          </>
+        )}
       </div>
     </section>
   );
@@ -572,16 +738,22 @@ function DayMenuPanel({
 function DishRow({
   item,
   groups,
+  readOnly,
   onDishChange,
   onChildrenCountChange,
 }: {
   item: DailyMenuItem;
   groups: SchoolGroup[];
+  readOnly: boolean;
   onDishChange: (item: CatalogSelection) => void;
   onChildrenCountChange: (group: SchoolGroup, count: number) => void;
 }) {
   return (
-    <article className="grid gap-5 bg-white p-4 lg:grid-cols-[minmax(280px,1.1fr)_minmax(360px,1fr)]">
+    <article
+      className={`grid gap-5 p-4 lg:grid-cols-[minmax(280px,1.1fr)_minmax(360px,1fr)] ${
+        readOnly ? "bg-slate-100 text-slate-500" : "bg-white"
+      }`}
+    >
       <div className="min-w-0">
         <div className="mb-2 flex items-center gap-2 text-xs font-bold text-slate-500">
           <span className="flex size-6 items-center justify-center border border-slate-300 bg-slate-50 tabular-nums">
@@ -591,6 +763,7 @@ function DishRow({
         </div>
         <DishPicker
           selectedItem={item}
+          disabled={readOnly}
           onSelect={onDishChange}
         />
         <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(140px,0.55fr)_1fr]">
@@ -631,19 +804,12 @@ function DishRow({
                 <span className="mt-0.5 block text-[11px] text-slate-500">
                   {AGE_GROUP_LABELS[group.age_group]}
                 </span>
-                <input
-                  type="number"
-                  min={0}
-                  step={1}
-                  inputMode="numeric"
-                  className="nf-input mt-2 text-right font-bold tabular-nums"
+                <ChildrenCountInput
                   aria-label={`${group.name}: кількість дітей для страви ${item.name}`}
-                  value={count}
-                  onChange={(event) =>
-                    onChildrenCountChange(
-                      group,
-                      normalizeChildrenCount(event.target.value),
-                    )
+                  count={count}
+                  disabled={readOnly}
+                  onChange={(nextCount) =>
+                    onChildrenCountChange(group, nextCount)
                   }
                 />
               </label>
@@ -655,11 +821,43 @@ function DishRow({
   );
 }
 
+function ChildrenCountInput({
+  count,
+  disabled,
+  onChange,
+  "aria-label": ariaLabel,
+}: {
+  count: number;
+  disabled: boolean;
+  onChange: (count: number) => void;
+  "aria-label": string;
+}) {
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      pattern="[0-9]*"
+      maxLength={4}
+      className="nf-input mt-2 text-right font-bold tabular-nums"
+      aria-label={ariaLabel}
+      value={count}
+      disabled={disabled}
+      onFocus={(event) => event.currentTarget.select()}
+      onChange={(event) => {
+        const digits = event.target.value.replace(/\D/g, "").slice(0, 4);
+        onChange(digits ? normalizeChildrenCount(digits) : 0);
+      }}
+    />
+  );
+}
+
 function DishPicker({
   selectedItem,
+  disabled,
   onSelect,
 }: {
   selectedItem: DailyMenuItem;
+  disabled: boolean;
   onSelect: (item: CatalogSelection) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -699,10 +897,14 @@ function DishPicker({
     <div ref={pickerRef} className="relative">
       <button
         type="button"
-        className="flex min-h-11 w-full items-center justify-between gap-3 border border-slate-400 bg-white px-3 py-2 text-left hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-(--nf-brand)"
+        className="flex min-h-11 w-full items-center justify-between gap-3 border border-slate-400 bg-white px-3 py-2 text-left hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-(--nf-brand) disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-500"
         aria-haspopup="listbox"
         aria-expanded={isOpen}
+        disabled={disabled}
         onClick={() => {
+          if (disabled) {
+            return;
+          }
           setQuery("");
           setIsOpen((current) => !current);
         }}
@@ -1053,31 +1255,43 @@ function sortDays(days: DailyMenu[]): DailyMenu[] {
 
 function buildDailyMenuUpdatePayload(
   days: DailyMenu[],
+  serverDays: DailyMenu[] = [],
 ): WeeklyMenuUpdatePayload {
+  const serverDayByWeekday = new Map(
+    serverDays.map((day) => [day.weekday, day] as const),
+  );
+
   return {
-    days: sortDays(days).map((day) => ({
-      weekday: day.weekday,
-      date: day.date,
-      notes: day.notes,
-      items: [...day.items]
-        .sort((left, right) => left.position - right.position)
-        .map((item) => ({
-          id: item.id,
-          position: item.position,
-          kind: item.kind,
-          source_text: item.source_text,
-          recipe_card_number: item.recipe_card_number,
-          dish_card_id: item.dish_card_id,
-          dish_card_version_id: item.dish_card_version_id,
-          product_ingredient_id: item.product_ingredient_id,
-          product_name_snapshot: item.product_name_snapshot,
-          name: item.name,
-          allergen_codes: item.allergen_codes,
-          portions: item.portions,
-          servings: item.servings,
-          notes: item.notes,
-        })),
-    })),
+    days: sortDays(days).map((localDay) => {
+      const day =
+        localDay.closed_at && serverDayByWeekday.has(localDay.weekday)
+          ? serverDayByWeekday.get(localDay.weekday)!
+          : localDay;
+
+      return {
+        weekday: day.weekday,
+        date: day.date,
+        notes: day.notes,
+        items: [...day.items]
+          .sort((left, right) => left.position - right.position)
+          .map((item) => ({
+            id: item.id,
+            position: item.position,
+            kind: item.kind,
+            source_text: item.source_text,
+            recipe_card_number: item.recipe_card_number,
+            dish_card_id: item.dish_card_id,
+            dish_card_version_id: item.dish_card_version_id,
+            product_ingredient_id: item.product_ingredient_id,
+            product_name_snapshot: item.product_name_snapshot,
+            name: item.name,
+            allergen_codes: item.allergen_codes,
+            portions: item.portions,
+            servings: item.servings,
+            notes: item.notes,
+          })),
+      };
+    }),
   };
 }
 

@@ -166,18 +166,9 @@ export function WeeklyMenuSchoolWorkspace() {
           {selectedMenu.data ? (
             <section className="nf-panel">
               <div className="nf-panel-header">
-                <h2 className="nf-panel-title">Деталі меню</h2>
+                <h2 className="nf-panel-title">Дії з меню</h2>
               </div>
-              <div className="nf-panel-body space-y-3">
-                <p className="text-sm text-slate-700">
-                  Опубліковане меню оновлено: {formatDate(selectedMenu.data.updated_at)}
-                </p>
-                <p className="text-sm text-slate-700">
-                  Дата публікації:{" "}
-                  {selectedMenu.data.published_at
-                    ? formatDate(selectedMenu.data.published_at)
-                    : "не вказана"}
-                </p>
+              <div className="nf-panel-body">
                 <button
                   type="button"
                   className="nf-button nf-button-secondary w-full"

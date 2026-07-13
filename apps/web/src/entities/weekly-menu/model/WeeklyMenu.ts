@@ -18,6 +18,7 @@ export const weeklyMenuStatusSchema = z.enum([
 ]);
 export const menuItemKindSchema = z.enum(["dish_card", "product"]);
 export const ageGroupSchema = z.enum(["6-11", "11-14", "14-18"]);
+export const dayCloseReasonSchema = z.enum(["manual", "automatic"]);
 
 const decimalStringSchema = z.string().trim().min(1);
 
@@ -63,6 +64,9 @@ export const dailyMenuSchema = z.object({
   date: z.string().min(1).nullable(),
   items: z.array(dailyMenuItemSchema).min(1),
   notes: z.string().min(1).nullable(),
+  closed_at: z.string().min(1).nullable(),
+  closed_by: z.string().min(1).nullable(),
+  close_reason: dayCloseReasonSchema.nullable(),
 });
 
 export const weeklyMenuSchema = z.object({
@@ -109,6 +113,7 @@ export type Weekday = z.infer<typeof weekdaySchema>;
 export type WeeklyMenuStatus = z.infer<typeof weeklyMenuStatusSchema>;
 export type MenuItemKind = z.infer<typeof menuItemKindSchema>;
 export type AgeGroup = z.infer<typeof ageGroupSchema>;
+export type DayCloseReason = z.infer<typeof dayCloseReasonSchema>;
 export type MenuNutrition = z.infer<typeof menuNutritionSchema>;
 export type MenuPortion = z.infer<typeof menuPortionSchema>;
 export type MenuItemServingCount = z.infer<typeof menuItemServingCountSchema>;

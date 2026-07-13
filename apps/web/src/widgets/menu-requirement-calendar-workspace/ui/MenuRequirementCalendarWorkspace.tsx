@@ -8,6 +8,7 @@ import {
   Eye,
   ExternalLink,
   FileSpreadsheet,
+  Scale,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -71,12 +72,17 @@ const statusClasses: Record<MenuRequirementAggregateStatus, string> = {
   mixed: "border-orange-200 bg-orange-50 text-orange-800",
 };
 
+const incompleteWeekHint =
+  "Щоб сформувати тижневу меню-вимогу або дотримання норм, спочатку сформуйте або оновіть меню-вимоги за всі 5 робочих днів.";
+const incompleteMonthHint =
+  "Щоб сформувати місячну меню-вимогу, спочатку сформуйте або оновіть меню-вимоги за всі дні, що беруть участь у цьому місяці.";
+
 export function MenuRequirementCalendarWorkspace() {
   const currentYear = new Date().getFullYear();
   const [selectedSchoolId, setSelectedSchoolId] = useState("");
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMealType, setSelectedMealType] = useState<"" | MealType>(
-    "lunch",
+    "",
   );
   const [selectedGroupId, setSelectedGroupId] = useState("");
   const [selectedMonthNumber, setSelectedMonthNumber] = useState<number | null>(
@@ -317,6 +323,18 @@ export function MenuRequirementCalendarWorkspace() {
             }}
             onBackToWeeks={() => setSelectedWeekRange(null)}
             onOpenReport={openReport}
+            allowIncompleteReports={currentUser.data?.role === "OWNER"}
+            normComplianceHref={
+              selectedWeek
+                ? buildNormComplianceHref({
+                    schoolId: effectiveSchoolId,
+                    dateFrom: selectedWeek.date_from,
+                    dateTo: selectedWeek.date_to,
+                    mealType: selectedMealType || undefined,
+                    schoolGroupId: selectedGroupId || undefined,
+                  })
+                : undefined
+            }
           />
         ) : null}
       </section>
@@ -346,6 +364,8 @@ export function RequirementPeriodNavigator({
   onBackToMonths,
   onBackToWeeks,
   onOpenReport,
+  allowIncompleteReports = false,
+  normComplianceHref,
 }: {
   months: MenuRequirementCalendarMonth[];
   selectedMonth: MenuRequirementCalendarMonth | null;
@@ -356,7 +376,16 @@ export function RequirementPeriodNavigator({
   onBackToMonths: () => void;
   onBackToWeeks: () => void;
   onOpenReport: (range: SelectedRange) => void;
+  allowIncompleteReports?: boolean;
+  normComplianceHref?: string;
 }) {
+  const selectedPeriodBlockReason = allowIncompleteReports
+    ? null
+    : selectedWeek
+      ? getWeekReportBlockReason(selectedWeek)
+      : selectedMonth
+        ? getMonthReportBlockReason(selectedMonth)
+        : null;
   const title = selectedWeek
     ? `Робочі дні · тиждень ${selectedWeek.week_index}`
     : selectedMonth
@@ -367,10 +396,33 @@ export function RequirementPeriodNavigator({
     : selectedMonth
       ? "Оберіть тиждень, щоб перейти до його робочих днів."
       : "Почніть із місяця, за який потрібно переглянути меню-вимоги.";
+  const openCurrentReport = () => {
+    if (selectedPeriodBlockReason) {
+      return;
+    }
+    onOpenReport(
+      selectedWeek
+        ? {
+            dateFrom: selectedWeek.date_from,
+            dateTo: selectedWeek.date_to,
+            granularity: "week",
+            label: `Тиждень ${selectedWeek.week_index} · ${formatShortRange(
+              selectedWeek.date_from,
+              selectedWeek.date_to,
+            )}`,
+          }
+        : {
+            dateFrom: selectedMonth?.date_from ?? "",
+            dateTo: selectedMonth?.date_to ?? "",
+            granularity: "month",
+            label: selectedMonth ? monthName(year, selectedMonth.month) : "",
+          },
+    );
+  };
 
   return (
     <>
-      <div className="nf-panel-header items-start gap-4">
+      <div className="nf-panel-header flex-col items-stretch gap-4 sm:flex-row sm:items-start">
         <div className="min-w-0">
           <nav
             aria-label="Навігація календарем меню-вимог"
@@ -412,44 +464,55 @@ export function RequirementPeriodNavigator({
         </div>
 
         {selectedMonth ? (
-          <div className="flex shrink-0 flex-wrap justify-end gap-2">
-            <button
-              type="button"
-              className="nf-button nf-button-secondary min-h-9 px-3 text-sm"
-              onClick={selectedWeek ? onBackToWeeks : onBackToMonths}
-            >
-              <ArrowLeft className="size-4" aria-hidden />
-              Назад
-            </button>
-            <button
-              type="button"
-              className="nf-button nf-button-primary min-h-9 px-3 text-sm"
-              onClick={() =>
-                onOpenReport(
-                  selectedWeek
-                    ? {
-                        dateFrom: selectedWeek.date_from,
-                        dateTo: selectedWeek.date_to,
-                        granularity: "week",
-                        label: `Тиждень ${selectedWeek.week_index} · ${formatShortRange(
-                          selectedWeek.date_from,
-                          selectedWeek.date_to,
-                        )}`,
-                      }
-                    : {
-                        dateFrom: selectedMonth.date_from,
-                        dateTo: selectedMonth.date_to,
-                        granularity: "month",
-                        label: monthName(year, selectedMonth.month),
-                      },
+          <div className="grid w-full shrink-0 gap-2 sm:w-auto">
+            <div className="grid gap-2 sm:flex sm:justify-end">
+              <button
+                type="button"
+                className="nf-button nf-button-secondary min-h-9 w-full px-3 text-sm sm:w-auto"
+                onClick={selectedWeek ? onBackToWeeks : onBackToMonths}
+              >
+                <ArrowLeft className="size-4" aria-hidden />
+                Назад
+              </button>
+              {selectedWeek && normComplianceHref ? (
+                selectedPeriodBlockReason ? (
+                  <button
+                    type="button"
+                    className="nf-button nf-button-primary min-h-9 w-full px-3 text-sm sm:w-auto"
+                    disabled
+                    title={selectedPeriodBlockReason}
+                  >
+                    <Scale className="size-4" aria-hidden />
+                    Сформувати дотримання норм
+                  </button>
+                ) : (
+                  <Link
+                    href={normComplianceHref}
+                    className="nf-button nf-button-primary min-h-9 w-full px-3 text-sm sm:w-auto"
+                  >
+                    <Scale className="size-4" aria-hidden />
+                    Сформувати дотримання норм
+                  </Link>
                 )
-              }
-            >
-              <Eye className="size-4" aria-hidden />
-              {selectedWeek
-                ? "Меню-вимога за тиждень"
-                : "Меню-вимога за місяць"}
-            </button>
+              ) : null}
+              <button
+                type="button"
+                className="nf-button nf-button-secondary min-h-9 w-full px-3 text-sm sm:w-auto"
+                disabled={Boolean(selectedPeriodBlockReason)}
+                title={selectedPeriodBlockReason ?? undefined}
+                onClick={openCurrentReport}
+              >
+                <Eye className="size-4" aria-hidden />
+                {selectedWeek
+                  ? "Меню-вимога за тиждень"
+                  : "Меню-вимога за місяць"}
+              </button>
+            </div>
+            {selectedPeriodBlockReason ? (
+              <p className="max-w-xl text-xs font-semibold leading-5 text-amber-800 sm:text-right">
+                {selectedPeriodBlockReason}
+              </p>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -480,6 +543,70 @@ export function RequirementPeriodNavigator({
   );
 }
 
+export function buildNormComplianceHref({
+  schoolId,
+  dateFrom,
+  dateTo,
+  mealType,
+  schoolGroupId,
+}: {
+  schoolId: string;
+  dateFrom: string;
+  dateTo: string;
+  mealType?: MealType;
+  schoolGroupId?: string;
+}) {
+  const params = new URLSearchParams({
+    school_id: schoolId,
+    date_from: dateFrom,
+    date_to: dateTo,
+    source: "menu-requirements-calendar",
+  });
+  if (mealType) params.set("meal_type", mealType);
+  if (schoolGroupId) params.set("school_group_id", schoolGroupId);
+  return `/norm-compliance?${params.toString()}`;
+}
+
+function getWeekReportBlockReason(
+  week: MenuRequirementCalendarWeek,
+): string | null {
+  const allWeekdaysHaveRequirements =
+    week.days.length === 5 &&
+    week.days.every(
+      (day) =>
+        day.expected_requirements > 0 &&
+        day.generated_requirements >= day.expected_requirements &&
+        day.missing_requirements === 0 &&
+        day.stale_requirements === 0,
+    );
+
+  return allWeekdaysHaveRequirements ? null : incompleteWeekHint;
+}
+
+function getMonthReportBlockReason(
+  month: MenuRequirementCalendarMonth,
+): string | null {
+  const participatingDays = month.weeks
+    .flatMap((week) => week.days)
+    .filter(
+      (day) =>
+        day.service_date >= month.date_from &&
+        day.service_date <= month.date_to &&
+        day.expected_requirements > 0,
+    );
+  const allParticipatingDaysHaveRequirements =
+    participatingDays.length > 0 &&
+    participatingDays.every(
+      (day) =>
+        day.generated_requirements >= day.expected_requirements &&
+        day.missing_requirements === 0 &&
+        day.stale_requirements === 0,
+    ) &&
+    month.stale_days === 0;
+
+  return allParticipatingDaysHaveRequirements ? null : incompleteMonthHint;
+}
+
 function RequirementMonthGrid({
   months,
   onSelect,
@@ -488,12 +615,12 @@ function RequirementMonthGrid({
   onSelect: (month: MenuRequirementCalendarMonth) => void;
 }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 sm:grid sm:grid-cols-2 sm:overflow-visible sm:pb-0 lg:grid-cols-3 xl:grid-cols-4">
       {months.map((month) => (
         <button
           key={month.month}
           type="button"
-          className="group min-h-36 border border-slate-200 bg-white p-3 text-left transition-colors hover:border-emerald-500 hover:bg-emerald-50/40"
+          className="group min-h-36 w-[82vw] max-w-80 shrink-0 snap-start border border-slate-200 bg-white p-3 text-left transition-colors hover:border-emerald-500 hover:bg-emerald-50/40 sm:w-auto sm:max-w-none sm:shrink"
           onClick={() => onSelect(month)}
         >
           <span className="flex items-start justify-between gap-2">
@@ -536,12 +663,12 @@ function RequirementWeekGrid({
   onSelect: (week: MenuRequirementCalendarWeek) => void;
 }) {
   return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+    <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 md:grid md:grid-cols-2 md:overflow-visible md:pb-0 xl:grid-cols-3">
       {weeks.map((week) => (
         <button
           key={`${week.date_from}:${week.date_to}`}
           type="button"
-          className="group border border-slate-200 bg-white p-4 text-left transition-colors hover:border-emerald-500 hover:bg-emerald-50/40"
+          className="group w-[82vw] max-w-80 shrink-0 snap-start border border-slate-200 bg-white p-4 text-left transition-colors hover:border-emerald-500 hover:bg-emerald-50/40 md:w-auto md:max-w-none md:shrink"
           onClick={() => onSelect(week)}
         >
           <span className="flex items-start justify-between gap-2">
@@ -586,7 +713,7 @@ function RequirementDayGrid({
   onOpenReport: (day: MenuRequirementCalendarDay) => void;
 }) {
   return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+    <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 md:grid md:grid-cols-2 md:overflow-visible md:pb-0 xl:grid-cols-5">
       {days.map((day) => {
         const hasNoData =
           day.expected_requirements === 0 && day.generated_requirements === 0;
@@ -594,7 +721,7 @@ function RequirementDayGrid({
         return (
           <article
             key={day.service_date}
-            className="flex min-h-52 flex-col border border-slate-200 bg-white p-4"
+            className="flex min-h-52 w-[82vw] max-w-80 shrink-0 snap-start flex-col border border-slate-200 bg-white p-4 md:w-auto md:max-w-none md:shrink"
           >
             <div className="flex items-start justify-between gap-2">
               <div>

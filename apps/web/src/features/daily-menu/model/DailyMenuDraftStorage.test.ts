@@ -61,6 +61,9 @@ const days: DailyMenu[] = [
     weekday: "monday",
     date: "2026-07-06",
     notes: null,
+    closed_at: null,
+    closed_by: null,
+    close_reason: null,
     items: [originalItem],
   },
 ];

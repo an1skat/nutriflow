@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createBlankWeeklyMenuFormValues,
   formValuesToWeeklyMenuPayload,
+  resolveEffectiveDayDate,
   updateDayDate,
   weeklyMenuFormSchema,
 } from "./WeeklyMenuFormSchema";
@@ -55,9 +56,9 @@ describe("weekly menu form schema", () => {
     expect(payload.days[0].items[0].portions[0].nutrition.kcal).toBe("120.5");
   });
 
-  it("uses device date when week start is omitted", () => {
+  it("uses the next Monday when week start is omitted", () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-06T10:00:00+03:00"));
+    vi.setSystemTime(new Date("2026-07-10T10:00:00+03:00"));
 
     const values = createBlankWeeklyMenuFormValues();
     values.title = "Меню на тиждень";
@@ -73,9 +74,34 @@ describe("weekly menu form schema", () => {
 
     const payload = formValuesToWeeklyMenuPayload(values);
 
-    expect(payload.starts_on).toBe("2026-07-06");
-    expect(payload.days[0].date).toBe("2026-07-06");
-    expect(payload.days[1].date).toBe("2026-07-07");
+    expect(payload.starts_on).toBe("2026-07-13");
+    expect(payload.days[0].date).toBe("2026-07-13");
+    expect(payload.days[1].date).toBe("2026-07-14");
+  });
+
+  it("prefills a new menu with the next Monday and its weekdays", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-12T10:00:00+03:00"));
+
+    const values = createBlankWeeklyMenuFormValues();
+
+    expect(values.starts_on).toBe("2026-07-13");
+    expect(values.days.map((day) => day.date)).toEqual([
+      "2026-07-13",
+      "2026-07-14",
+      "2026-07-15",
+      "2026-07-16",
+      "2026-07-17",
+    ]);
+  });
+
+  it("aligns a legacy day date with the weekday before generation", () => {
+    expect(resolveEffectiveDayDate("2026-07-12", 0, "2026-07-12")).toBe(
+      "2026-07-13",
+    );
+    expect(resolveEffectiveDayDate("2026-07-12", 4, "2026-07-16")).toBe(
+      "2026-07-17",
+    );
   });
   it("propagates a changed Monday date across the remaining weekdays", () => {
     const values = createBlankWeeklyMenuFormValues();

@@ -25,6 +25,9 @@ function createMenu(
       {
         weekday: "monday",
         date: null,
+        closed_at: null,
+        closed_by: null,
+        close_reason: null,
         items: [
           {
             id: `${id}-item`,

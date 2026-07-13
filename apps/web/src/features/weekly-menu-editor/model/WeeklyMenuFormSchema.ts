@@ -195,13 +195,18 @@ export function createBlankDay(weekday: z.infer<typeof weekdaySchema>) {
 }
 
 export function createBlankWeeklyMenuFormValues(): WeeklyMenuFormValues {
+  const startsOn = getNextMondayLocalIsoDate();
+
   return {
     title: "",
     meal_type: "lunch",
     cycle_week: "",
-    starts_on: "",
+    starts_on: startsOn,
     notes: "",
-    days: DEFAULT_WEEKDAYS.map((weekday) => createBlankDay(weekday)),
+    days: DEFAULT_WEEKDAYS.map((weekday) => ({
+      ...createBlankDay(weekday),
+      date: addDaysToLocalIso(startsOn, WEEKDAY_ORDER.indexOf(weekday)),
+    })),
   };
 }
 
@@ -272,12 +277,11 @@ export function formValuesToWeeklyMenuPayload(
     notes: normalizeOptionalText(values.notes),
     days: orderedDays.map((day) => ({
       weekday: day.weekday,
-      date:
-        normalizeOptionalText(day.date) ??
-        addDaysToLocalIso(
-          effectiveStartDate,
-          WEEKDAY_ORDER.indexOf(day.weekday),
-        ),
+      date: resolveEffectiveDayDate(
+        effectiveStartDate,
+        WEEKDAY_ORDER.indexOf(day.weekday),
+        day.date,
+      ),
       notes: normalizeOptionalText(day.notes),
       items: day.items.map((item, index) => ({
         id: item.id,
@@ -334,7 +338,7 @@ function normalizeAllergenCodes(value: string[]) {
 }
 
 export function resolveEffectiveStartDate(value: string | null | undefined) {
-  return normalizeOptionalText(value) ?? getTodayLocalIsoDate();
+  return normalizeOptionalText(value) ?? getNextMondayLocalIsoDate();
 }
 
 export function resolveEffectiveDayDate(
@@ -342,10 +346,10 @@ export function resolveEffectiveDayDate(
   dayIndex: number,
   manualDate: string | null | undefined,
 ) {
-  return (
+  const candidate =
     normalizeOptionalText(manualDate) ??
-    addDaysToLocalIso(resolveEffectiveStartDate(startDate), dayIndex)
-  );
+    addDaysToLocalIso(resolveEffectiveStartDate(startDate), dayIndex);
+  return alignLocalIsoToDayIndex(candidate, dayIndex);
 }
 
 export function propagateMondayDate(
@@ -377,10 +381,15 @@ export function updateDayDate(
   return days.map((day) => (day.weekday === weekday ? { ...day, date } : day));
 }
 
-function getTodayLocalIsoDate() {
+export function getNextMondayLocalIsoDate() {
   const now = new Date();
-  const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
-  return localDate.toISOString().slice(0, 10);
+  const daysUntilNextMonday = ((8 - now.getDay()) % 7) || 7;
+  now.setDate(now.getDate() + daysUntilNextMonday);
+
+  const year = now.getFullYear();
+  const month = `${now.getMonth() + 1}`.padStart(2, "0");
+  const day = `${now.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function addDaysToLocalIso(baseIsoDate: string, days: number) {
@@ -393,4 +402,13 @@ function addDaysToLocalIso(baseIsoDate: string, days: number) {
   const resolvedDay = `${date.getDate()}`.padStart(2, "0");
 
   return `${resolvedYear}-${resolvedMonth}-${resolvedDay}`;
+}
+
+function alignLocalIsoToDayIndex(value: string, dayIndex: number) {
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  const expectedJsWeekday = (dayIndex + 1) % 7;
+  const daysUntilExpectedWeekday =
+    (expectedJsWeekday - date.getDay() + 7) % 7;
+  return addDaysToLocalIso(value, daysUntilExpectedWeekday);
 }

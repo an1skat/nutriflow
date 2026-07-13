@@ -19,6 +19,9 @@ const menu: WeeklyMenu = {
     {
       weekday: "monday",
       date: "2026-09-07",
+      closed_at: null,
+      closed_by: null,
+      close_reason: null,
       items: [
         {
           id: "item-1",

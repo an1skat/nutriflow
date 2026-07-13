@@ -244,6 +244,14 @@ const detailTranslations: Record<string, string> = {
     "Вкажіть кількість дітей більше нуля хоча б для однієї страви.",
   "Daily menu date is required to generate a menu requirement":
     "Для формування меню-вимоги потрібно вказати дату дня.",
+  "Dev-only endpoint is disabled":
+    "Ця тестова дія доступна тільки в dev-середовищі.",
+  "Norm compliance requires menu requirements for all five weekdays":
+    "Щоб сформувати дотримання норм, спочатку сформуйте меню-вимоги за всі 5 робочих днів тижня.",
+  "Weekly menu requirement report requires complete menu requirements for all five weekdays":
+    "Щоб сформувати тижневу меню-вимогу, спочатку сформуйте або оновіть меню-вимоги за всі 5 робочих днів.",
+  "Monthly menu requirement report requires complete menu requirements for every participating day":
+    "Щоб сформувати місячну меню-вимогу, спочатку сформуйте або оновіть меню-вимоги за всі дні, що беруть участь у цьому місяці.",
   "School is inactive or missing":
     "Школа неактивна або її не знайдено.",
   "School group age group does not match":

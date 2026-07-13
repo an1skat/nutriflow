@@ -5,7 +5,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   archiveSchoolWeeklyMenu,
   archiveWeeklyMenu,
+  closeWeeklyMenuDay,
   createWeeklyMenu,
+  devReopenWeeklyMenuDay,
   deleteWeeklyMenu,
   publishWeeklyMenu,
   restoreSchoolWeeklyMenu,
@@ -14,8 +16,10 @@ import {
   updateWeeklyMenu,
 } from "@/entities/weekly-menu/api/WeeklyMenuApi";
 import { weeklyMenuQueryKeys } from "@/entities/weekly-menu/api/WeeklyMenuQueries";
+import { menuRequirementQueryKeys } from "@/entities/menu-requirement/api/MenuRequirementQueries";
 import type {
   PublishWeeklyMenuPayload,
+  Weekday,
   WeeklyMenuPayload,
   WeeklyMenuUpdatePayload,
 } from "@/entities/weekly-menu/model/WeeklyMenu";
@@ -122,6 +126,56 @@ export function useRestoreSchoolWeeklyMenu(menuId: string) {
       await queryClient.invalidateQueries({
         queryKey: weeklyMenuQueryKeys.lists(),
       });
+    },
+  });
+}
+
+export function useCloseWeeklyMenuDay(menuId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (weekday: Weekday) => closeWeeklyMenuDay(menuId, weekday),
+    onSuccess: async (menu) => {
+      queryClient.setQueryData(weeklyMenuQueryKeys.detail(menuId), menu);
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: weeklyMenuQueryKeys.lists(),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: menuRequirementQueryKeys.lists(),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: menuRequirementQueryKeys.calendars(),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: menuRequirementQueryKeys.reports(),
+        }),
+      ]);
+    },
+  });
+}
+
+export function useDevReopenWeeklyMenuDay(menuId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (weekday: Weekday) => devReopenWeeklyMenuDay(menuId, weekday),
+    onSuccess: async (menu) => {
+      queryClient.setQueryData(weeklyMenuQueryKeys.detail(menuId), menu);
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: weeklyMenuQueryKeys.lists(),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: menuRequirementQueryKeys.lists(),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: menuRequirementQueryKeys.calendars(),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: menuRequirementQueryKeys.reports(),
+        }),
+      ]);
     },
   });
 }
