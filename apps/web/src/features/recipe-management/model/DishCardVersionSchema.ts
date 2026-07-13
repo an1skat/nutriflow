@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { normativeContributionSchema } from "@/entities/recipe/model/Recipe";
+
 const decimalString = z
   .string()
   .trim()
@@ -32,6 +34,7 @@ const portionFormSchema = z.object({
   proteins: optionalDecimalString,
   fats: optionalDecimalString,
   carbs: optionalDecimalString,
+  normative_contributions: z.array(normativeContributionSchema),
 });
 
 const ingredientFormSchema = z.object({

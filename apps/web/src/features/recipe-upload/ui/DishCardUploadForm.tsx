@@ -2,12 +2,13 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus, Trash2 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 
 import { useAllergens } from "@/entities/recipe/api/RecipeQueries";
 import { getApiErrorMessage } from "@/shared/api/HttpClient";
+import { FormField as Field, FormSection as Section } from "@/shared/ui/FormLayout";
 
 import {
   recipeUploadSchema,
@@ -540,44 +541,6 @@ function AmountCell({ index, portionTempId, portionGrams, register, error }: Amo
           {...register(`ingredients.${index}.amounts.${portionTempId}.net`)}
         />
       </div>
-      {error ? <p role="alert" className="nf-field-error">{error}</p> : null}
-    </div>
-  );
-}
-
-function Section({
-  title,
-  action,
-  children,
-}: {
-  title: string;
-  action?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <section className="nf-panel">
-      <div className="nf-panel-header flex items-center justify-between">
-        <h2 className="nf-panel-title">{title}</h2>
-        {action}
-      </div>
-      <div className="nf-panel-body flex flex-col gap-3">{children}</div>
-    </section>
-  );
-}
-
-function Field({
-  label,
-  error,
-  children,
-}: {
-  label: string;
-  error?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="nf-label">{label}</span>
-      {children}
       {error ? <p role="alert" className="nf-field-error">{error}</p> : null}
     </div>
   );

@@ -168,6 +168,7 @@ function buildVersionPayload(
         fats: orZero(portion.fats),
         carbs: orZero(portion.carbs),
       },
+      normative_contributions: [],
     })),
     ingredient_amounts: values.ingredients.flatMap((ingredient) =>
       values.portions.map((portion) => ({

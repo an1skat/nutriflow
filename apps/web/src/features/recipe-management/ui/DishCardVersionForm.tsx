@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -13,6 +13,7 @@ import {
 import { useAllergens } from "@/entities/recipe/api/RecipeQueries";
 import type { DishCardVersion } from "@/entities/recipe/model/Recipe";
 import { getApiErrorMessage } from "@/shared/api/HttpClient";
+import { FormField as Field, FormSection as Section } from "@/shared/ui/FormLayout";
 
 import {
   dishCardVersionFormSchema,
@@ -69,6 +70,7 @@ function versionToFormValues(version: DishCardVersion): DishCardVersionFormValue
       proteins: nutritionFormValue(p.nutrition, "proteins"),
       fats: nutritionFormValue(p.nutrition, "fats"),
       carbs: nutritionFormValue(p.nutrition, "carbs"),
+      normative_contributions: p.normative_contributions,
     })),
     ingredients: Array.from(
       new Map(
@@ -111,6 +113,7 @@ function emptyValues(): DishCardVersionFormValues {
         proteins: "",
         fats: "",
         carbs: "",
+        normative_contributions: [],
       },
     ],
     ingredients: [
@@ -180,6 +183,7 @@ export function DishCardVersionForm({
       proteins: "",
       fats: "",
       carbs: "",
+      normative_contributions: [],
     });
   const addIngredient = () =>
     ingredients.append({
@@ -203,6 +207,7 @@ export function DishCardVersionForm({
         fats: orZero(p.fats),
         carbs: orZero(p.carbs),
       },
+      normative_contributions: p.normative_contributions,
     })),
     ingredient_amounts: values.ingredients.flatMap((ingredient) =>
       values.portions.map((portion) => ({
@@ -606,44 +611,6 @@ function AmountCell({
           {...register(`ingredients.${index}.amounts.${portionTempId}.net`)}
         />
       </div>
-      {error ? <p role="alert" className="nf-field-error">{error}</p> : null}
-    </div>
-  );
-}
-
-function Section({
-  title,
-  action,
-  children,
-}: {
-  title: string;
-  action?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <section className="nf-panel">
-      <div className="nf-panel-header flex items-center justify-between">
-        <h2 className="nf-panel-title">{title}</h2>
-        {action}
-      </div>
-      <div className="nf-panel-body">{children}</div>
-    </section>
-  );
-}
-
-function Field({
-  label,
-  error,
-  children,
-}: {
-  label: string;
-  error?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="nf-label">{label}</span>
-      {children}
       {error ? <p role="alert" className="nf-field-error">{error}</p> : null}
     </div>
   );

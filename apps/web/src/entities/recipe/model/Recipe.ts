@@ -8,6 +8,36 @@ const decimalString = z
   .min(1, "Введіть значення")
   .regex(/^-?\d+(\.\d+)?$/, "Очікуємо десяткове число");
 
+export const normativeGroupCodeSchema = z.enum([
+  "vegetables",
+  "fruits_berries",
+  "juices",
+  "dried_fruits_nuts_seeds",
+  "cereals_grains_legumes",
+  "potatoes",
+  "bread",
+  "fish",
+  "poultry",
+  "red_meat",
+  "eggs",
+  "dairy",
+  "animal_fats",
+  "vegetable_fats",
+  "salt",
+  "sugar",
+  "cocoa",
+  "tea",
+]);
+
+export const normativeContributionSchema = z.object({
+  group_code: normativeGroupCodeSchema,
+  amount: decimalString,
+  unit: z.enum(["g", "ml", "item", "portion"]),
+  basis: z.enum(["per_portion", "per_source_unit"]),
+  portion_equivalent: decimalString.nullable(),
+  product_variant: z.string().min(1).max(80).nullable(),
+});
+
 export const nutritionSchema = z.object({
   kcal: decimalString,
   proteins: decimalString,
@@ -21,6 +51,7 @@ export const portionVariantSchema = z.object({
   portion_grams: decimalString.nullable(),
   output_grams: decimalString,
   nutrition: nutritionSchema,
+  normative_contributions: z.array(normativeContributionSchema).default([]),
 });
 
 export const ingredientAmountSchema = z.object({
@@ -49,6 +80,7 @@ export const ingredientSchema = z.object({
   normalized_name: z.string().min(1),
   unit: z.string().min(1),
   normative_group_id: z.string().min(1).nullable(),
+  normative_contributions: z.array(normativeContributionSchema).default([]),
   aliases: z.array(z.string()),
   is_active: z.boolean(),
   created_at: z.string().min(1),
@@ -127,6 +159,7 @@ export const validationResponseSchema = z.object({
 });
 
 export type Nutrition = z.infer<typeof nutritionSchema>;
+export type NormativeContribution = z.infer<typeof normativeContributionSchema>;
 export type PortionVariant = z.infer<typeof portionVariantSchema>;
 export type IngredientAmount = z.infer<typeof ingredientAmountSchema>;
 export type Allergen = z.infer<typeof allergenSchema>;
@@ -157,6 +190,7 @@ export type CreateIngredientPayload = {
   name: string;
   unit: string;
   normative_group_id?: string | null;
+  normative_contributions?: NormativeContribution[];
   aliases?: string[];
 };
 
@@ -164,6 +198,7 @@ export type UpdateIngredientPayload = {
   name?: string;
   unit?: string;
   normative_group_id?: string | null;
+  normative_contributions?: NormativeContribution[];
   aliases?: string[];
   is_active?: boolean;
 };
