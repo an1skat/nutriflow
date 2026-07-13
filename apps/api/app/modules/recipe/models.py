@@ -17,6 +17,7 @@ from pydantic import (
 from pymongo import ASCENDING, IndexModel
 
 from app.modules.identity.models import AgeGroup, utc_now
+from app.modules.norm_compliance.domain import NormativeContribution
 
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 Code = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
@@ -77,6 +78,7 @@ class Ingredient(Document):
     normalized_name: str = Field(min_length=1, max_length=200)
     unit: Unit
     normative_group_id: PydanticObjectId | None = None
+    normative_contributions: list[NormativeContribution] = Field(default_factory=list)
     aliases: list[str] = Field(default_factory=list)
     is_active: bool = True
     created_at: datetime = Field(default_factory=utc_now)
@@ -143,6 +145,7 @@ class PortionVariant(BaseModel):
     portion_grams: AmountDecimal | None = Field(default=None, ge=Decimal("0"))
     output_grams: AmountDecimal = Field(ge=Decimal("0"))
     nutrition: Nutrition = Field(default_factory=Nutrition)
+    normative_contributions: list[NormativeContribution] = Field(default_factory=list)
 
     @field_validator("nutrition", mode="before")
     @classmethod
@@ -181,7 +184,7 @@ def find_portion_variant_by_yield(
     if target is None:
         if preferred_variant_id is None:
             return None
-        
+
         return next(
             (
                 variant
@@ -190,7 +193,7 @@ def find_portion_variant_by_yield(
             ),
             None
         )
-    
+
     for attribute in ("output_grams", "portion_grams"):
         matches = [
             variant
@@ -209,10 +212,10 @@ def find_portion_variant_by_yield(
             )
             if preferred is not None:
                 return preferred
-        
+
         if matches:
             return matches[0]
-        
+
     return None
 
 

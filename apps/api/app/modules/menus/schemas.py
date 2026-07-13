@@ -9,6 +9,7 @@ from app.modules.identity.models import AgeGroup
 from app.modules.menus.models import (
     DailyMenu,
     DailyMenuItem,
+    DayCloseReason,
     MealType,
     MenuChangeRequest,
     MenuChangeRequestStatus,
@@ -229,6 +230,9 @@ class DailyMenuItemResponse(DailyMenuItemPayload):
 
 class DailyMenuResponse(DailyMenuPayload):
     items: list[DailyMenuItemResponse]
+    closed_at: datetime | None = None
+    closed_by: PydanticObjectId | None = None
+    close_reason: DayCloseReason | None = None
 
     @classmethod
     def from_day(cls, day: DailyMenu) -> "DailyMenuResponse":
@@ -237,6 +241,9 @@ class DailyMenuResponse(DailyMenuPayload):
             date=day.date,
             items=[DailyMenuItemResponse.from_item(item) for item in day.items],
             notes=day.notes,
+            closed_at=day.closed_at,
+            closed_by=day.closed_by,
+            close_reason=day.close_reason,
         )
 
 

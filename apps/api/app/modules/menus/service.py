@@ -2,7 +2,9 @@ import asyncio
 import re
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
+from datetime import date as Date
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from beanie import PydanticObjectId
 from fastapi import UploadFile
@@ -12,9 +14,15 @@ from app.core.config import get_settings
 from app.db.mongo import get_mongo_client
 from app.modules.auth.service import user_has_permissions
 from app.modules.identity.models import AdminPermission, School, User, UserRole
+from app.modules.menu_requirements.service import (
+    MenuRequirementValidationError,
+    generate_menu_requirements,
+    resolve_service_date,
+)
 from app.modules.menus.models import (
     DailyMenu,
     DailyMenuItem,
+    DayCloseReason,
     MealType,
     MenuChangeRequest,
     MenuChangeRequestStatus,
@@ -78,6 +86,10 @@ class MenuValidationError(ValueError):
 
 class MenuImportError(ValueError):
     """Menu import file cannot be parsed into a weekly menu."""
+
+
+DAY_AUTO_CLOSE_HOUR = 18
+SCHOOL_TIMEZONE = ZoneInfo("Europe/Kyiv")
 
 
 async def list_weekly_menus(
@@ -144,6 +156,8 @@ async def list_weekly_menus(
     cursor = WeeklyMenu.find(filters)
     total = await cursor.count()
     items = await cursor.sort("-created_at").skip(offset).limit(limit).to_list()
+    if current_user.role == UserRole.SCHOOL_USER:
+        await _auto_close_due_days(current_user, items)
     return items, total
 
 
@@ -157,6 +171,8 @@ async def get_weekly_menu(
         raise MenuNotFoundError("Weekly menu not found")
 
     await _authorize_menu_access(menu, current_user)
+    if current_user.role == UserRole.SCHOOL_USER:
+        await _auto_close_due_days(current_user, [menu])
     return menu
 
 
@@ -198,6 +214,7 @@ async def update_weekly_menu(
 ) -> WeeklyMenu:
     menu = await get_weekly_menu(menu_id, current_user)
     previous_days = deepcopy(menu.days)
+    converted_days: list[DailyMenu] | None = None
 
     if current_user.role == UserRole.SCHOOL_USER:
         if menu.status != WeeklyMenuStatus.PUBLISHED:
@@ -210,6 +227,11 @@ async def update_weekly_menu(
                 menu.school_id,
                 data.days or [],
             )
+            converted_days = await _to_daily_menus(data.days or [])
+            _ensure_closed_days_are_unchanged(previous_days, converted_days)
+            _copy_day_close_metadata(previous_days, converted_days)
+    elif "days" in data.model_fields_set:
+        converted_days = await _to_daily_menus(data.days or [])
 
     if "title" in data.model_fields_set:
         menu.title = data.title
@@ -222,7 +244,7 @@ async def update_weekly_menu(
     if "ends_on" in data.model_fields_set:
         menu.ends_on = data.ends_on
     if "days" in data.model_fields_set:
-        menu.days = await _to_daily_menus(data.days or [])
+        menu.days = converted_days or []
     if "notes" in data.model_fields_set:
         menu.notes = data.notes
 
@@ -246,6 +268,53 @@ async def update_weekly_menu(
         async with get_mongo_client().start_session() as session:
             await session.with_transaction(save_menu_and_request)
 
+    return menu
+
+
+async def close_weekly_menu_day(
+    menu_id: PydanticObjectId,
+    weekday: Weekday,
+    current_user: User,
+) -> WeeklyMenu:
+    return await _close_weekly_menu_day(
+        menu_id,
+        weekday,
+        current_user,
+        reason=DayCloseReason.MANUAL,
+        require_requirement=True,
+    )
+
+
+async def reopen_weekly_menu_day_for_dev(
+    menu_id: PydanticObjectId,
+    weekday: Weekday,
+    current_user: User,
+) -> WeeklyMenu:
+    if current_user.role != UserRole.SCHOOL_USER:
+        raise MenuAccessDeniedError("Only schools can reopen their daily menus")
+
+    menu = await WeeklyMenu.get(menu_id)
+    if menu is None:
+        raise MenuNotFoundError("Weekly menu not found")
+    if menu.school_id != current_user.school_id:
+        raise MenuAccessDeniedError("School access denied")
+    if menu.status != WeeklyMenuStatus.PUBLISHED:
+        raise MenuAccessDeniedError("Menu access denied")
+
+    day = next((candidate for candidate in menu.days if candidate.weekday == weekday), None)
+    if day is None:
+        raise MenuNotFoundError("Daily menu not found")
+    if day.closed_at is None:
+        return menu
+
+    now = datetime.now(UTC)
+    day.closed_at = None
+    day.closed_by = None
+    day.close_reason = None
+    day.dev_reopened_at = now
+    menu.updated_by = current_user.id
+    menu.updated_at = now
+    await menu.save()
     return menu
 
 
@@ -1178,10 +1247,54 @@ def _ensure_school_menu_shape_is_stable(
         submitted_shape = sorted(
             (item.id, item.position) for item in submitted_day.items if item.id is not None
         )
+        if len(submitted_day.items) != len(current_day.items):
+            raise MenuValidationError(
+                "School users cannot change the number of dishes in a day",
+            )
         if len(submitted_shape) != len(submitted_day.items) or current_shape != submitted_shape:
             raise MenuValidationError(
                 "School users cannot add, remove, or reorder dishes",
             )
+
+
+def _ensure_closed_days_are_unchanged(
+    current_days: list[DailyMenu],
+    submitted_days: list[DailyMenu],
+) -> None:
+    submitted_by_weekday = {day.weekday: day for day in submitted_days}
+    for current_day in current_days:
+        if current_day.closed_at is None:
+            continue
+
+        submitted_day = submitted_by_weekday.get(current_day.weekday)
+        if submitted_day is None:
+            raise MenuValidationError("Closed daily menus cannot be changed")
+        if _day_content_dump(current_day) != _day_content_dump(submitted_day):
+            raise MenuValidationError("Closed daily menus cannot be changed")
+
+
+def _copy_day_close_metadata(
+    current_days: list[DailyMenu],
+    submitted_days: list[DailyMenu],
+) -> None:
+    current_by_weekday = {day.weekday: day for day in current_days}
+    for submitted_day in submitted_days:
+        current_day = current_by_weekday.get(submitted_day.weekday)
+        if current_day is None:
+            continue
+        submitted_day.closed_at = current_day.closed_at
+        submitted_day.closed_by = current_day.closed_by
+        submitted_day.close_reason = current_day.close_reason
+        submitted_day.dev_reopened_at = current_day.dev_reopened_at
+
+
+def _day_content_dump(day: DailyMenu) -> dict[str, Any]:
+    data = day.model_dump(mode="json")
+    data.pop("closed_at", None)
+    data.pop("closed_by", None)
+    data.pop("close_reason", None)
+    data.pop("dev_reopened_at", None)
+    return data
 
 
 async def _ensure_school_servings_belong_to_school(
@@ -1204,6 +1317,136 @@ async def _ensure_school_servings_belong_to_school(
                     raise MenuValidationError("School group not found")
                 if serving.age_group != group.age_group:
                     raise MenuValidationError("School group age group does not match")
+
+
+async def _close_weekly_menu_day(
+    menu_id: PydanticObjectId,
+    weekday: Weekday,
+    current_user: User,
+    *,
+    reason: DayCloseReason,
+    require_requirement: bool,
+) -> WeeklyMenu:
+    if current_user.role != UserRole.SCHOOL_USER:
+        raise MenuAccessDeniedError("Only schools can close their daily menus")
+    if current_user.id is None:
+        raise MenuAccessDeniedError("Current user is not persisted")
+
+    menu = await WeeklyMenu.get(menu_id)
+    if menu is None:
+        raise MenuNotFoundError("Weekly menu not found")
+    if menu.school_id != current_user.school_id:
+        raise MenuAccessDeniedError("School access denied")
+    if menu.status != WeeklyMenuStatus.PUBLISHED:
+        raise MenuAccessDeniedError("Menu access denied")
+
+    day = next((candidate for candidate in menu.days if candidate.weekday == weekday), None)
+    if day is None:
+        raise MenuNotFoundError("Daily menu not found")
+    if day.closed_at is not None:
+        return menu
+
+    service_date = resolve_service_date(menu, day, _today_in_school_timezone())
+    try:
+        await generate_menu_requirements(
+            menu.id,
+            weekday,
+            service_date,
+            current_user,
+            allow_closed_day=True,
+        )
+    except MenuRequirementValidationError as exc:
+        if require_requirement:
+            raise MenuValidationError(str(exc)) from exc
+
+    now = datetime.now(UTC)
+    day.closed_at = now
+    day.closed_by = current_user.id
+    day.close_reason = reason
+    day.dev_reopened_at = None
+    menu.updated_by = current_user.id
+    menu.updated_at = now
+    await menu.save()
+    return menu
+
+
+async def _auto_close_due_days(
+    current_user: User,
+    menus: list[WeeklyMenu],
+) -> None:
+    if current_user.role != UserRole.SCHOOL_USER:
+        return
+
+    now = datetime.now(SCHOOL_TIMEZONE)
+    today = now.date()
+    is_after_close_time = now.hour >= DAY_AUTO_CLOSE_HOUR
+
+    for menu in menus:
+        if menu.id is None or menu.status != WeeklyMenuStatus.PUBLISHED:
+            continue
+        for day in menu.days:
+            if day.closed_at is not None:
+                continue
+            service_date = _resolve_auto_close_service_date(menu, day, today)
+            if service_date is None:
+                continue
+            if service_date > today:
+                continue
+            if service_date == today and not is_after_close_time:
+                continue
+            closed_menu = await _close_weekly_menu_day(
+                menu.id,
+                day.weekday,
+                current_user,
+                reason=DayCloseReason.AUTOMATIC,
+                require_requirement=False,
+            )
+            _copy_menu_state(closed_menu, menu)
+
+
+def _resolve_auto_close_service_date(
+    menu: WeeklyMenu,
+    day: DailyMenu,
+    today: Date,
+) -> Date | None:
+    if day.dev_reopened_at is not None:
+        return None
+
+    if day.date is not None or menu.starts_on is not None:
+        return resolve_service_date(menu, day, today)
+
+    today_weekday = list(Weekday)[today.weekday()]
+    if day.weekday != today_weekday:
+        return None
+    return today
+
+
+def _today_in_school_timezone() -> Date:
+    return datetime.now(SCHOOL_TIMEZONE).date()
+
+
+def _copy_menu_state(source: WeeklyMenu, target: WeeklyMenu) -> None:
+    target.title = source.title
+    target.school_id = source.school_id
+    target.source_menu_id = source.source_menu_id
+    target.meal_type = source.meal_type
+    target.cycle_week = source.cycle_week
+    target.starts_on = source.starts_on
+    target.ends_on = source.ends_on
+    target.status = source.status
+    target.days = deepcopy(source.days)
+    target.notes = source.notes
+    target.source_file_name = source.source_file_name
+    target.source_sheet_name = source.source_sheet_name
+    target.published_at = source.published_at
+    target.archived_from_status = source.archived_from_status
+    target.revoked_at = source.revoked_at
+    target.revoked_by = source.revoked_by
+    target.revoke_reason = source.revoke_reason
+    target.created_by = source.created_by
+    target.updated_by = source.updated_by
+    target.created_at = source.created_at
+    target.updated_at = source.updated_at
 
 
 def _build_import_preview_response(

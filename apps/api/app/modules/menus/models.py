@@ -59,6 +59,11 @@ class MenuChangeRequestStatus(StrEnum):
     REVIEWED = "reviewed"
 
 
+class DayCloseReason(StrEnum):
+    MANUAL = "manual"
+    AUTOMATIC = "automatic"
+
+
 class MenuNutrition(BaseModel):
     kcal: AmountDecimal | None = None
     proteins: AmountDecimal | None = None
@@ -133,6 +138,10 @@ class DailyMenu(BaseModel):
     date: Date | None = None
     items: list[DailyMenuItem] = Field(default_factory=list, min_length=1)
     notes: MenuNote | None = None
+    closed_at: datetime | None = None
+    closed_by: PydanticObjectId | None = None
+    close_reason: DayCloseReason | None = None
+    dev_reopened_at: datetime | None = None
 
     @model_validator(mode="after")
     def validate_item_positions(self) -> Self:

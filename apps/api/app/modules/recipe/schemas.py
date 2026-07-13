@@ -6,6 +6,7 @@ from beanie import PydanticObjectId
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.modules.identity.models import AgeGroup
+from app.modules.norm_compliance.domain import NormativeContribution
 from app.modules.recipe.models import (
     Allergen,
     AmountBasis,
@@ -28,6 +29,7 @@ class CreateIngredientRequest(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     unit: str = Field(min_length=1, max_length=20)
     normative_group_id: PydanticObjectId | None = None
+    normative_contributions: list[NormativeContribution] = Field(default_factory=list)
     aliases: list[str] = Field(default_factory=list)
 
     @field_validator("name", "unit")
@@ -40,6 +42,7 @@ class UpdateIngredientRequest(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     unit: str | None = Field(default=None, min_length=1, max_length=20)
     normative_group_id: PydanticObjectId | None = None
+    normative_contributions: list[NormativeContribution] | None = None
     aliases: list[str] | None = None
     is_active: bool | None = None
 
@@ -58,6 +61,11 @@ class UpdateIngredientRequest(BaseModel):
             raise ValueError("Ingredient unit cannot be null")
         if "aliases" in self.model_fields_set and self.aliases is None:
             raise ValueError("Ingredient aliases cannot be null")
+        if (
+            "normative_contributions" in self.model_fields_set
+            and self.normative_contributions is None
+        ):
+            raise ValueError("Ingredient normative contributions cannot be null")
         if "is_active" in self.model_fields_set and self.is_active is None:
             raise ValueError("is_active cannot be null")
         return self
@@ -71,6 +79,7 @@ class IngredientResponse(BaseModel):
     normalized_name: str
     unit: str
     normative_group_id: PydanticObjectId | None
+    normative_contributions: list[NormativeContribution]
     aliases: list[str]
     is_active: bool
     created_at: datetime
@@ -171,6 +180,7 @@ class PortionVariantPayload(DecimalResponseModel):
     portion_grams: AmountDecimal | None = Field(default=None, ge=Decimal("0"))
     output_grams: AmountDecimal = Field(ge=Decimal("0"))
     nutrition: NutritionPayload = Field(default_factory=NutritionPayload)
+    normative_contributions: list[NormativeContribution] = Field(default_factory=list)
 
     @field_validator("nutrition", mode="before")
     @classmethod

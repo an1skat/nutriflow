@@ -5,9 +5,11 @@ from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 
+from app.api.deps import get_app_settings
+from app.core.config import Settings
 from app.modules.auth.dependencies import CsrfProtection, CurrentUser, require_permissions
 from app.modules.identity.models import AdminPermission, User
-from app.modules.menus.models import MealType, MenuChangeRequestStatus, WeeklyMenuStatus
+from app.modules.menus.models import MealType, MenuChangeRequestStatus, Weekday, WeeklyMenuStatus
 from app.modules.menus.schemas import (
     CommitWeeklyMenuImportRequest,
     CreateWeeklyMenuRequest,
@@ -32,6 +34,9 @@ from app.modules.menus.service import (
 )
 from app.modules.menus.service import (
     archive_weekly_menu as archive_weekly_menu_record,
+)
+from app.modules.menus.service import (
+    close_weekly_menu_day as close_weekly_menu_day_record,
 )
 from app.modules.menus.service import (
     commit_weekly_menu_import as commit_weekly_menu_import_record,
@@ -71,6 +76,9 @@ from app.modules.menus.service import (
 )
 from app.modules.menus.service import (
     publish_weekly_menu as publish_weekly_menu_record,
+)
+from app.modules.menus.service import (
+    reopen_weekly_menu_day_for_dev as reopen_weekly_menu_day_for_dev_record,
 )
 from app.modules.menus.service import (
     restore_school_weekly_menu as restore_school_weekly_menu_record,
@@ -438,6 +446,57 @@ async def restore_school_weekly_menu(
 ) -> WeeklyMenuResponse:
     try:
         menu = await restore_school_weekly_menu_record(menu_id, current_user)
+    except MenuNotFoundError as exc:
+        raise not_found(exc) from exc
+    except MenuAccessDeniedError as exc:
+        raise forbidden(exc) from exc
+    except MenuValidationError as exc:
+        raise bad_request(exc) from exc
+
+    return WeeklyMenuResponse.from_menu(menu)
+
+
+@router.post(
+    "/weekly/{menu_id}/days/{weekday}/close",
+    response_model=WeeklyMenuResponse,
+)
+async def close_weekly_menu_day(
+    menu_id: PydanticObjectId,
+    weekday: Weekday,
+    current_user: CurrentUser,
+    _csrf: CsrfProtection,
+) -> WeeklyMenuResponse:
+    try:
+        menu = await close_weekly_menu_day_record(menu_id, weekday, current_user)
+    except MenuNotFoundError as exc:
+        raise not_found(exc) from exc
+    except MenuAccessDeniedError as exc:
+        raise forbidden(exc) from exc
+    except MenuValidationError as exc:
+        raise bad_request(exc) from exc
+
+    return WeeklyMenuResponse.from_menu(menu)
+
+
+@router.post(
+    "/weekly/{menu_id}/days/{weekday}/dev-reopen",
+    response_model=WeeklyMenuResponse,
+)
+async def dev_reopen_weekly_menu_day(
+    menu_id: PydanticObjectId,
+    weekday: Weekday,
+    current_user: CurrentUser,
+    _csrf: CsrfProtection,
+    settings: Annotated[Settings, Depends(get_app_settings)],
+) -> WeeklyMenuResponse:
+    if settings.environment.lower() in {"prod", "production"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Dev-only endpoint is disabled",
+        )
+
+    try:
+        menu = await reopen_weekly_menu_day_for_dev_record(menu_id, weekday, current_user)
     except MenuNotFoundError as exc:
         raise not_found(exc) from exc
     except MenuAccessDeniedError as exc:

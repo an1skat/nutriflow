@@ -47,11 +47,22 @@ from app.modules.menus.models import (
     WeeklyMenu,
     WeeklyMenuStatus,
 )
+from app.modules.norm_compliance.domain import (
+    NormativeContribution,
+    NormativeContributionBasis,
+    NormativeContributionSnapshot,
+    NormativeContributionSource,
+)
+from app.modules.norm_compliance.ingredient_registry import (
+    INGREDIENTS_NOT_COUNTED_SEPARATELY,
+    get_ingredient_norm_rule,
+)
 from app.modules.recipe.models import (
     DishCardVersion,
     DishCardVersionStatus,
     Ingredient,
     IngredientAmount,
+    PortionVariant,
     find_portion_variant_by_yield,
     normalize_lookup_text,
 )
@@ -122,6 +133,8 @@ async def generate_menu_requirements(
     weekday: Weekday,
     service_date: Date,
     current_user: User,
+    *,
+    allow_closed_day: bool = False,
 ) -> list[MenuRequirementRecord]:
     _ensure_school_user(current_user)
     menu = await WeeklyMenu.get(weekly_menu_id)
@@ -137,6 +150,8 @@ async def generate_menu_requirements(
     day = next((candidate for candidate in menu.days if candidate.weekday == weekday), None)
     if day is None:
         raise MenuRequirementNotFoundError("Daily menu not found")
+    if day.closed_at is not None and not allow_closed_day:
+        raise MenuRequirementValidationError("Daily menu is closed")
 
     resolved_service_date = resolve_service_date(menu, day, service_date)
     school = await School.get(menu.school_id)
@@ -351,8 +366,7 @@ async def get_menu_requirement_calendar(
     stale_dates = {
         requirement.service_date
         for requirement in requirements
-        if requirement_statuses.get(requirement.id)
-        == MenuRequirementAggregateStatus.STALE
+        if requirement_statuses.get(requirement.id) == MenuRequirementAggregateStatus.STALE
     }
     expected_dates = set(expected_days)
     day_summaries = _build_calendar_day_summaries(
@@ -411,6 +425,23 @@ async def get_menu_requirement_report(
         school_group_id=school_group_id,
     )
     requirement_statuses = await _requirement_statuses(requirements)
+    if (
+        current_user.role != UserRole.OWNER
+        and granularity != MenuRequirementReportGranularity.DAY
+    ):
+        day_summaries = _build_calendar_day_summaries(
+            expected_days,
+            requirements,
+            requirement_statuses=requirement_statuses,
+            school=school,
+            school_group_id=school_group_id,
+        )
+        _validate_complete_aggregate_report(
+            granularity,
+            date_from=date_from,
+            date_to=date_to,
+            day_summaries=day_summaries,
+        )
     generated_dates = {requirement.service_date for requirement in requirements}
     expected_dates = set(expected_days)
     missing_dates = sorted(expected_dates - generated_dates)
@@ -418,8 +449,7 @@ async def get_menu_requirement_report(
         {
             requirement.service_date
             for requirement in requirements
-            if requirement_statuses.get(requirement.id)
-            == MenuRequirementAggregateStatus.STALE
+            if requirement_statuses.get(requirement.id) == MenuRequirementAggregateStatus.STALE
         }
     )
 
@@ -534,10 +564,7 @@ def build_ingredient_rows(
             start=Decimal("0"),
         )
         issue_total_raw = sum(
-            (
-                cell.net_per_person_g * children_by_dish[cell.menu_item_id]
-                for cell in cells
-            ),
+            (cell.net_per_person_g * children_by_dish[cell.menu_item_id] for cell in cells),
             start=Decimal("0"),
         )
         result.append(
@@ -578,8 +605,13 @@ def resolve_service_date(
 
 
 def hash_daily_menu(day: DailyMenu) -> str:
+    day_data = day.model_dump(mode="json")
+    day_data.pop("closed_at", None)
+    day_data.pop("closed_by", None)
+    day_data.pop("close_reason", None)
+    day_data.pop("dev_reopened_at", None)
     canonical = json.dumps(
-        day.model_dump(mode="json"),
+        day_data,
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
@@ -709,11 +741,7 @@ async def _requirement_statuses(
         menu = menus_by_id.get(requirement.weekly_menu_id)
         day = (
             next(
-                (
-                    candidate
-                    for candidate in menu.days
-                    if candidate.weekday == requirement.weekday
-                ),
+                (candidate for candidate in menu.days if candidate.weekday == requirement.weekday),
                 None,
             )
             if menu is not None
@@ -739,15 +767,14 @@ def _build_calendar_month(
     last_day = monthrange(year, month)[1]
     date_from = Date(year, month, 1)
     date_to = Date(year, month, last_day)
-    month_working_dates = {
+    month_dates = {
         date_from + timedelta(days=offset)
         for offset in range((date_to - date_from).days + 1)
-        if (date_from + timedelta(days=offset)).weekday() < 5
     }
-    expected = expected_dates & month_working_dates
-    generated = generated_dates & month_working_dates
+    expected = expected_dates & month_dates
+    generated = generated_dates & month_dates
     missing = expected - generated
-    stale = stale_dates & month_working_dates
+    stale = stale_dates & month_dates
     resolved_day_summaries = day_summaries or {}
 
     weeks = []
@@ -755,10 +782,19 @@ def _build_calendar_month(
         _month_workweek_blocks(date_from, date_to),
         start=1,
     ):
-        block_dates = {
+        workday_dates = {
             block_from + timedelta(days=offset)
             for offset in range((block_to - block_from).days + 1)
         }
+        full_week_dates = {
+            block_from + timedelta(days=offset)
+            for offset in range(7)
+        }
+        weekend_activity_dates = (
+            (expected_dates | generated_dates | stale_dates) & full_week_dates
+        ) - workday_dates
+        block_dates = workday_dates | weekend_activity_dates
+        resolved_block_to = max(block_dates)
         block_expected = expected_dates & block_dates
         block_generated = generated_dates & block_dates
         block_missing = block_expected - block_generated
@@ -767,7 +803,7 @@ def _build_calendar_month(
             MenuRequirementCalendarWeekResponse(
                 week_index=index,
                 date_from=block_from,
-                date_to=block_to,
+                date_to=resolved_block_to,
                 generated_days=len(block_generated),
                 missing_days=len(block_missing),
                 stale_days=len(block_stale),
@@ -840,17 +876,12 @@ def _build_calendar_day_summaries(
             requirement.school_group_id,
         )
         generated_keys_by_date[requirement.service_date].add(key)
-        if (
-            requirement_statuses.get(requirement.id)
-            == MenuRequirementAggregateStatus.STALE
-        ):
+        if requirement_statuses.get(requirement.id) == MenuRequirementAggregateStatus.STALE:
             stale_keys_by_date[requirement.service_date].add(key)
 
     summaries: dict[Date, MenuRequirementCalendarDayResponse] = {}
     for service_date in (
-        set(expected_keys_by_date)
-        | set(generated_keys_by_date)
-        | set(stale_keys_by_date)
+        set(expected_keys_by_date) | set(generated_keys_by_date) | set(stale_keys_by_date)
     ):
         expected_keys = expected_keys_by_date[service_date]
         generated_keys = generated_keys_by_date[service_date]
@@ -868,6 +899,63 @@ def _build_calendar_day_summaries(
             ),
         )
     return summaries
+
+
+def _validate_complete_aggregate_report(
+    granularity: MenuRequirementReportGranularity,
+    *,
+    date_from: Date,
+    date_to: Date,
+    day_summaries: dict[Date, MenuRequirementCalendarDayResponse],
+) -> None:
+    period_summaries = {
+        service_date: summary
+        for service_date, summary in day_summaries.items()
+        if date_from <= service_date <= date_to
+    }
+
+    if granularity == MenuRequirementReportGranularity.WEEK:
+        required_dates = [date_from + timedelta(days=offset) for offset in range(5)]
+        is_complete = (
+            date_to == date_from + timedelta(days=4)
+            and all(
+                (summary := period_summaries.get(service_date)) is not None
+                and _is_complete_calendar_day(summary)
+                for service_date in required_dates
+            )
+        )
+        if not is_complete:
+            raise MenuRequirementValidationError(
+                "Weekly menu requirement report requires complete menu requirements "
+                "for all five weekdays"
+            )
+        return
+
+    if granularity == MenuRequirementReportGranularity.MONTH:
+        participating_days = [
+            summary
+            for summary in period_summaries.values()
+            if summary.expected_requirements > 0
+        ]
+        is_complete = (
+            bool(participating_days)
+            and all(_is_complete_calendar_day(summary) for summary in participating_days)
+            and all(summary.stale_requirements == 0 for summary in period_summaries.values())
+        )
+        if not is_complete:
+            raise MenuRequirementValidationError(
+                "Monthly menu requirement report requires complete menu requirements "
+                "for every participating day"
+            )
+
+
+def _is_complete_calendar_day(summary: MenuRequirementCalendarDayResponse) -> bool:
+    return (
+        summary.expected_requirements > 0
+        and summary.generated_requirements >= summary.expected_requirements
+        and summary.missing_requirements == 0
+        and summary.stale_requirements == 0
+    )
 
 
 def _empty_calendar_day(service_date: Date) -> MenuRequirementCalendarDayResponse:
@@ -1160,8 +1248,7 @@ def _expected_day_contains_dish(
             (
                 candidate
                 for candidate in item.servings
-                if candidate.school_group_id == school_group.id
-                and candidate.children_count > 0
+                if candidate.school_group_id == school_group.id and candidate.children_count > 0
             ),
             None,
         )
@@ -1207,11 +1294,7 @@ def _daily_item_aggregate_key(
     school_group: SchoolGroup,
 ) -> AggregateDishKey | None:
     portion = next(
-        (
-            candidate
-            for candidate in item.portions
-            if candidate.age_group == school_group.age_group
-        ),
+        (candidate for candidate in item.portions if candidate.age_group == school_group.age_group),
         None,
     )
     if portion is None:
@@ -1318,10 +1401,7 @@ def _build_updated_ingredient_rows(
         raise MenuRequirementValidationError("Ingredient rows do not match requirement rows")
 
     dish_ids = {dish.menu_item_id for dish in requirement.dishes}
-    children_by_dish = {
-        dish.menu_item_id: dish.children_count
-        for dish in requirement.dishes
-    }
+    children_by_dish = {dish.menu_item_id: dish.children_count for dish in requirement.dishes}
 
     updated_rows: list[MenuRequirementIngredientRow] = []
     for row_update in row_updates:
@@ -1345,10 +1425,7 @@ def _build_updated_ingredient_rows(
             start=Decimal("0"),
         )
         issue_total_raw = sum(
-            (
-                cell.net_per_person_g * children_by_dish[cell.menu_item_id]
-                for cell in cells
-            ),
+            (cell.net_per_person_g * children_by_dish[cell.menu_item_id] for cell in cells),
             start=Decimal("0"),
         )
         updated_rows.append(
@@ -1407,11 +1484,7 @@ async def _build_requirement_records(
     school_ids = {requirement.school_id for requirement in requirements}
     schools = await School.find({"_id": {"$in": list(school_ids)}}).to_list()
     schools_by_id = {school.id: school for school in schools}
-    owner_ids = {
-        school.admin_owner_id
-        for school in schools
-        if school.admin_owner_id is not None
-    }
+    owner_ids = {school.admin_owner_id for school in schools if school.admin_owner_id is not None}
     owners = await User.find({"_id": {"$in": list(owner_ids)}}).to_list()
     owner_names = {owner.id: owner.username for owner in owners}
 
@@ -1480,36 +1553,25 @@ async def _build_dish_calculations(
 
     for item in sorted(day.items, key=lambda candidate: candidate.position):
         serving = next(
-            (
-                candidate
-                for candidate in item.servings
-                if candidate.school_group_id == group.id
-            ),
+            (candidate for candidate in item.servings if candidate.school_group_id == group.id),
             None,
         )
         if serving is None or serving.children_count <= 0:
             continue
 
         portion = next(
-            (
-                candidate
-                for candidate in item.portions
-                if candidate.age_group == group.age_group
-            ),
+            (candidate for candidate in item.portions if candidate.age_group == group.age_group),
             None,
         )
         if portion is None:
             raise MenuRequirementValidationError(
-                f'Portion for group "{group.name}" '
-                f'is missing in dish "{item.name}"'
+                f'Portion for group "{group.name}" is missing in dish "{item.name}"'
             )
 
-        resolved_portion_variant_id = (
-            portion.dish_card_portion_variant_id
-        )
+        resolved_portion_variant_id = portion.dish_card_portion_variant_id
 
         if item.kind == MenuItemKind.PRODUCT:
-            lines = await _product_ingredient_lines(
+            lines, normative_contributions = await _product_ingredient_lines(
                 item,
                 portion.yield_amount,
                 catalog_by_id=catalog_by_id,
@@ -1519,6 +1581,7 @@ async def _build_dish_calculations(
             (
                 resolved_portion_variant_id,
                 lines,
+                normative_contributions,
             ) = await _dish_card_ingredient_lines(
                 item,
                 portion.dish_card_portion_variant_id,
@@ -1539,6 +1602,7 @@ async def _build_dish_calculations(
             product_ingredient_id=item.product_ingredient_id,
             yield_amount=portion.yield_amount,
             children_count=serving.children_count,
+            normative_contributions=normative_contributions,
         )
 
         calculations.append(
@@ -1558,7 +1622,11 @@ async def _dish_card_ingredient_lines(
     *,
     catalog_by_id: dict[PydanticObjectId, Ingredient],
     catalog_by_name: dict[str, Ingredient],
-) -> tuple[PydanticObjectId, list[IngredientLine]]:
+) -> tuple[
+    PydanticObjectId,
+    list[IngredientLine],
+    list[NormativeContributionSnapshot],
+]:
     if item.dish_card_version_id is None:
         raise MenuRequirementValidationError(
             f'Dish "{item.name}" must reference a dish card version'
@@ -1566,9 +1634,7 @@ async def _dish_card_ingredient_lines(
 
     version = await DishCardVersion.get(item.dish_card_version_id)
     if version is None:
-        raise MenuRequirementValidationError(
-            f'Dish card version for "{item.name}" was not found'
-        )
+        raise MenuRequirementValidationError(f'Dish card version for "{item.name}" was not found')
 
     if version.status not in {
         DishCardVersionStatus.CONFIRMED,
@@ -1588,23 +1654,19 @@ async def _dish_card_ingredient_lines(
 
     if variant is None:
         raise MenuRequirementValidationError(
-            f'Dish "{item.name}" has no portion variant '
-            f"for output {yield_amount} g"
+            f'Dish "{item.name}" has no portion variant for output {yield_amount} g'
         )
 
     amounts = [
-        amount
-        for amount in version.ingredient_amounts
-        if amount.portion_variant_id == variant.id
+        amount for amount in version.ingredient_amounts if amount.portion_variant_id == variant.id
     ]
 
     if not amounts:
         raise MenuRequirementValidationError(
-            f'Dish "{item.name}" has no ingredients '
-            "for the selected portion"
+            f'Dish "{item.name}" has no ingredients for the selected portion'
         )
 
-    return variant.id, [
+    lines = [
         _ingredient_line(
             amount,
             catalog_by_id=catalog_by_id,
@@ -1612,6 +1674,15 @@ async def _dish_card_ingredient_lines(
         )
         for amount in amounts
     ]
+    explicit = _portion_variant_contribution_snapshots(variant, item.name)
+    fallback = _ingredient_contribution_snapshots(
+        lines,
+        catalog_by_id=catalog_by_id,
+        catalog_by_name=catalog_by_name,
+        excluded_groups={item.group_code for item in explicit},
+        source_type=NormativeContributionSource.INGREDIENT,
+    )
+    return variant.id, lines, [*explicit, *fallback]
 
 
 async def _product_ingredient_lines(
@@ -1620,7 +1691,7 @@ async def _product_ingredient_lines(
     *,
     catalog_by_id: dict[PydanticObjectId, Ingredient],
     catalog_by_name: dict[str, Ingredient],
-) -> list[IngredientLine]:
+) -> tuple[list[IngredientLine], list[NormativeContributionSnapshot]]:
     try:
         amount = Decimal(yield_amount.strip().replace(",", "."))
     except InvalidOperation as exc:
@@ -1628,9 +1699,7 @@ async def _product_ingredient_lines(
             f'Product "{item.name}" must have a single numeric yield in grams'
         ) from exc
     if amount < 0:
-        raise MenuRequirementValidationError(
-            f'Product "{item.name}" cannot have a negative yield'
-        )
+        raise MenuRequirementValidationError(f'Product "{item.name}" cannot have a negative yield')
 
     ingredient = (
         catalog_by_id.get(item.product_ingredient_id)
@@ -1643,7 +1712,7 @@ async def _product_ingredient_lines(
         )
     ingredient_id = ingredient.id if ingredient is not None else item.product_ingredient_id
     name = ingredient.name if ingredient is not None else (item.product_name_snapshot or item.name)
-    return [
+    lines = [
         IngredientLine(
             key=ingredient_key(ingredient_id, name),
             ingredient_id=ingredient_id,
@@ -1651,6 +1720,121 @@ async def _product_ingredient_lines(
             net_per_person_g=amount,
         )
     ]
+    snapshots = _ingredient_contribution_snapshots(
+        lines,
+        catalog_by_id=catalog_by_id,
+        catalog_by_name=catalog_by_name,
+        excluded_groups=set(),
+        source_type=NormativeContributionSource.PRODUCT,
+    )
+    return lines, snapshots
+
+
+def _portion_variant_contribution_snapshots(
+    variant: PortionVariant,
+    dish_name: str,
+) -> list[NormativeContributionSnapshot]:
+    return [
+        NormativeContributionSnapshot(
+            group_code=contribution.group_code,
+            amount=contribution.amount,
+            unit=contribution.unit,
+            portion_equivalent=contribution.portion_equivalent,
+            product_variant=contribution.product_variant,
+            source_type=NormativeContributionSource.PORTION_VARIANT,
+            source_id=str(variant.id),
+            source_name=dish_name,
+        )
+        for contribution in variant.normative_contributions
+        if contribution.basis == NormativeContributionBasis.PER_PORTION
+    ]
+
+
+def _ingredient_contribution_snapshots(
+    lines: list[IngredientLine],
+    *,
+    catalog_by_id: dict[PydanticObjectId, Ingredient],
+    catalog_by_name: dict[str, Ingredient],
+    excluded_groups: set,
+    source_type: NormativeContributionSource,
+) -> list[NormativeContributionSnapshot]:
+    snapshots: list[NormativeContributionSnapshot] = []
+    for line in lines:
+        ingredient = (
+            catalog_by_id.get(line.ingredient_id) if line.ingredient_id is not None else None
+        )
+        if ingredient is None:
+            ingredient = catalog_by_name.get(normalize_lookup_text(line.name))
+        if ingredient is None:
+            continue
+        if (
+            source_type == NormativeContributionSource.INGREDIENT
+            and ingredient.normalized_name in INGREDIENTS_NOT_COUNTED_SEPARATELY
+        ):
+            continue
+
+        if not ingredient.normative_contributions:
+            rule = get_ingredient_norm_rule(ingredient.normalized_name)
+            amount = rule.contribution_amount(line.net_per_person_g) if rule is not None else None
+            if rule is not None and amount is not None and rule.group_code not in excluded_groups:
+                snapshots.append(
+                    NormativeContributionSnapshot(
+                        group_code=rule.group_code,
+                        amount=amount,
+                        unit=rule.unit,
+                        product_variant=rule.product_variant,
+                        source_type=source_type,
+                        source_id=str(ingredient.id),
+                        source_name=ingredient.name,
+                    )
+                )
+            continue
+
+        source_quantity = _source_quantity(line.net_per_person_g, ingredient.unit)
+        for contribution in ingredient.normative_contributions:
+            if contribution.group_code in excluded_groups:
+                continue
+            snapshots.append(
+                _scaled_ingredient_contribution(
+                    contribution,
+                    source_quantity=source_quantity,
+                    ingredient=ingredient,
+                    source_type=source_type,
+                )
+            )
+    return snapshots
+
+
+def _source_quantity(amount_g: Decimal, source_unit: str) -> Decimal:
+    return amount_g / Decimal("1000") if source_unit in {"kg", "кг"} else amount_g
+
+
+def _scaled_ingredient_contribution(
+    contribution: NormativeContribution,
+    *,
+    source_quantity: Decimal,
+    ingredient: Ingredient,
+    source_type: NormativeContributionSource,
+) -> NormativeContributionSnapshot:
+    multiplier = (
+        source_quantity
+        if contribution.basis == NormativeContributionBasis.PER_SOURCE_UNIT
+        else Decimal("1")
+    )
+    return NormativeContributionSnapshot(
+        group_code=contribution.group_code,
+        amount=contribution.amount * multiplier,
+        unit=contribution.unit,
+        portion_equivalent=(
+            contribution.portion_equivalent * multiplier
+            if contribution.portion_equivalent is not None
+            else None
+        ),
+        product_variant=contribution.product_variant,
+        source_type=source_type,
+        source_id=str(ingredient.id),
+        source_name=ingredient.name,
+    )
 
 
 def _ingredient_line(
@@ -1660,9 +1844,7 @@ def _ingredient_line(
     catalog_by_name: dict[str, Ingredient],
 ) -> IngredientLine:
     ingredient = (
-        catalog_by_id.get(amount.ingredient_id)
-        if amount.ingredient_id is not None
-        else None
+        catalog_by_id.get(amount.ingredient_id) if amount.ingredient_id is not None else None
     )
     if ingredient is None:
         ingredient = catalog_by_name.get(normalize_lookup_text(amount.ingredient_name_snapshot))

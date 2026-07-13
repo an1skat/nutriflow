@@ -8,6 +8,7 @@ from pymongo import ASCENDING, DESCENDING, IndexModel
 
 from app.modules.identity.models import AgeGroup, utc_now
 from app.modules.menus.models import MealType, MenuItemKind, Weekday
+from app.modules.norm_compliance.domain import NormativeContributionSnapshot
 from app.modules.recipe.models import AmountDecimal
 
 
@@ -23,6 +24,7 @@ class MenuRequirementDish(BaseModel):
     product_ingredient_id: PydanticObjectId | None = None
     yield_amount: str = Field(min_length=1, max_length=40)
     children_count: int = Field(ge=1, le=100_000)
+    normative_contributions: list[NormativeContributionSnapshot] = Field(default_factory=list)
 
 
 class MenuRequirementCell(BaseModel):

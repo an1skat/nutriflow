@@ -95,6 +95,7 @@ async def create_ingredient(data: CreateIngredientRequest) -> Ingredient:
         normalized_name=normalize_lookup_text(data.name),
         unit=data.unit,
         normative_group_id=data.normative_group_id,
+        normative_contributions=data.normative_contributions,
         aliases=data.aliases,
     )
 
@@ -119,6 +120,8 @@ async def update_ingredient(
         ingredient.unit = data.unit
     if "normative_group_id" in data.model_fields_set:
         ingredient.normative_group_id = data.normative_group_id
+    if "normative_contributions" in data.model_fields_set:
+        ingredient.normative_contributions = data.normative_contributions or []
     if "aliases" in data.model_fields_set:
         ingredient.aliases = data.aliases
     if "is_active" in data.model_fields_set:
@@ -577,6 +580,7 @@ def _to_portion_variant(data) -> PortionVariant:
         portion_grams=data.portion_grams,
         output_grams=data.output_grams,
         nutrition=Nutrition(**data.nutrition.model_dump()),
+        normative_contributions=data.normative_contributions,
     )
 
 

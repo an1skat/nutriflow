@@ -14,6 +14,7 @@ from app.modules.menu_requirements.models import (
     MenuRequirementIngredientRow,
 )
 from app.modules.menus.models import MealType, MenuItemKind, Weekday
+from app.modules.norm_compliance.domain import NormativeContributionSnapshot
 from app.modules.recipe.models import AmountDecimal
 
 EditableIngredientName = Annotated[
@@ -40,6 +41,7 @@ class MenuRequirementDishResponse(BaseModel):
     product_ingredient_id: PydanticObjectId | None
     yield_amount: str
     children_count: int
+    normative_contributions: list[NormativeContributionSnapshot]
 
     @classmethod
     def from_dish(cls, dish: MenuRequirementDish) -> "MenuRequirementDishResponse":
