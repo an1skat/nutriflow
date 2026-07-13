@@ -102,6 +102,7 @@ async def record_login_failure(
     subnet = get_client_subnet(client_ip)
     normalized_identifier = _normalized_identifier(identifier)
 
+    retry_after_seconds = 0
     for key in (
         ("login-fail-ip", client_ip),
         ("login-fail-subnet", subnet),
@@ -114,7 +115,10 @@ async def record_login_failure(
         )
 
         if not decision.allowed:
-            raise _too_many_requests(decision.retry_after_seconds)
+            retry_after_seconds = max(retry_after_seconds, decision.retry_after_seconds)
+
+    if retry_after_seconds:
+        raise _too_many_requests(retry_after_seconds)
 
 
 async def check_refresh_throttle(
@@ -206,6 +210,7 @@ async def record_refresh_failure(
     if raw_refresh_token:
         keys.append(("refresh-fail-token", _fingerprint(raw_refresh_token)))
 
+    retry_after_seconds = 0
     for key in keys:
         decision = await _failure_lockout.record_failure(
             key,
@@ -214,4 +219,7 @@ async def record_refresh_failure(
         )
 
         if not decision.allowed:
-            raise _too_many_requests(decision.retry_after_seconds)
+            retry_after_seconds = max(retry_after_seconds, decision.retry_after_seconds)
+
+    if retry_after_seconds:
+        raise _too_many_requests(retry_after_seconds)

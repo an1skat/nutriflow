@@ -75,6 +75,38 @@ async def test_failure_lockout_blocks_after_threshold():
 
 @pytest.mark.no_clean_database
 @pytest.mark.asyncio
+async def test_sliding_window_limiter_evicts_oldest_bucket():
+    limiter = SlidingWindowRateLimiter(max_buckets=2)
+
+    await limiter.allow("oldest", limit=1, window_seconds=60)
+    await limiter.allow("second", limit=1, window_seconds=60)
+    await limiter.allow("newest", limit=1, window_seconds=60)
+
+    reset_oldest = await limiter.allow("oldest", limit=1, window_seconds=60)
+
+    assert reset_oldest.allowed is True
+
+
+@pytest.mark.no_clean_database
+@pytest.mark.asyncio
+async def test_failure_lockout_evicts_oldest_incomplete_record():
+    lockout = FailureLockout(max_buckets=2)
+
+    await lockout.record_failure("oldest", failure_limit=2, lock_seconds=60)
+    await lockout.record_failure("second", failure_limit=2, lock_seconds=60)
+    await lockout.record_failure("newest", failure_limit=2, lock_seconds=60)
+
+    reset_oldest = await lockout.record_failure(
+        "oldest",
+        failure_limit=2,
+        lock_seconds=60,
+    )
+
+    assert reset_oldest.allowed is True
+
+
+@pytest.mark.no_clean_database
+@pytest.mark.asyncio
 async def test_hardening_middleware_sets_security_headers():
     settings = Settings(
         jwt_secret_key=SECRET,

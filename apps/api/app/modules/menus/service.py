@@ -6,7 +6,7 @@ from datetime import date as Date
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from beanie import PydanticObjectId
+from beanie import BulkWriter, PydanticObjectId
 from fastapi import UploadFile
 from pymongo import ReturnDocument
 
@@ -156,8 +156,6 @@ async def list_weekly_menus(
     cursor = WeeklyMenu.find(filters)
     total = await cursor.count()
     items = await cursor.sort("-created_at").skip(offset).limit(limit).to_list()
-    if current_user.role == UserRole.SCHOOL_USER:
-        await _auto_close_due_days(current_user, items)
     return items, total
 
 
@@ -171,8 +169,6 @@ async def get_weekly_menu(
         raise MenuNotFoundError("Weekly menu not found")
 
     await _authorize_menu_access(menu, current_user)
-    if current_user.role == UserRole.SCHOOL_USER:
-        await _auto_close_due_days(current_user, [menu])
     return menu
 
 
@@ -257,7 +253,14 @@ async def update_weekly_menu(
         if changes:
             change_request = _build_menu_change_request(menu, current_user, changes)
 
-    if change_request is None:
+    if (
+        change_request is None
+        and current_user.role != UserRole.SCHOOL_USER
+        and menu.school_id is None
+        and menu.source_menu_id is None
+    ):
+        await _save_template_and_propagate(menu, current_user)
+    elif change_request is None:
         await menu.save()
     else:
 
@@ -283,6 +286,17 @@ async def close_weekly_menu_day(
         reason=DayCloseReason.MANUAL,
         require_requirement=True,
     )
+
+
+async def close_due_weekly_menu_days(current_user: User) -> int:
+    if current_user.role != UserRole.SCHOOL_USER or current_user.school_id is None:
+        raise MenuAccessDeniedError("Only schools can close due daily menus")
+
+    menus = await WeeklyMenu.find(
+        WeeklyMenu.school_id == current_user.school_id,
+        WeeklyMenu.status == WeeklyMenuStatus.PUBLISHED,
+    ).to_list()
+    return await _auto_close_due_days(current_user, menus)
 
 
 async def reopen_weekly_menu_day_for_dev(
@@ -518,6 +532,87 @@ async def restore_school_weekly_menu(
     return menu
 
 
+async def _save_template_and_propagate(source: WeeklyMenu, actor: User) -> None:
+    if source.id is None:
+        raise RuntimeError("Persisted weekly menu is required")
+
+    copies = await WeeklyMenu.find(
+        WeeklyMenu.source_menu_id == source.id,
+        {"status": {"$ne": WeeklyMenuStatus.REVOKED.value}},
+    ).to_list()
+    now = datetime.now(UTC)
+    for copy in copies:
+        _apply_template_update_to_copy(source, copy, actor=actor, now=now)
+
+    async def save_source_and_copies(session: Any) -> None:
+        await source.save(session=session)
+        if not copies:
+            return
+        async with BulkWriter(session=session, ordered=False) as bulk_writer:
+            for copy in copies:
+                await copy.replace(session=session, bulk_writer=bulk_writer)
+
+    async with get_mongo_client().start_session() as session:
+        await session.with_transaction(save_source_and_copies)
+
+
+def _apply_template_update_to_copy(
+    source: WeeklyMenu,
+    target: WeeklyMenu,
+    *,
+    actor: User,
+    now: datetime,
+) -> None:
+    target.title = source.title
+    target.meal_type = source.meal_type
+    target.cycle_week = source.cycle_week
+    target.starts_on = source.starts_on
+    target.ends_on = source.ends_on
+    target.days = _merge_distributed_days(source.days, target.days)
+    target.notes = source.notes
+    target.source_file_name = source.source_file_name
+    target.source_sheet_name = source.source_sheet_name
+    target.updated_by = actor.id
+    target.updated_at = now
+
+
+def _merge_distributed_days(
+    source_days: list[DailyMenu],
+    current_days: list[DailyMenu],
+) -> list[DailyMenu]:
+    current_by_weekday = {day.weekday: day for day in current_days}
+    merged_days: list[DailyMenu] = []
+
+    for source_day in source_days:
+        current_day = current_by_weekday.get(source_day.weekday)
+        if current_day is not None and current_day.closed_at is not None:
+            merged_days.append(deepcopy(current_day))
+            continue
+
+        merged_day = deepcopy(source_day)
+        if current_day is not None:
+            current_items_by_id = {
+                item.id: item for item in current_day.items if item.id is not None
+            }
+            current_items_by_position = {item.position: item for item in current_day.items}
+            for item in merged_day.items:
+                current_item = current_items_by_id.get(item.id)
+                if current_item is None:
+                    current_item = current_items_by_position.get(item.position)
+                if current_item is not None:
+                    item.servings = deepcopy(current_item.servings)
+            merged_day.dev_reopened_at = current_day.dev_reopened_at
+        merged_days.append(merged_day)
+
+    source_weekdays = {day.weekday for day in source_days}
+    merged_days.extend(
+        deepcopy(day)
+        for day in current_days
+        if day.weekday not in source_weekdays and day.closed_at is not None
+    )
+    return sorted(merged_days, key=lambda day: list(Weekday).index(day.weekday))
+
+
 async def publish_weekly_menu(
     menu_id: PydanticObjectId,
     data: PublishWeeklyMenuRequest,
@@ -531,46 +626,26 @@ async def publish_weekly_menu(
         raise MenuValidationError("Archived weekly menus cannot be published")
 
     target_schools = await _get_publish_target_schools(data.school_ids, admin)
-    created_menu_ids: list[PydanticObjectId] = []
-    replaced_menu_ids: list[PydanticObjectId] = []
-    skipped_existing_school_ids: list[PydanticObjectId] = []
+    target_school_ids = [school.id for school in target_schools if school.id is not None]
+    existing_copies = await WeeklyMenu.find(
+        WeeklyMenu.source_menu_id == source.id,
+        {"school_id": {"$in": target_school_ids}},
+    ).to_list()
+    existing_school_ids = {
+        copy.school_id for copy in existing_copies if copy.school_id is not None
+    }
+    skipped_existing_school_ids = [
+        school_id for school_id in target_school_ids if school_id in existing_school_ids
+    ]
     now = datetime.now(UTC)
 
     source.status = WeeklyMenuStatus.PUBLISHED
     source.published_at = now
     source.updated_by = admin.id
     source.updated_at = now
-    await source.save()
-
-    for school in target_schools:
-        existing = await WeeklyMenu.find_one(
-            WeeklyMenu.source_menu_id == source.id,
-            WeeklyMenu.school_id == school.id,
-        )
-
-        if existing is not None and not data.replace_existing:
-            skipped_existing_school_ids.append(school.id)
-            continue
-
-        if existing is not None:
-            existing.title = source.title
-            existing.meal_type = source.meal_type
-            existing.cycle_week = source.cycle_week
-            existing.starts_on = source.starts_on
-            existing.ends_on = source.ends_on
-            existing.status = WeeklyMenuStatus.PUBLISHED
-            existing.days = deepcopy(source.days)
-            existing.notes = source.notes
-            existing.source_file_name = source.source_file_name
-            existing.source_sheet_name = source.source_sheet_name
-            existing.published_at = now
-            existing.updated_by = admin.id
-            existing.updated_at = now
-            await existing.save()
-            replaced_menu_ids.append(existing.id)
-            continue
-
-        copy = WeeklyMenu(
+    new_copies = [
+        WeeklyMenu(
+            id=PydanticObjectId(),
             title=source.title,
             school_id=school.id,
             source_menu_id=source.id,
@@ -589,14 +664,23 @@ async def publish_weekly_menu(
             created_at=now,
             updated_at=now,
         )
-        await copy.insert()
-        created_menu_ids.append(copy.id)
+        for school in target_schools
+        if school.id not in existing_school_ids
+    ]
+
+    async def save_publication(session: Any) -> None:
+        await source.save(session=session)
+        if new_copies:
+            await WeeklyMenu.insert_many(new_copies, session=session)
+
+    async with get_mongo_client().start_session() as session:
+        await session.with_transaction(save_publication)
 
     return PublishWeeklyMenuResponse(
         source_menu_id=source.id,
-        target_school_ids=[school.id for school in target_schools],
-        created_menu_ids=created_menu_ids,
-        replaced_menu_ids=replaced_menu_ids,
+        target_school_ids=target_school_ids,
+        created_menu_ids=[copy.id for copy in new_copies if copy.id is not None],
+        replaced_menu_ids=[],
         skipped_existing_school_ids=skipped_existing_school_ids,
     )
 
@@ -1121,14 +1205,21 @@ async def _get_publish_target_schools(
 
         return await School.find(School.is_active == True).sort("name").to_list()  # noqa: E712
 
-    schools: list[School] = []
-    seen: set[PydanticObjectId] = set()
-    for school_id in school_ids:
-        if school_id in seen:
-            continue
-        seen.add(school_id)
-        schools.append(await _get_active_school_for_user(school_id, current_user))
-    return schools
+    unique_school_ids = list(dict.fromkeys(school_ids))
+    schools = await School.find({"_id": {"$in": unique_school_ids}}).to_list()
+    schools_by_id = {school.id: school for school in schools}
+
+    ordered_schools: list[School] = []
+    for school_id in unique_school_ids:
+        school = schools_by_id.get(school_id)
+        if school is None:
+            raise MenuValidationError("School not found")
+        if not school.is_active:
+            raise MenuValidationError("School is inactive")
+        if current_user.role == UserRole.ADMIN and school.admin_owner_id != current_user.id:
+            raise MenuAccessDeniedError("School access denied")
+        ordered_schools.append(school)
+    return ordered_schools
 
 
 async def _ensure_menu_permission(current_user: User) -> None:
@@ -1373,13 +1464,14 @@ async def _close_weekly_menu_day(
 async def _auto_close_due_days(
     current_user: User,
     menus: list[WeeklyMenu],
-) -> None:
+) -> int:
     if current_user.role != UserRole.SCHOOL_USER:
-        return
+        return 0
 
     now = datetime.now(SCHOOL_TIMEZONE)
     today = now.date()
     is_after_close_time = now.hour >= DAY_AUTO_CLOSE_HOUR
+    closed_days = 0
 
     for menu in menus:
         if menu.id is None or menu.status != WeeklyMenuStatus.PUBLISHED:
@@ -1394,14 +1486,16 @@ async def _auto_close_due_days(
                 continue
             if service_date == today and not is_after_close_time:
                 continue
-            closed_menu = await _close_weekly_menu_day(
+            await _close_weekly_menu_day(
                 menu.id,
                 day.weekday,
                 current_user,
                 reason=DayCloseReason.AUTOMATIC,
                 require_requirement=False,
             )
-            _copy_menu_state(closed_menu, menu)
+            closed_days += 1
+
+    return closed_days
 
 
 def _resolve_auto_close_service_date(
@@ -1423,30 +1517,6 @@ def _resolve_auto_close_service_date(
 
 def _today_in_school_timezone() -> Date:
     return datetime.now(SCHOOL_TIMEZONE).date()
-
-
-def _copy_menu_state(source: WeeklyMenu, target: WeeklyMenu) -> None:
-    target.title = source.title
-    target.school_id = source.school_id
-    target.source_menu_id = source.source_menu_id
-    target.meal_type = source.meal_type
-    target.cycle_week = source.cycle_week
-    target.starts_on = source.starts_on
-    target.ends_on = source.ends_on
-    target.status = source.status
-    target.days = deepcopy(source.days)
-    target.notes = source.notes
-    target.source_file_name = source.source_file_name
-    target.source_sheet_name = source.source_sheet_name
-    target.published_at = source.published_at
-    target.archived_from_status = source.archived_from_status
-    target.revoked_at = source.revoked_at
-    target.revoked_by = source.revoked_by
-    target.revoke_reason = source.revoke_reason
-    target.created_by = source.created_by
-    target.updated_by = source.updated_by
-    target.created_at = source.created_at
-    target.updated_at = source.updated_at
 
 
 def _build_import_preview_response(

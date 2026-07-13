@@ -11,6 +11,7 @@ from app.modules.auth.dependencies import CsrfProtection, CurrentUser, require_p
 from app.modules.identity.models import AdminPermission, User
 from app.modules.menus.models import MealType, MenuChangeRequestStatus, Weekday, WeeklyMenuStatus
 from app.modules.menus.schemas import (
+    CloseDueWeeklyMenuDaysResponse,
     CommitWeeklyMenuImportRequest,
     CreateWeeklyMenuRequest,
     MenuChangeRequestListResponse,
@@ -34,6 +35,9 @@ from app.modules.menus.service import (
 )
 from app.modules.menus.service import (
     archive_weekly_menu as archive_weekly_menu_record,
+)
+from app.modules.menus.service import (
+    close_due_weekly_menu_days as close_due_weekly_menu_days_record,
 )
 from app.modules.menus.service import (
     close_weekly_menu_day as close_weekly_menu_day_record,
@@ -454,6 +458,21 @@ async def restore_school_weekly_menu(
         raise bad_request(exc) from exc
 
     return WeeklyMenuResponse.from_menu(menu)
+
+
+@router.post(
+    "/weekly/close-due-days",
+    response_model=CloseDueWeeklyMenuDaysResponse,
+)
+async def close_due_weekly_menu_days(
+    current_user: CurrentUser,
+    _csrf: CsrfProtection,
+) -> CloseDueWeeklyMenuDaysResponse:
+    try:
+        closed_days = await close_due_weekly_menu_days_record(current_user)
+    except MenuAccessDeniedError as exc:
+        raise forbidden(exc) from exc
+    return CloseDueWeeklyMenuDaysResponse(closed_days=closed_days)
 
 
 @router.post(

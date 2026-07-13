@@ -303,6 +303,81 @@ def test_admin_publishes_template_to_school_copy(seeded_client):
     assert get_response.json()["source_menu_id"] == source_id
 
 
+def test_template_update_propagates_to_existing_school_copy(seeded_client):
+    client, identities = seeded_client
+    login(client, identities.admin.username, identities.admin_password)
+
+    create_response = client.post(
+        "/api/v1/menus/weekly",
+        json=weekly_menu_payload(),
+        headers=csrf_headers(client),
+    )
+    source_id = create_response.json()["id"]
+    publish_response = client.post(
+        f"/api/v1/menus/weekly/{source_id}/publish",
+        json={"school_ids": [str(identities.own_school.id)]},
+        headers=csrf_headers(client),
+    )
+    copy_id = publish_response.json()["created_menu_ids"][0]
+
+    update_response = client.patch(
+        f"/api/v1/menus/weekly/{source_id}",
+        json={"title": "Оновлене меню"},
+        headers=csrf_headers(client),
+    )
+
+    assert update_response.status_code == 200
+    copy_response = client.get(f"/api/v1/menus/weekly/{copy_id}")
+    assert copy_response.status_code == 200
+    assert copy_response.json()["title"] == "Оновлене меню"
+
+    repeated_publish_response = client.post(
+        f"/api/v1/menus/weekly/{source_id}/publish",
+        json={"school_ids": [str(identities.own_school.id)]},
+        headers=csrf_headers(client),
+    )
+    assert repeated_publish_response.status_code == 200
+    assert repeated_publish_response.json()["created_menu_ids"] == []
+    assert repeated_publish_response.json()["replaced_menu_ids"] == []
+    assert repeated_publish_response.json()["skipped_existing_school_ids"] == [
+        str(identities.own_school.id)
+    ]
+
+
+def test_weekly_menu_get_does_not_auto_close_days(seeded_client):
+    client, identities = seeded_client
+    login(client, identities.admin.username, identities.admin_password)
+    payload = weekly_menu_payload()
+    payload["starts_on"] = "2020-01-06"
+    payload["ends_on"] = "2020-01-10"
+
+    create_response = client.post(
+        "/api/v1/menus/weekly",
+        json=payload,
+        headers=csrf_headers(client),
+    )
+    source_id = create_response.json()["id"]
+    publish_response = client.post(
+        f"/api/v1/menus/weekly/{source_id}/publish",
+        json={"school_ids": [str(identities.own_school.id)]},
+        headers=csrf_headers(client),
+    )
+    copy_id = publish_response.json()["created_menu_ids"][0]
+
+    login(client, identities.school_user.username, identities.school_user_password)
+    get_response = client.get(f"/api/v1/menus/weekly/{copy_id}")
+
+    assert get_response.status_code == 200
+    assert get_response.json()["days"][0]["closed_at"] is None
+
+    close_response = client.post(
+        "/api/v1/menus/weekly/close-due-days",
+        headers=csrf_headers(client),
+    )
+    assert close_response.status_code == 200
+    assert close_response.json() == {"closed_days": 1}
+
+
 def test_school_archives_menu_locally_and_admin_can_still_access_it(seeded_client):
     client, identities = seeded_client
     login(client, identities.admin.username, identities.admin_password)

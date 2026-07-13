@@ -94,6 +94,16 @@ def test_admin_can_list_get_and_update_schools(seeded_client):
 def test_school_hard_delete_cascades_users_and_sessions(seeded_client):
     client, identities = seeded_client
     settings = get_settings()
+    mongo_client = MongoClient(settings.mongo_uri, tz_aware=True)
+    try:
+        mongo_client[settings.mongo_db]["menu_change_requests"].insert_one(
+            {
+                "school_id": identities.own_school.id,
+                "marker": "delete-with-school",
+            }
+        )
+    finally:
+        mongo_client.close()
 
     login(
         client,
@@ -171,6 +181,12 @@ def test_school_hard_delete_cascades_users_and_sessions(seeded_client):
         database = mongo_client[settings.mongo_db]
         assert database["schools"].count_documents({"_id": identities.own_school.id}) == 0
         assert database["users"].count_documents({"school_id": identities.own_school.id}) == 0
+        assert (
+            database["menu_change_requests"].count_documents(
+                {"school_id": identities.own_school.id}
+            )
+            == 0
+        )
         assert (
             database["refresh_sessions"].count_documents({"user_id": identities.school_user.id})
             == 0

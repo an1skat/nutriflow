@@ -11,13 +11,23 @@ class RateLimitDecision:
     retry_after_seconds: int
 
 
+@dataclass
+class _FailureRecord:
+    count: int
+    locked_until: float | None
+    last_seen: float
+
+
 class SlidingWindowRateLimiter:
     def __init__(
         self,
         *,
         max_buckets: int = 10000,
     ) -> None:
+        if max_buckets < 1:
+            raise ValueError("max_buckets must be positive")
         self._attempts: dict[Hashable, deque[float]] = defaultdict(deque)
+        self._last_seen: dict[Hashable, float] = {}
         self._lock = asyncio.Lock()
         self._max_buckets = max_buckets
 
@@ -42,21 +52,27 @@ class SlidingWindowRateLimiter:
                 return RateLimitDecision(allowed=False, retry_after_seconds=retry_after)
 
             bucket.append(now)
-            self._evict_empty_buckets()
+            self._last_seen[key] = now
+            self._evict_oldest_buckets(protected_key=key)
             return RateLimitDecision(allowed=True, retry_after_seconds=0)
 
     async def clear(self, key: Hashable) -> None:
         async with self._lock:
             self._attempts.pop(key, None)
+            self._last_seen.pop(key, None)
 
-    def _evict_empty_buckets(self) -> None:
+    def _evict_oldest_buckets(self, *, protected_key: Hashable) -> None:
         if len(self._attempts) <= self._max_buckets:
             return
 
-        empty_keys = [key for key, bucket in self._attempts.items() if not bucket]
-
-        for key in empty_keys:
+        overflow = len(self._attempts) - self._max_buckets
+        oldest_keys = sorted(
+            (key for key in self._attempts if key != protected_key),
+            key=lambda key: self._last_seen.get(key, float("-inf")),
+        )[:overflow]
+        for key in oldest_keys:
             self._attempts.pop(key, None)
+            self._last_seen.pop(key, None)
 
 
 class FailureLockout:
@@ -65,7 +81,9 @@ class FailureLockout:
         *,
         max_buckets: int = 10000,
     ) -> None:
-        self._failures: dict[Hashable, tuple[int, float | None]] = {}
+        if max_buckets < 1:
+            raise ValueError("max_buckets must be positive")
+        self._failures: dict[Hashable, _FailureRecord] = {}
         self._lock = asyncio.Lock()
         self._max_buckets = max_buckets
 
@@ -78,7 +96,8 @@ class FailureLockout:
             if record is None:
                 return RateLimitDecision(allowed=True, retry_after_seconds=0)
 
-            _, locked_until = record
+            record.last_seen = now
+            locked_until = record.locked_until
 
             if locked_until is None:
                 return RateLimitDecision(allowed=True, retry_after_seconds=0)
@@ -102,7 +121,9 @@ class FailureLockout:
         now = time.monotonic()
 
         async with self._lock:
-            count, locked_until = self._failures.get(key, (0, None))
+            record = self._failures.get(key)
+            count = record.count if record is not None else 0
+            locked_until = record.locked_until if record is not None else None
 
             if locked_until is not None and locked_until > now:
                 return RateLimitDecision(
@@ -116,8 +137,12 @@ class FailureLockout:
             if count >= failure_limit:
                 locked_until = now + lock_seconds
 
-            self._failures[key] = (count, locked_until)
-            self._evict_expired(now)
+            self._failures[key] = _FailureRecord(
+                count=count,
+                locked_until=locked_until,
+                last_seen=now,
+            )
+            self._evict_oldest_records(now, protected_key=key)
 
             if locked_until is None:
                 return RateLimitDecision(allowed=True, retry_after_seconds=0)
@@ -131,15 +156,27 @@ class FailureLockout:
         async with self._lock:
             self._failures.pop(key, None)
 
-    def _evict_expired(self, now: float) -> None:
+    def _evict_oldest_records(self, now: float, *, protected_key: Hashable) -> None:
         if len(self._failures) <= self._max_buckets:
             return
 
         expired_keys = [
             key
-            for key, (_, locked_until) in self._failures.items()
-            if locked_until is not None and locked_until <= now
+            for key, record in self._failures.items()
+            if key != protected_key
+            and record.locked_until is not None
+            and record.locked_until <= now
         ]
-
         for key in expired_keys:
+            self._failures.pop(key, None)
+
+        overflow = len(self._failures) - self._max_buckets
+        if overflow <= 0:
+            return
+
+        oldest_keys = sorted(
+            (key for key in self._failures if key != protected_key),
+            key=lambda key: self._failures[key].last_seen,
+        )[:overflow]
+        for key in oldest_keys:
             self._failures.pop(key, None)

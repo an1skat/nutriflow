@@ -377,7 +377,6 @@ class MenuChangeRequestListResponse(BaseModel):
 
 class PublishWeeklyMenuRequest(BaseModel):
     school_ids: list[PydanticObjectId] | None = None
-    replace_existing: bool = False
 
 
 class PublishWeeklyMenuResponse(BaseModel):
@@ -386,6 +385,10 @@ class PublishWeeklyMenuResponse(BaseModel):
     created_menu_ids: list[PydanticObjectId]
     replaced_menu_ids: list[PydanticObjectId]
     skipped_existing_school_ids: list[PydanticObjectId]
+
+
+class CloseDueWeeklyMenuDaysResponse(BaseModel):
+    closed_days: int = Field(ge=0)
 
 
 class WeeklyMenuImportDiagnosticResponse(BaseModel):

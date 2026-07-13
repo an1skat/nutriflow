@@ -27,6 +27,7 @@ from app.modules.identity.models import (
     User,
     UserRole,
 )
+from app.modules.menus.models import MenuChangeRequest
 
 
 class SchoolAlreadyExistsError(ValueError):
@@ -198,6 +199,10 @@ async def delete_school(actor: User, school_id: PydanticObjectId) -> None:
             )
 
         await User.get_pymongo_collection().delete_many(
+            {"school_id": school_id},
+            session=session,
+        )
+        await MenuChangeRequest.get_pymongo_collection().delete_many(
             {"school_id": school_id},
             session=session,
         )
