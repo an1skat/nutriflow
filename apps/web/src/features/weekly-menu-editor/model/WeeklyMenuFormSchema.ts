@@ -6,48 +6,14 @@ import type {
   WeeklyMenuPayload,
 } from "@/entities/weekly-menu/model/WeeklyMenu";
 import {
+  DEFAULT_WEEKDAYS,
+  WEEKDAY_ORDER,
   ageGroupSchema,
   mealTypeSchema,
   menuItemKindSchema,
   weekdaySchema,
 } from "@/entities/weekly-menu/model/WeeklyMenu";
-
-export const WEEKDAY_LABELS: Record<z.infer<typeof weekdaySchema>, string> = {
-  monday: "Понеділок",
-  tuesday: "Вівторок",
-  wednesday: "Середа",
-  thursday: "Четвер",
-  friday: "П’ятниця",
-  saturday: "Субота",
-  sunday: "Неділя",
-};
-
-export const AGE_GROUP_LABELS: Record<
-  z.infer<typeof ageGroupSchema>,
-  string
-> = {
-  "6-11": "6-11 років",
-  "11-14": "11-14 років",
-  "14-18": "14-18 років",
-};
-
-export const WEEKDAY_ORDER: Array<z.infer<typeof weekdaySchema>> = [
-  "monday",
-  "tuesday",
-  "wednesday",
-  "thursday",
-  "friday",
-  "saturday",
-  "sunday",
-];
-
-export const DEFAULT_WEEKDAYS: Array<z.infer<typeof weekdaySchema>> = [
-  "monday",
-  "tuesday",
-  "wednesday",
-  "thursday",
-  "friday",
-];
+import { addDaysToLocalIsoDate, toLocalIsoDate } from "@/shared/lib/LocalDate";
 
 const optionalDecimalInput = z
   .string()
@@ -205,7 +171,7 @@ export function createBlankWeeklyMenuFormValues(): WeeklyMenuFormValues {
     notes: "",
     days: DEFAULT_WEEKDAYS.map((weekday) => ({
       ...createBlankDay(weekday),
-      date: addDaysToLocalIso(startsOn, WEEKDAY_ORDER.indexOf(weekday)),
+      date: addDaysToLocalIsoDate(startsOn, WEEKDAY_ORDER.indexOf(weekday)),
     })),
   };
 }
@@ -348,7 +314,7 @@ export function resolveEffectiveDayDate(
 ) {
   const candidate =
     normalizeOptionalText(manualDate) ??
-    addDaysToLocalIso(resolveEffectiveStartDate(startDate), dayIndex);
+    addDaysToLocalIsoDate(resolveEffectiveStartDate(startDate), dayIndex);
   return alignLocalIsoToDayIndex(candidate, dayIndex);
 }
 
@@ -361,7 +327,7 @@ export function propagateMondayDate(
   return days.map((day) => ({
     ...day,
     date: normalizedMondayDate
-      ? addDaysToLocalIso(
+      ? addDaysToLocalIsoDate(
           normalizedMondayDate,
           WEEKDAY_ORDER.indexOf(day.weekday),
         )
@@ -386,22 +352,7 @@ export function getNextMondayLocalIsoDate() {
   const daysUntilNextMonday = ((8 - now.getDay()) % 7) || 7;
   now.setDate(now.getDate() + daysUntilNextMonday);
 
-  const year = now.getFullYear();
-  const month = `${now.getMonth() + 1}`.padStart(2, "0");
-  const day = `${now.getDate()}`.padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function addDaysToLocalIso(baseIsoDate: string, days: number) {
-  const [year, month, day] = baseIsoDate.split("-").map(Number);
-  const date = new Date(year, month - 1, day);
-  date.setDate(date.getDate() + days);
-
-  const resolvedYear = date.getFullYear();
-  const resolvedMonth = `${date.getMonth() + 1}`.padStart(2, "0");
-  const resolvedDay = `${date.getDate()}`.padStart(2, "0");
-
-  return `${resolvedYear}-${resolvedMonth}-${resolvedDay}`;
+  return toLocalIsoDate(now);
 }
 
 function alignLocalIsoToDayIndex(value: string, dayIndex: number) {
@@ -410,5 +361,5 @@ function alignLocalIsoToDayIndex(value: string, dayIndex: number) {
   const expectedJsWeekday = (dayIndex + 1) % 7;
   const daysUntilExpectedWeekday =
     (expectedJsWeekday - date.getDay() + 7) % 7;
-  return addDaysToLocalIso(value, daysUntilExpectedWeekday);
+  return addDaysToLocalIsoDate(value, daysUntilExpectedWeekday);
 }

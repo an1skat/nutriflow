@@ -16,7 +16,7 @@ import type {
 import {
   AGE_GROUP_LABELS,
   WEEKDAY_LABELS,
-} from "@/features/weekly-menu-editor/model/WeeklyMenuFormSchema";
+} from "@/entities/weekly-menu/model/WeeklyMenu";
 import { getApiErrorMessage } from "@/shared/api/HttpClient";
 import { formatDate } from "@/shared/lib/FormatDate";
 import { RequestError } from "@/shared/ui/RequestError";

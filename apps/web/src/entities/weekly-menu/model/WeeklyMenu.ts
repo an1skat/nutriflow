@@ -20,6 +20,34 @@ export const menuItemKindSchema = z.enum(["dish_card", "product"]);
 export const ageGroupSchema = z.enum(["6-11", "11-14", "14-18"]);
 export const dayCloseReasonSchema = z.enum(["manual", "automatic"]);
 
+export const WEEKDAY_LABELS: Record<z.infer<typeof weekdaySchema>, string> = {
+  monday: "Понеділок",
+  tuesday: "Вівторок",
+  wednesday: "Середа",
+  thursday: "Четвер",
+  friday: "П’ятниця",
+  saturday: "Субота",
+  sunday: "Неділя",
+};
+
+export const AGE_GROUP_LABELS: Record<z.infer<typeof ageGroupSchema>, string> = {
+  "6-11": "6-11 років",
+  "11-14": "11-14 років",
+  "14-18": "14-18 років",
+};
+
+export const WEEKDAY_ORDER: Array<z.infer<typeof weekdaySchema>> = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+];
+
+export const DEFAULT_WEEKDAYS = WEEKDAY_ORDER.slice(0, 5);
+
 const decimalStringSchema = z.string().trim().min(1);
 
 export const menuNutritionSchema = z.object({

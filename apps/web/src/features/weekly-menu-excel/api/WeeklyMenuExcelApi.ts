@@ -1,38 +1,21 @@
 import axios, { type AxiosError } from "axios";
 
 import type { MealType } from "@/entities/weekly-menu/model/WeeklyMenu";
+import {
+  downloadFile,
+  triggerFileDownload,
+  type DownloadedFile,
+} from "@/shared/api/Download";
 import { apiClient, getCsrfHeaders } from "@/shared/api/HttpClient";
 
 import {
-  extractDownloadFilename,
   weeklyMenuImportCommitSchema,
   weeklyMenuImportPreviewSchema,
   type WeeklyMenuImportCommit,
   type WeeklyMenuImportPreview,
 } from "../model/WeeklyMenuExcel";
 
-export type DownloadedWorkbook = {
-  blob: Blob;
-  filename: string;
-};
-
-async function normalizeBlobApiError(error: unknown): Promise<never> {
-  if (
-    axios.isAxiosError(error) &&
-    error.response?.data instanceof Blob &&
-    error.response.data.size > 0
-  ) {
-    const text = await error.response.data.text();
-
-    try {
-      error.response.data = JSON.parse(text) as unknown;
-    } catch {
-      error.response.data = { detail: text };
-    }
-  }
-
-  throw error;
-}
+export type DownloadedWorkbook = DownloadedFile;
 
 export async function previewWeeklyMenuWorkbook(input: {
   file: File;
@@ -73,21 +56,7 @@ async function downloadWorkbook(
   url: string,
   fallbackFilename: string,
 ): Promise<DownloadedWorkbook> {
-  try {
-    const response = await apiClient.get<Blob>(url, {
-      responseType: "blob",
-    });
-
-    return {
-      blob: response.data,
-      filename: extractDownloadFilename(
-        response.headers["content-disposition"],
-        fallbackFilename,
-      ),
-    };
-  } catch (error) {
-    return normalizeBlobApiError(error);
-  }
+  return downloadFile(url, fallbackFilename);
 }
 
 export function downloadWeeklyMenuTemplate(): Promise<DownloadedWorkbook> {
@@ -107,16 +76,7 @@ export function exportWeeklyMenuWorkbook(
 }
 
 export function triggerWorkbookDownload(workbook: DownloadedWorkbook): void {
-  const url = URL.createObjectURL(workbook.blob);
-  const anchor = document.createElement("a");
-
-  anchor.href = url;
-  anchor.download = workbook.filename;
-  anchor.style.display = "none";
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
+  triggerFileDownload(workbook);
 }
 
 export function isBlobAxiosError(error: unknown): error is AxiosError<Blob> {
