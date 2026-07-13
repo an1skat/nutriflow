@@ -4,13 +4,13 @@ from beanie import PydanticObjectId
 from fastapi import (
     APIRouter,
     Depends,
-    HTTPException,
     Query,
     Request,
     Response,
     status,
 )
 
+from app.api.errors import conflict, forbidden, not_found
 from app.core.config import Settings, get_settings
 from app.modules.admin.schemas import (
     AdminUserListResponse,
@@ -150,27 +150,6 @@ SchoolUserManagerUser = Annotated[
 ]
 Offset = Annotated[int, Query(ge=0)]
 Limit = Annotated[int, Query(ge=1, le=100)]
-
-
-def not_found(exc: ValueError) -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail=str(exc),
-    )
-
-
-def conflict(exc: ValueError) -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_409_CONFLICT,
-        detail=str(exc),
-    )
-
-
-def forbidden(exc: ValueError) -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail=str(exc),
-    )
 
 
 def admin_path(settings: Settings) -> str:

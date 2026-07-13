@@ -6,6 +6,7 @@ from typing import Annotated
 from beanie import PydanticObjectId
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
+from app.api.responses import PaginatedResponse
 from app.modules.identity.models import AgeGroup
 from app.modules.menu_requirements.models import (
     MenuRequirement,
@@ -161,11 +162,8 @@ class MenuRequirementResponse(BaseModel):
         )
 
 
-class MenuRequirementListResponse(BaseModel):
-    items: list[MenuRequirementResponse]
-    total: int
-    offset: int
-    limit: int
+class MenuRequirementListResponse(PaginatedResponse[MenuRequirementResponse]):
+    pass
 
 
 class GenerateMenuRequirementsResponse(BaseModel):

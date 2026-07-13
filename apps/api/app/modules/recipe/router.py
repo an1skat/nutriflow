@@ -1,8 +1,9 @@
 from typing import Annotated
 
 from beanie import PydanticObjectId
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from app.api.errors import bad_request, conflict, forbidden, not_found
 from app.modules.auth.dependencies import CsrfProtection, CurrentUser, require_permissions
 from app.modules.auth.service import user_has_permissions
 from app.modules.identity.models import AdminPermission, User, UserRole
@@ -24,7 +25,6 @@ from app.modules.recipe.schemas import (
     DishCardVersionValidationResponse,
     IngredientListResponse,
     IngredientResponse,
-    PdfImportPreviewResponse,
     UpdateAllergenRequest,
     UpdateDishCardRequest,
     UpdateDishCardVersionRequest,
@@ -36,7 +36,6 @@ from app.modules.recipe.service import (
     DishCardVersionNotConfirmedError,
     RecipeConflictError,
     RecipeNotFoundError,
-    preview_pdf_import,
 )
 from app.modules.recipe.service import (
     calculate_ingredients as calculate_ingredients_record,
@@ -104,34 +103,6 @@ AdminUser = Annotated[
 ]
 Offset = Annotated[int, Query(ge=0)]
 Limit = Annotated[int, Query(ge=1, le=100)]
-
-
-def not_found(exc: ValueError) -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail=str(exc),
-    )
-
-
-def conflict(exc: ValueError) -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_409_CONFLICT,
-        detail=str(exc),
-    )
-
-
-def forbidden(exc: ValueError) -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail=str(exc),
-    )
-
-
-def bad_request(exc: ValueError) -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail=str(exc),
-    )
 
 
 async def require_recipe_catalog_read(current_user: CurrentUser) -> User:
@@ -451,30 +422,6 @@ async def create_dish_card_version_preview(
         raise conflict(exc) from exc
 
     return DishCardVersionResponse.from_version(version)
-
-
-@router.post(
-    "/dish-card-versions/pdf-preview",
-    response_model=PdfImportPreviewResponse,
-    status_code=status.HTTP_202_ACCEPTED,
-)
-async def preview_dish_card_pdf(
-    file: Annotated[UploadFile, File(description="PDF file with dish card")],
-    _admin: AdminUser,
-    _csrf: CsrfProtection,
-) -> PdfImportPreviewResponse:
-    if not file.filename:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File name is required",
-        )
-    if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only .pdf files are supported",
-        )
-
-    return await preview_pdf_import(file)
 
 
 @router.get(

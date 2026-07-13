@@ -1,10 +1,8 @@
 import re
 from datetime import UTC, datetime
 from decimal import Decimal
-from io import BytesIO
 
 from beanie import PydanticObjectId
-from fastapi import UploadFile
 from pymongo.errors import DuplicateKeyError
 
 from app.modules.recipe.models import (
@@ -26,7 +24,6 @@ from app.modules.recipe.schemas import (
     CreateIngredientRequest,
     DishCardVersionValidationResponse,
     IngredientCalculationLine,
-    PdfImportPreviewResponse,
     UpdateAllergenRequest,
     UpdateDishCardRequest,
     UpdateDishCardVersionRequest,
@@ -506,56 +503,6 @@ def calculate_ingredient_lines(
     ]
 
 
-async def preview_pdf_import(file: UploadFile) -> PdfImportPreviewResponse:
-    content = await file.read()
-    warnings = [
-        "PDF preview is not confirmed automatically. Review extracted data before saving.",
-    ]
-    recognition_errors: list[str] = []
-    extracted_text: str | None = None
-    guessed_card_number: str | None = None
-    guessed_name: str | None = None
-
-    try:
-        from pypdf import PdfReader
-    except ModuleNotFoundError:
-        recognition_errors.append("PDF text extraction dependency is not installed.")
-        return PdfImportPreviewResponse(
-            filename=file.filename or "",
-            content_type=file.content_type,
-            extracted_text_preview=None,
-            guessed_card_number=None,
-            guessed_name=None,
-            warnings=warnings,
-            recognition_errors=recognition_errors,
-        )
-
-    try:
-        reader = PdfReader(BytesIO(content))
-        extracted_text = "\n".join((page.extract_text() or "") for page in reader.pages)
-    except Exception as exc:
-        recognition_errors.append(f"Could not extract text from PDF: {exc}")
-
-    if extracted_text:
-        guessed_card_number, guessed_name = _guess_dish_card_identity(extracted_text)
-        if guessed_card_number is None:
-            warnings.append("Could not confidently detect dish card number.")
-        if guessed_name is None:
-            warnings.append("Could not confidently detect dish card name.")
-    elif not recognition_errors:
-        recognition_errors.append("PDF text extraction returned empty content.")
-
-    return PdfImportPreviewResponse(
-        filename=file.filename or "",
-        content_type=file.content_type,
-        extracted_text_preview=extracted_text[:4000] if extracted_text else None,
-        guessed_card_number=guessed_card_number,
-        guessed_name=guessed_name,
-        warnings=warnings,
-        recognition_errors=recognition_errors,
-    )
-
-
 async def _next_version_number(dish_card_id: PydanticObjectId) -> int:
     latest = (
         await DishCardVersion.find(DishCardVersion.dish_card_id == dish_card_id)
@@ -595,19 +542,3 @@ def _to_ingredient_amount(data) -> IngredientAmount:
         portion_variant_id=data.portion_variant_id,
         notes=data.notes,
     )
-
-
-def _guess_dish_card_identity(text: str) -> tuple[str | None, str | None]:
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    card_number = None
-    name = None
-
-    for index, line in enumerate(lines):
-        match = re.search(r"Технологічна\s+карта\s*№\s*([^\n]+)", line, re.IGNORECASE)
-        if match:
-            card_number = match.group(1).strip()
-            if index + 1 < len(lines):
-                name = lines[index + 1].strip()
-            break
-
-    return card_number, name

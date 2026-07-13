@@ -11,6 +11,7 @@ from pydantic import (
     model_validator,
 )
 
+from app.api.responses import PaginatedResponse
 from app.modules.identity.models import (
     AdminPermission,
     AgeGroup,
@@ -82,11 +83,8 @@ class SchoolResponse(BaseModel):
         return cls.model_validate(school)
 
 
-class SchoolListResponse(BaseModel):
-    items: list[SchoolResponse]
-    total: int
-    offset: int
-    limit: int
+class SchoolListResponse(PaginatedResponse[SchoolResponse]):
+    pass
 
 
 class UpdateSchoolGroupRequest(BaseModel):
@@ -135,11 +133,8 @@ class SchoolGroupResponse(BaseModel):
         )
 
 
-class SchoolGroupListResponse(BaseModel):
-    items: list[SchoolGroupResponse]
-    total: int
-    offset: int
-    limit: int
+class SchoolGroupListResponse(PaginatedResponse[SchoolGroupResponse]):
+    pass
 
 
 class CreateSchoolUserRequest(BaseModel):
@@ -346,11 +341,8 @@ class AdminUserResponse(BaseModel):
         return cls.model_validate(user)
 
 
-class AdminUserListResponse(BaseModel):
-    items: list[AdminUserResponse]
-    total: int
-    offset: int
-    limit: int
+class AdminUserListResponse(PaginatedResponse[AdminUserResponse]):
+    pass
 
 
 class SchoolUserResponse(BaseModel):
@@ -370,8 +362,5 @@ class SchoolUserResponse(BaseModel):
         return cls.model_validate(user)
 
 
-class SchoolUserListResponse(BaseModel):
-    items: list[SchoolUserResponse]
-    total: int
-    offset: int
-    limit: int
+class SchoolUserListResponse(PaginatedResponse[SchoolUserResponse]):
+    pass

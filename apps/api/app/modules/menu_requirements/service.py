@@ -267,10 +267,23 @@ async def list_menu_requirements(
     if service_date is not None:
         filters["service_date"] = service_date
 
-    requirements = await MenuRequirement.find(filters).to_list()
+    query = MenuRequirement.find(filters)
+    total = await query.count()
+    requirements = await (
+        query.sort(
+            [
+                ("school_id", 1),
+                ("service_date", -1),
+                ("meal_type", 1),
+                ("school_group_name", 1),
+            ]
+        )
+        .skip(offset)
+        .limit(limit)
+        .to_list()
+    )
     records = await _build_requirement_records(requirements)
-    records.sort(key=_requirement_record_sort_key)
-    return records[offset : offset + limit], len(records)
+    return records, total
 
 
 async def get_menu_requirement(
@@ -1501,20 +1514,6 @@ async def _build_requirement_records(
             )
         )
     return records
-
-
-def _requirement_record_sort_key(
-    record: MenuRequirementRecord,
-) -> tuple[str, str, int, str, str]:
-    requirement = record.requirement
-    owner_name = record.school_admin_owner_username or "\uffff"
-    return (
-        owner_name.casefold(),
-        record.school_name.casefold(),
-        -requirement.service_date.toordinal(),
-        requirement.meal_type.value,
-        requirement.school_group_name.casefold(),
-    )
 
 
 def _eligible_groups(

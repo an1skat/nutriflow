@@ -1,11 +1,12 @@
 from typing import Annotated
-from urllib.parse import quote
 
 from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 
 from app.api.deps import get_app_settings
+from app.api.errors import bad_request, forbidden, not_found
+from app.api.responses import xlsx_response
 from app.core.config import Settings
 from app.modules.auth.dependencies import CsrfProtection, CurrentUser, require_permissions
 from app.modules.identity.models import AdminPermission, User
@@ -105,43 +106,6 @@ AdminUser = Annotated[
 ]
 Offset = Annotated[int, Query(ge=0)]
 Limit = Annotated[int, Query(ge=1, le=100)]
-
-
-XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-
-
-def xlsx_response(filename: str, content: bytes) -> StreamingResponse:
-    encoded_filename = quote(filename)
-    return StreamingResponse(
-        content=iter([content]),
-        media_type=XLSX_MEDIA_TYPE,
-        headers={
-            "Content-Disposition": (
-                f"attachment; filename=weekly-menu.xlsx; filename*=UTF-8''{encoded_filename}"
-            )
-        },
-    )
-
-
-def not_found(exc: ValueError) -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail=str(exc),
-    )
-
-
-def forbidden(exc: ValueError) -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail=str(exc),
-    )
-
-
-def bad_request(exc: ValueError) -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        detail=str(exc),
-    )
 
 
 def validate_xlsx_file(file: UploadFile) -> None:

@@ -5,6 +5,7 @@ from typing import Any, Self
 from beanie import PydanticObjectId
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.api.responses import PaginatedResponse
 from app.modules.identity.models import AgeGroup
 from app.modules.menus.models import (
     DailyMenu,
@@ -27,18 +28,14 @@ from app.modules.menus.models import (
 from app.modules.recipe.models import AmountDecimal
 
 
-class DecimalResponseModel(BaseModel):
-    pass
-
-
-class MenuNutritionPayload(DecimalResponseModel):
+class MenuNutritionPayload(BaseModel):
     kcal: AmountDecimal | None = None
     proteins: AmountDecimal | None = None
     fats: AmountDecimal | None = None
     carbs: AmountDecimal | None = None
 
 
-class MenuPortionPayload(DecimalResponseModel):
+class MenuPortionPayload(BaseModel):
     age_group: AgeGroup
     yield_amount: str = Field(min_length=1, max_length=40)
     dish_card_portion_variant_id: PydanticObjectId | None = None
@@ -56,7 +53,7 @@ class MenuItemServingCountPayload(BaseModel):
     children_count: int = Field(ge=0, le=100_000)
 
 
-class DailyMenuItemPayload(DecimalResponseModel):
+class DailyMenuItemPayload(BaseModel):
     id: PydanticObjectId | None = None
     position: int = Field(ge=1, le=200)
     kind: MenuItemKind = MenuItemKind.DISH_CARD
@@ -101,7 +98,7 @@ class DailyMenuItemPayload(DecimalResponseModel):
         return self
 
 
-class DailyMenuPayload(DecimalResponseModel):
+class DailyMenuPayload(BaseModel):
     weekday: Weekday
     date: Date | None = None
     items: list[DailyMenuItemPayload] = Field(default_factory=list, min_length=1)
@@ -115,7 +112,7 @@ class DailyMenuPayload(DecimalResponseModel):
         return str(value).strip()
 
 
-class CreateWeeklyMenuRequest(DecimalResponseModel):
+class CreateWeeklyMenuRequest(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     school_id: PydanticObjectId | None = None
     meal_type: MealType
@@ -146,7 +143,7 @@ class CreateWeeklyMenuRequest(DecimalResponseModel):
         return self
 
 
-class UpdateWeeklyMenuRequest(DecimalResponseModel):
+class UpdateWeeklyMenuRequest(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=255)
     meal_type: MealType | None = None
     cycle_week: int | None = Field(default=None, ge=1, le=53)
@@ -247,7 +244,7 @@ class DailyMenuResponse(DailyMenuPayload):
         )
 
 
-class WeeklyMenuResponse(DecimalResponseModel):
+class WeeklyMenuResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: PydanticObjectId
@@ -299,11 +296,8 @@ class WeeklyMenuResponse(DecimalResponseModel):
         )
 
 
-class WeeklyMenuListResponse(BaseModel):
-    items: list[WeeklyMenuResponse]
-    total: int
-    offset: int
-    limit: int
+class WeeklyMenuListResponse(PaginatedResponse[WeeklyMenuResponse]):
+    pass
 
 
 class MenuFieldChangeResponse(BaseModel):
@@ -368,11 +362,8 @@ class MenuChangeRequestResponse(BaseModel):
         )
 
 
-class MenuChangeRequestListResponse(BaseModel):
-    items: list[MenuChangeRequestResponse]
-    total: int
-    offset: int
-    limit: int
+class MenuChangeRequestListResponse(PaginatedResponse[MenuChangeRequestResponse]):
+    pass
 
 
 class PublishWeeklyMenuRequest(BaseModel):
@@ -413,12 +404,12 @@ class CommitWeeklyMenuImportRequest(BaseModel):
     school_id: PydanticObjectId | None = None
 
 
-class WeeklyMenuImportPreviewItemResponse(DecimalResponseModel):
+class WeeklyMenuImportPreviewItemResponse(BaseModel):
     sheet_name: str
     menu: CreateWeeklyMenuRequest
 
 
-class WeeklyMenuImportPreviewResponse(DecimalResponseModel):
+class WeeklyMenuImportPreviewResponse(BaseModel):
     preview_id: PydanticObjectId
     filename: str
     available_sheet_names: list[str]

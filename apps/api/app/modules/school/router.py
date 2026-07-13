@@ -1,8 +1,9 @@
 from typing import Annotated
 
 from beanie import PydanticObjectId
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query
 
+from app.api.errors import not_found
 from app.modules.admin.schemas import SchoolGroupListResponse, SchoolGroupResponse
 from app.modules.admin.service import SchoolGroupNotFoundError, get_school_group, list_school_groups
 from app.modules.auth.dependencies import require_roles
@@ -16,13 +17,6 @@ SchoolUser = Annotated[
 ]
 Offset = Annotated[int, Query(ge=0)]
 Limit = Annotated[int, Query(ge=1, le=100)]
-
-
-def not_found(exc: ValueError) -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail=str(exc),
-    )
 
 
 @router.get(

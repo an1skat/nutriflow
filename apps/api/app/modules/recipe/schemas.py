@@ -5,6 +5,7 @@ from typing import Self
 from beanie import PydanticObjectId
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.api.responses import PaginatedResponse
 from app.modules.identity.models import AgeGroup
 from app.modules.nutrition.domain import NormativeContribution
 from app.modules.recipe.models import (
@@ -19,10 +20,6 @@ from app.modules.recipe.models import (
     NutritionDecimal,
     PortionVariant,
 )
-
-
-class DecimalResponseModel(BaseModel):
-    pass
 
 
 class CreateIngredientRequest(BaseModel):
@@ -90,11 +87,8 @@ class IngredientResponse(BaseModel):
         return cls.model_validate(ingredient)
 
 
-class IngredientListResponse(BaseModel):
-    items: list[IngredientResponse]
-    total: int
-    offset: int
-    limit: int
+class IngredientListResponse(PaginatedResponse[IngredientResponse]):
+    pass
 
 
 class CreateAllergenRequest(BaseModel):
@@ -160,21 +154,18 @@ class AllergenResponse(BaseModel):
         return cls.model_validate(allergen)
 
 
-class AllergenListResponse(BaseModel):
-    items: list[AllergenResponse]
-    total: int
-    offset: int
-    limit: int
+class AllergenListResponse(PaginatedResponse[AllergenResponse]):
+    pass
 
 
-class NutritionPayload(DecimalResponseModel):
+class NutritionPayload(BaseModel):
     kcal: NutritionDecimal = Field(default=Decimal("0"), ge=Decimal("0"))
     proteins: NutritionDecimal = Field(default=Decimal("0"), ge=Decimal("0"))
     fats: NutritionDecimal = Field(default=Decimal("0"), ge=Decimal("0"))
     carbs: NutritionDecimal = Field(default=Decimal("0"), ge=Decimal("0"))
 
 
-class PortionVariantPayload(DecimalResponseModel):
+class PortionVariantPayload(BaseModel):
     id: PydanticObjectId | None = None
     age_group: AgeGroup | None = None
     portion_grams: AmountDecimal | None = Field(default=None, ge=Decimal("0"))
@@ -194,7 +185,7 @@ class PortionVariantPayload(DecimalResponseModel):
         return self
 
 
-class IngredientAmountPayload(DecimalResponseModel):
+class IngredientAmountPayload(BaseModel):
     ingredient_id: PydanticObjectId | None = None
     ingredient_name_snapshot: str = Field(min_length=1, max_length=200)
     gross_amount: AmountDecimal = Field(ge=Decimal("0"))
@@ -303,11 +294,8 @@ class DishCardResponse(BaseModel):
         return cls.model_validate(dish_card)
 
 
-class DishCardListResponse(BaseModel):
-    items: list[DishCardResponse]
-    total: int
-    offset: int
-    limit: int
+class DishCardListResponse(PaginatedResponse[DishCardResponse]):
+    pass
 
 
 class CreateDishCardVersionRequest(BaseModel):
@@ -344,7 +332,7 @@ class UpdateDishCardVersionRequest(BaseModel):
         return self
 
 
-class DishCardVersionResponse(DecimalResponseModel):
+class DishCardVersionResponse(BaseModel):
     id: PydanticObjectId
     dish_card_id: PydanticObjectId
     version: int
@@ -389,11 +377,8 @@ class DishCardVersionResponse(DecimalResponseModel):
         )
 
 
-class DishCardVersionListResponse(BaseModel):
-    items: list[DishCardVersionResponse]
-    total: int
-    offset: int
-    limit: int
+class DishCardVersionListResponse(PaginatedResponse[DishCardVersionResponse]):
+    pass
 
 
 class ValidationIssue(BaseModel):
@@ -413,7 +398,7 @@ class CalculateIngredientsRequest(BaseModel):
     servings_count: int = Field(ge=1, le=100_000)
 
 
-class IngredientCalculationLine(DecimalResponseModel):
+class IngredientCalculationLine(BaseModel):
     ingredient_id: PydanticObjectId | None
     ingredient_name_snapshot: str
     unit: str
@@ -424,18 +409,8 @@ class IngredientCalculationLine(DecimalResponseModel):
     notes: str | None
 
 
-class CalculateIngredientsResponse(DecimalResponseModel):
+class CalculateIngredientsResponse(BaseModel):
     dish_card_version_id: PydanticObjectId
     portion_variant_id: PydanticObjectId
     servings_count: int
     items: list[IngredientCalculationLine]
-
-
-class PdfImportPreviewResponse(BaseModel):
-    filename: str
-    content_type: str | None
-    extracted_text_preview: str | None
-    guessed_card_number: str | None
-    guessed_name: str | None
-    warnings: list[str]
-    recognition_errors: list[str]
