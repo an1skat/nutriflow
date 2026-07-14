@@ -1,7 +1,8 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useNormComplianceReport } from "@/entities/norm-compliance/api/NormComplianceQueries";
+import { downloadNormComplianceReport } from "@/entities/norm-compliance/api/NormComplianceApi";
 import { normComplianceReportSchema } from "@/entities/norm-compliance/model/NormCompliance";
 
 import {
@@ -14,6 +15,9 @@ let searchParamsValue =
 
 vi.mock("@/entities/norm-compliance/api/NormComplianceQueries", () => ({
   useNormComplianceReport: vi.fn(),
+}));
+vi.mock("@/entities/norm-compliance/api/NormComplianceApi", () => ({
+  downloadNormComplianceReport: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(searchParamsValue),
@@ -148,6 +152,30 @@ describe("NormComplianceWorkspace", () => {
   beforeEach(() => {
     searchParamsValue =
       "school_id=school-1&date_from=2026-07-06&date_to=2026-07-10&meal_type=lunch&school_group_id=group-1&source=menu-requirements-calendar";
+    vi.mocked(downloadNormComplianceReport).mockResolvedValue();
+  });
+
+  it("exports the report with the active calendar filters", async () => {
+    vi.mocked(useNormComplianceReport).mockReturnValue({
+      data: report,
+      isPending: false,
+      isFetching: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useNormComplianceReport>);
+
+    render(<NormComplianceWorkspace />);
+    fireEvent.click(screen.getByRole("button", { name: "Експорт в Excel" }));
+
+    await waitFor(() =>
+      expect(downloadNormComplianceReport).toHaveBeenCalledWith({
+        school_id: "school-1",
+        date_from: "2026-07-06",
+        date_to: "2026-07-10",
+        meal_type: "lunch",
+        school_group_id: "group-1",
+      }),
+    );
   });
 
   it("uses the concrete week transferred by the calendar without editable filters", () => {

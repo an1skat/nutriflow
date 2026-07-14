@@ -1,4 +1,5 @@
 import { apiClient } from "@/shared/api/HttpClient";
+import { downloadFile, triggerFileDownload } from "@/shared/api/Download";
 
 import {
   normComplianceReportSchema,
@@ -23,4 +24,15 @@ export async function fetchNormComplianceReport(
     params: buildNormComplianceParams(request),
   });
   return normComplianceReportSchema.parse(response.data);
+}
+
+export async function downloadNormComplianceReport(
+  request: Omit<NormComplianceReportRequest, "enabled">,
+): Promise<void> {
+  const file = await downloadFile(
+    "/norm-compliance/report/export.xlsx",
+    "norm-compliance.xlsx",
+    { params: buildNormComplianceParams(request) },
+  );
+  triggerFileDownload(file);
 }

@@ -7,6 +7,8 @@ import {
   ChevronRight,
   CircleAlert,
   DatabaseZap,
+  FileSpreadsheet,
+  LoaderCircle,
   RefreshCw,
   Scale,
   X,
@@ -14,7 +16,9 @@ import {
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 
+import { downloadNormComplianceReport } from "@/entities/norm-compliance/api/NormComplianceApi";
 import { useNormComplianceReport } from "@/entities/norm-compliance/api/NormComplianceQueries";
 import {
   complianceStatusClasses,
@@ -25,11 +29,13 @@ import {
   type ComplianceStatus,
   type ContributionSource,
   type NormComplianceReport,
+  type NormComplianceReportRequest,
   type NormativeUnit,
   type UnmappedItem,
 } from "@/entities/norm-compliance/model/NormCompliance";
 import { ageGroupLabels } from "@/entities/school-group/model/SchoolGroup";
 import type { MealType } from "@/entities/weekly-menu/model/WeeklyMenu";
+import { getApiErrorMessage } from "@/shared/api/HttpClient";
 import { RequestError } from "@/shared/ui/RequestError";
 
 type SelectedRow = {
@@ -147,6 +153,16 @@ export function NormComplianceWorkspace() {
               </h2>
             </div>
             <div className="flex gap-2">
+              <NormComplianceExportButton
+                request={{
+                  school_id: schoolId,
+                  date_from: dateFrom,
+                  date_to: dateTo,
+                  meal_type: mealType,
+                  school_group_id: schoolGroupId,
+                }}
+                disabled={report.isFetching}
+              />
               <Link
                 href="/menu-requirements/calendar"
                 className="nf-button nf-button-secondary"
@@ -213,6 +229,46 @@ export function NormComplianceWorkspace() {
         />
       ) : null}
     </main>
+  );
+}
+
+function NormComplianceExportButton({
+  request,
+  disabled,
+}: {
+  request: Omit<NormComplianceReportRequest, "enabled">;
+  disabled: boolean;
+}) {
+  const [isPending, setIsPending] = useState(false);
+
+  const handleExport = async () => {
+    setIsPending(true);
+    try {
+      await downloadNormComplianceReport(request);
+      toast.success("Звіт про дотримання норм експортовано.");
+    } catch (error) {
+      toast.error(
+        getApiErrorMessage(error, "Не вдалося експортувати звіт про дотримання норм."),
+      );
+    } finally {
+      setIsPending(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      className="nf-button nf-button-secondary"
+      disabled={disabled || isPending}
+      onClick={() => void handleExport()}
+    >
+      {isPending ? (
+        <LoaderCircle className="size-4 animate-spin" aria-hidden />
+      ) : (
+        <FileSpreadsheet className="size-4" aria-hidden />
+      )}
+      {isPending ? "Експортуємо…" : "Експорт в Excel"}
+    </button>
   );
 }
 
