@@ -1,6 +1,8 @@
 from datetime import date, timedelta
 from decimal import Decimal
+from io import BytesIO
 
+import openpyxl
 import pytest
 from beanie import PydanticObjectId
 
@@ -17,7 +19,11 @@ from app.modules.menus.models import (
     Weekday,
 )
 from app.modules.norm_compliance.registry import get_norm, get_norms
-from app.modules.norm_compliance.schemas import ComplianceStatus
+from app.modules.norm_compliance.schemas import (
+    ComplianceGroupResponse,
+    ComplianceStatus,
+    NormComplianceReportResponse,
+)
 from app.modules.norm_compliance.service import (
     ExpectedRequirement,
     NormComplianceAccessDeniedError,
@@ -28,6 +34,7 @@ from app.modules.norm_compliance.service import (
     _validate_range,
     calculate_numeric_status,
 )
+from app.modules.norm_compliance.xlsx import build_norm_compliance_workbook
 from app.modules.nutrition.domain import (
     NormativeContributionSnapshot,
     NormativeContributionSource,
@@ -255,6 +262,43 @@ def test_report_requires_menu_requirements_for_all_five_weekdays() -> None:
             date(2026, 7, 6),
             date(2026, 7, 10),
         )
+
+
+def test_builds_norm_compliance_workbook() -> None:
+    group, day, expected = _expected_fixture()
+    requirement = _requirement_fixture(
+        group,
+        day,
+        expected.weekly_menu_id,
+        amount=Decimal("500"),
+    )
+    section = _build_section(group.age_group, MealType.BREAKFAST, [requirement], [expected])
+    report = NormComplianceReportResponse(
+        school_id=PydanticObjectId(),
+        school_name="Ліцей №1",
+        date_from=date(2026, 7, 6),
+        date_to=date(2026, 7, 10),
+        status=section.status,
+        groups=[
+            ComplianceGroupResponse(
+                school_group_id=group.id,
+                school_group_name=group.name,
+                age_group=group.age_group,
+                status=section.status,
+                sections=[section],
+            )
+        ],
+    )
+
+    workbook = openpyxl.load_workbook(BytesIO(build_norm_compliance_workbook(report)))
+    sheet = workbook.active
+
+    assert sheet["A1"].value == "ДОТРИМАННЯ НОРМ ХАРЧУВАННЯ"
+    assert sheet["B2"].value == "Ліцей №1"
+    vegetables = next(row for row in sheet.iter_rows() if row[0].value == "Овочі")
+    assert vegetables[4].value == 500
+    assert vegetables[5].value == 500
+    assert vegetables[-1].value == "В нормі"
 
 
 def _expected_fixture() -> tuple[SchoolGroup, DailyMenu, ExpectedRequirement]:
