@@ -193,7 +193,7 @@ async def update_weekly_menu(
     menu_id: PydanticObjectId,
     data: UpdateWeeklyMenuRequest,
     current_user: User,
-) -> WeeklyMenu:
+) -> tuple[WeeklyMenu, PydanticObjectId | None]:
     menu = await get_weekly_menu(menu_id, current_user)
     previous_days = deepcopy(menu.days)
     converted_days: list[DailyMenu] | None = None
@@ -257,7 +257,7 @@ async def update_weekly_menu(
         async with get_mongo_client().start_session() as session:
             await session.with_transaction(save_menu_and_request)
 
-    return menu
+    return menu, change_request.id if change_request is not None else None
 
 
 async def list_menu_change_requests(
@@ -266,11 +266,14 @@ async def list_menu_change_requests(
     offset: int,
     limit: int,
     status: MenuChangeRequestStatus | None = None,
+    school_id: PydanticObjectId | None = None,
 ) -> tuple[list[tuple[MenuChangeRequest, str]], int]:
     _ensure_change_request_access(current_user)
     filters: dict[str, Any] = {}
     if status is not None:
         filters["status"] = status.value
+    if school_id is not None:
+        filters["school_id"] = school_id
 
     query = MenuChangeRequest.find(filters)
     total = await query.count()
@@ -284,7 +287,21 @@ async def list_menu_change_requests(
     ], total
 
 
-async def mark_menu_change_request_reviewed(
+async def list_menu_change_request_schools(
+    current_user: User,
+    *,
+    status: MenuChangeRequestStatus = MenuChangeRequestStatus.REVIEWED,
+) -> list[School]:
+    _ensure_change_request_access(current_user)
+    school_ids = await MenuChangeRequest.get_pymongo_collection().distinct(
+        "school_id",
+        {"status": status.value},
+    )
+    schools = await School.find({"_id": {"$in": school_ids}}).to_list()
+    return sorted(schools, key=lambda school: school.name.casefold())
+
+
+async def get_menu_change_request(
     request_id: PydanticObjectId,
     current_user: User,
 ) -> tuple[MenuChangeRequest, str]:
@@ -292,6 +309,16 @@ async def mark_menu_change_request_reviewed(
     request = await MenuChangeRequest.get(request_id)
     if request is None:
         raise MenuNotFoundError("Menu change request not found")
+
+    school = await School.get(request.school_id)
+    return request, school.name if school is not None else "Невідома школа"
+
+
+async def mark_menu_change_request_reviewed(
+    request_id: PydanticObjectId,
+    current_user: User,
+) -> tuple[MenuChangeRequest, str]:
+    request, school_name = await get_menu_change_request(request_id, current_user)
 
     if request.status != MenuChangeRequestStatus.REVIEWED:
         now = datetime.now(UTC)
@@ -301,8 +328,7 @@ async def mark_menu_change_request_reviewed(
         request.updated_at = now
         await request.save()
 
-    school = await School.get(request.school_id)
-    return request, school.name if school is not None else "Невідома школа"
+    return request, school_name
 
 
 async def archive_weekly_menu(

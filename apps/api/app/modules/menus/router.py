@@ -1,7 +1,16 @@
 from typing import Annotated
 
 from beanie import PydanticObjectId
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 from fastapi.responses import StreamingResponse
 
 from app.api.deps import get_app_settings
@@ -11,12 +20,14 @@ from app.core.config import Settings
 from app.modules.auth.dependencies import CsrfProtection, CurrentUser, require_permissions
 from app.modules.identity.models import AdminPermission, User
 from app.modules.menus.models import MealType, MenuChangeRequestStatus, Weekday, WeeklyMenuStatus
+from app.modules.menus.notifications import send_menu_change_request_notification
 from app.modules.menus.schemas import (
     CloseDueWeeklyMenuDaysResponse,
     CommitWeeklyMenuImportRequest,
     CreateWeeklyMenuRequest,
     MenuChangeRequestListResponse,
     MenuChangeRequestResponse,
+    MenuChangeRequestSchoolOption,
     PublishWeeklyMenuRequest,
     PublishWeeklyMenuResponse,
     UpdateWeeklyMenuRequest,
@@ -65,7 +76,13 @@ from app.modules.menus.service import (
     generate_weekly_menu_template_workbook as generate_weekly_menu_template_workbook_record,
 )
 from app.modules.menus.service import (
+    get_menu_change_request as get_menu_change_request_record,
+)
+from app.modules.menus.service import (
     get_weekly_menu as get_weekly_menu_record,
+)
+from app.modules.menus.service import (
+    list_menu_change_request_schools as list_menu_change_request_school_records,
 )
 from app.modules.menus.service import (
     list_menu_change_requests as list_menu_change_request_records,
@@ -134,6 +151,7 @@ async def list_menu_change_requests(
         MenuChangeRequestStatus | None,
         Query(alias="status"),
     ] = None,
+    school_id: PydanticObjectId | None = None,
 ) -> MenuChangeRequestListResponse:
     try:
         requests, total = await list_menu_change_request_records(
@@ -141,6 +159,7 @@ async def list_menu_change_requests(
             offset=offset,
             limit=limit,
             status=status_filter,
+            school_id=school_id,
         )
     except MenuAccessDeniedError as exc:
         raise forbidden(exc) from exc
@@ -154,6 +173,43 @@ async def list_menu_change_requests(
         offset=offset,
         limit=limit,
     )
+
+
+@router.get(
+    "/change-requests/schools",
+    response_model=list[MenuChangeRequestSchoolOption],
+)
+async def list_menu_change_request_schools(
+    current_user: CurrentUser,
+) -> list[MenuChangeRequestSchoolOption]:
+    try:
+        schools = await list_menu_change_request_school_records(current_user)
+    except MenuAccessDeniedError as exc:
+        raise forbidden(exc) from exc
+
+    return [
+        MenuChangeRequestSchoolOption(id=school.id, name=school.name)
+        for school in schools
+        if school.id is not None
+    ]
+
+
+@router.get(
+    "/change-requests/{request_id}",
+    response_model=MenuChangeRequestResponse,
+)
+async def get_menu_change_request(
+    request_id: PydanticObjectId,
+    current_user: CurrentUser,
+) -> MenuChangeRequestResponse:
+    try:
+        request, school_name = await get_menu_change_request_record(request_id, current_user)
+    except MenuNotFoundError as exc:
+        raise not_found(exc) from exc
+    except MenuAccessDeniedError as exc:
+        raise forbidden(exc) from exc
+
+    return MenuChangeRequestResponse.from_request(request, school_name=school_name)
 
 
 @router.post(
@@ -518,17 +574,21 @@ async def revoke_weekly_menu(
 async def update_weekly_menu(
     menu_id: PydanticObjectId,
     payload: UpdateWeeklyMenuRequest,
+    background_tasks: BackgroundTasks,
     current_user: CurrentUser,
     _csrf: CsrfProtection,
 ) -> WeeklyMenuResponse:
     try:
-        menu = await update_weekly_menu_record(menu_id, payload, current_user)
+        menu, change_request_id = await update_weekly_menu_record(menu_id, payload, current_user)
     except MenuNotFoundError as exc:
         raise not_found(exc) from exc
     except MenuAccessDeniedError as exc:
         raise forbidden(exc) from exc
     except MenuValidationError as exc:
         raise bad_request(exc) from exc
+
+    if change_request_id is not None:
+        background_tasks.add_task(send_menu_change_request_notification, change_request_id)
 
     return WeeklyMenuResponse.from_menu(menu)
 

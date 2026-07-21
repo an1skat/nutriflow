@@ -366,6 +366,11 @@ class MenuChangeRequestListResponse(PaginatedResponse[MenuChangeRequestResponse]
     pass
 
 
+class MenuChangeRequestSchoolOption(BaseModel):
+    id: PydanticObjectId
+    name: str
+
+
 class PublishWeeklyMenuRequest(BaseModel):
     school_ids: list[PydanticObjectId] | None = None
 

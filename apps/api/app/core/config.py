@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic import EmailStr, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -39,6 +39,15 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://127.0.0.1:3000",
     ]
+
+    mail_enabled: bool = False
+    smtp_host: str | None = None
+    smtp_port: int = Field(default=587, ge=1, le=65_535)
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    smtp_security: Literal["plain", "starttls", "ssl"] = "starttls"
+    smtp_from_email: EmailStr | None = None
+    web_app_url: str = "http://localhost:3000"
 
     trusted_hosts: list[str] = ["localhost", "127.0.0.1", "testserver"]
     max_request_body_bytes: int = Field(default=2 * 1024 * 1024, ge=1024)
@@ -81,6 +90,20 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production_security(self) -> "Settings":
+        if self.mail_enabled:
+            missing = [
+                name
+                for name, value in {
+                    "SMTP_HOST": self.smtp_host,
+                    "SMTP_USERNAME": self.smtp_username,
+                    "SMTP_PASSWORD": self.smtp_password,
+                    "SMTP_FROM_EMAIL": self.smtp_from_email,
+                }.items()
+                if value is None
+            ]
+            if missing:
+                raise ValueError(f"Mail is enabled but settings are missing: {', '.join(missing)}")
+
         if self.environment.lower() in {"prod", "production"}:
             if self.debug:
                 raise ValueError("DEBUG must be false in production")
