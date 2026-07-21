@@ -1,68 +1,81 @@
 "use client";
 
-import { CheckCheck, Clock3 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { BellRing, CheckCheck, ChevronRight } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import {
   useMarkMenuChangeRequestReviewed,
+  useMenuChangeRequest,
   useMenuChangeRequests,
+  useMenuChangeRequestSchools,
 } from "@/entities/menu-change-request/api/MenuChangeRequestQueries";
 import type {
   MenuChangeRequest,
   MenuChangeRequestStatus,
-  MenuFieldChange,
 } from "@/entities/menu-change-request/model/MenuChangeRequest";
-import {
-  AGE_GROUP_LABELS,
-  WEEKDAY_LABELS,
-} from "@/entities/weekly-menu/model/WeeklyMenu";
 import { getApiErrorMessage } from "@/shared/api/HttpClient";
 import { formatDate } from "@/shared/lib/FormatDate";
 import { RequestError } from "@/shared/ui/RequestError";
 
-const FIELD_LABELS: Record<string, string> = {
-  kind: "Тип позиції",
-  source_text: "Джерело",
-  recipe_card_number: "Номер техкарти",
-  dish_card_id: "Техкарта (ID)",
-  dish_card_version_id: "Версія техкарти (ID)",
-  product_ingredient_id: "Інгредієнт (ID)",
-  product_name_snapshot: "Промисловий виріб",
-  name: "Назва страви",
-  allergen_codes: "Алергени",
-  portions: "Порції та КБЖВ",
-  notes: "Нотатки",
-};
+import { MenuChangeRequestDialog } from "./MenuChangeRequestDialog";
 
-const HIDDEN_TECHNICAL_FIELDS = new Set([
-  "dish_card_id",
-  "dish_card_version_id",
-  "product_ingredient_id",
-]);
-
-const NUTRITION_LABELS: Record<string, string> = {
-  kcal: "ккал",
-  proteins: "Б",
-  fats: "Ж",
-  carbs: "В",
-};
-
-export function MenuChangeRequestsWorkspace() {
+export function MenuChangeRequestsWorkspace({
+  initialRequestId,
+}: {
+  initialRequestId?: string;
+}) {
+  const router = useRouter();
   const [status, setStatus] = useState<MenuChangeRequestStatus>("pending");
-  const requests = useMenuChangeRequests({
-    offset: 0,
-    limit: 100,
-    status,
-  });
-  const markReviewed = useMarkMenuChangeRequestReviewed();
+  const [selectedSchoolId, setSelectedSchoolId] = useState("");
+  const [activeRequestId, setActiveRequestId] = useState<string | null>(
+    initialRequestId ?? null,
+  );
+  const [hasDeepLink, setHasDeepLink] = useState(Boolean(initialRequestId));
+  const attemptedReviewId = useRef<string | null>(null);
 
-  const handleMarkReviewed = async (requestId: string) => {
-    try {
-      await markReviewed.mutateAsync(requestId);
-      toast.success("Зміну позначено як переглянуту.");
-    } catch (error) {
+  const shouldLoadList = status === "pending" || selectedSchoolId !== "";
+  const requests = useMenuChangeRequests(
+    {
+      offset: 0,
+      limit: 100,
+      status,
+      schoolId: status === "reviewed" ? selectedSchoolId || undefined : undefined,
+    },
+    shouldLoadList,
+  );
+  const schools = useMenuChangeRequestSchools();
+  const requestDetails = useMenuChangeRequest(activeRequestId);
+  const markReviewed = useMarkMenuChangeRequestReviewed();
+  const markAsReviewed = markReviewed.mutateAsync;
+
+  useEffect(() => {
+    const request = requestDetails.data;
+    if (
+      !activeRequestId ||
+      request?.status !== "pending" ||
+      attemptedReviewId.current === activeRequestId
+    ) {
+      return;
+    }
+    attemptedReviewId.current = activeRequestId;
+    void markAsReviewed(activeRequestId).catch((error) => {
       toast.error(getApiErrorMessage(error));
+    });
+  }, [activeRequestId, markAsReviewed, requestDetails.data]);
+
+  const openRequest = (requestId: string) => {
+    attemptedReviewId.current = null;
+    setActiveRequestId(requestId);
+  };
+
+  const closeRequest = () => {
+    attemptedReviewId.current = null;
+    setActiveRequestId(null);
+    if (hasDeepLink) {
+      setHasDeepLink(false);
+      router.replace("/admin/menu-changes", { scroll: false });
     }
   };
 
@@ -72,8 +85,8 @@ export function MenuChangeRequestsWorkspace() {
         <p className="nf-eyebrow">Технолог</p>
         <h1 className="nf-title">Зміни меню від шкіл</h1>
         <p className="nf-description">
-          Тут з’являються лише збереження, у яких школа замінила страву або
-          змінила її дані. Зміни кількості дітей сюди не потрапляють.
+          Відкрийте повідомлення, щоб переглянути повне порівняння. Зміни
+          кількості дітей сюди не потрапляють.
         </p>
       </header>
 
@@ -82,35 +95,60 @@ export function MenuChangeRequestsWorkspace() {
         role="tablist"
         aria-label="Статус змін"
       >
-        <button
-          type="button"
-          role="tab"
-          aria-selected={status === "pending"}
-          className={`min-h-9 px-4 text-sm font-bold transition-colors ${
-            status === "pending"
-              ? "bg-white text-emerald-800 shadow-sm"
-              : "text-slate-600 hover:bg-white/60 hover:text-slate-900"
-          }`}
+        <TabButton
+          active={status === "pending"}
           onClick={() => setStatus("pending")}
         >
-          Нові
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={status === "reviewed"}
-          className={`min-h-9 px-4 text-sm font-bold transition-colors ${
-            status === "reviewed"
-              ? "bg-white text-emerald-800 shadow-sm"
-              : "text-slate-600 hover:bg-white/60 hover:text-slate-900"
-          }`}
-          onClick={() => setStatus("reviewed")}
+          Вхідні
+        </TabButton>
+        <TabButton
+          active={status === "reviewed"}
+          onClick={() => {
+            setStatus("reviewed");
+            setSelectedSchoolId("");
+          }}
         >
           Переглянуті
-        </button>
+        </TabButton>
       </div>
 
-      {requests.isPending ? (
+      {status === "reviewed" ? (
+        <section className="nf-panel mb-5">
+          <div className="nf-panel-body">
+            <label className="nf-label" htmlFor="reviewed-school">
+              Школа
+            </label>
+            <select
+              id="reviewed-school"
+              className="nf-input mt-2 max-w-md"
+              value={selectedSchoolId}
+              disabled={schools.isPending || schools.isError}
+              onChange={(event) => setSelectedSchoolId(event.target.value)}
+            >
+              <option value="">Оберіть школу</option>
+              {schools.data?.map((school) => (
+                <option key={school.id} value={school.id}>
+                  {school.name}
+                </option>
+              ))}
+            </select>
+            {schools.isError ? (
+              <div className="mt-3">
+                <RequestError
+                  error={schools.error}
+                  onRetry={() => void schools.refetch()}
+                />
+              </div>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
+      {status === "reviewed" && !selectedSchoolId ? (
+        <EmptyState text="Оберіть школу, щоб переглянути історію змін." />
+      ) : null}
+
+      {shouldLoadList && requests.isPending ? (
         <section className="nf-panel">
           <div className="nf-panel-body">
             <p role="status" className="text-sm text-slate-600">
@@ -120,342 +158,157 @@ export function MenuChangeRequestsWorkspace() {
         </section>
       ) : null}
 
-      {requests.isError ? (
+      {shouldLoadList && requests.isError ? (
         <RequestError
           error={requests.error}
           onRetry={() => void requests.refetch()}
         />
       ) : null}
 
-      {requests.data?.items.length === 0 ? (
-        <section className="nf-panel">
-          <div className="nf-panel-body">
-            <div className="nf-empty">
-              {status === "pending"
-                ? "Нових змін страв від шкіл немає."
-                : "Переглянутих змін поки немає."}
-            </div>
-          </div>
-        </section>
+      {shouldLoadList && requests.data?.items.length === 0 ? (
+        <EmptyState
+          text={
+            status === "pending"
+              ? "Нових змін страв від шкіл немає."
+              : "Для цієї школи переглянутих змін поки немає."
+          }
+        />
       ) : null}
 
-      <div className="space-y-5">
-        {requests.data?.items.map((request) => (
-          <ChangeRequestCard
-            key={request.id}
-            request={request}
-            reviewing={
-              markReviewed.isPending && markReviewed.variables === request.id
-            }
-            onMarkReviewed={() => void handleMarkReviewed(request.id)}
-          />
-        ))}
-      </div>
+      {shouldLoadList ? (
+        <div className="space-y-3">
+          {requests.data?.items.map((request) => (
+            <ChangeRequestSummary
+              key={request.id}
+              request={request}
+              onOpen={() => openRequest(request.id)}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      <MenuChangeRequestDialog
+        open={activeRequestId !== null}
+        request={requestDetails.data}
+        loading={requestDetails.isPending}
+        error={requestDetails.isError ? requestDetails.error : null}
+        onRetry={() => void requestDetails.refetch()}
+        onClose={closeRequest}
+      />
     </main>
   );
 }
 
-function ChangeRequestCard({
+function TabButton({
+  active,
+  children,
+  onClick,
+}: {
+  active: boolean;
+  children: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      className={`min-h-9 px-4 text-sm font-bold transition-colors ${
+        active
+          ? "bg-white text-emerald-800 shadow-sm"
+          : "text-slate-600 hover:bg-white/60 hover:text-slate-900"
+      }`}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
+
+function ChangeRequestSummary({
   request,
-  reviewing,
-  onMarkReviewed,
+  onOpen,
 }: {
   request: MenuChangeRequest;
-  reviewing: boolean;
-  onMarkReviewed: () => void;
+  onOpen: () => void;
 }) {
-  const groupedChanges = useMemo(() => groupChanges(request), [request]);
+  const pending = request.status === "pending";
+  const changedDishCount = new Set(
+    request.changes.map((change) => `${change.weekday}:${change.position}`),
+  ).size;
+  const dateLabel = getChangedDateLabel(request);
 
   return (
-    <article className="nf-panel overflow-hidden">
-      <div className="nf-panel-header items-start gap-4">
-        <div>
-          <p className="nf-eyebrow">{request.school_name}</p>
-          <h2 className="nf-panel-title">{request.menu_title}</h2>
-          <p className="mt-1 text-xs text-slate-600">
-            {request.meal_type === "lunch" ? "Обід" : "Сніданок"}
-            {request.cycle_week ? ` · цикл ${request.cycle_week}` : ""}
-            {` · надіслано ${formatDate(request.created_at)}`}
-          </p>
-        </div>
-        <span
-          className={`inline-flex items-center gap-1 border px-2 py-1 text-xs font-bold ${
-            request.status === "pending"
-              ? "border-amber-300 bg-amber-50 text-amber-900"
-              : "border-emerald-300 bg-emerald-50 text-emerald-900"
-          }`}
-        >
-          {request.status === "pending" ? (
-            <Clock3 className="size-3.5" aria-hidden />
-          ) : (
-            <CheckCheck className="size-3.5" aria-hidden />
-          )}
-          {request.status === "pending" ? "Нова зміна" : "Переглянуто"}
-        </span>
-      </div>
-
-      <div className="nf-panel-body space-y-4">
-        {groupedChanges.map((group) => (
-          <section
-            key={`${group.weekday}-${group.position}`}
-            className="border border-amber-200 bg-amber-50/40"
-          >
-            <div className="border-b border-amber-200 bg-amber-50 px-4 py-3">
-              <h3 className="text-sm font-bold text-amber-950">
-                {WEEKDAY_LABELS[group.weekday]} · страва № {group.position}
-                {group.date ? ` · ${formatDayDate(group.date)}` : ""}
-              </h3>
-            </div>
-            <ChangeComparisonTables changes={group.changes} />
-          </section>
-        ))}
-
-        <details className="border border-slate-200 bg-slate-50">
-          <summary className="cursor-pointer px-4 py-3 text-sm font-bold text-slate-800">
-            Меню після збереження
-          </summary>
-          <div className="space-y-3 border-t border-slate-200 p-4">
-            {request.days_snapshot.map((day) => (
-              <div key={day.weekday}>
-                <p className="text-xs font-bold uppercase tracking-wide text-slate-600">
-                  {WEEKDAY_LABELS[day.weekday]}
-                  {day.date ? ` · ${formatDayDate(day.date)}` : ""}
-                </p>
-                <ol className="mt-1 list-decimal space-y-1 pl-5 text-sm text-slate-800">
-                  {[...day.items]
-                    .sort((left, right) => left.position - right.position)
-                    .map((item) => (
-                      <li key={item.id}>{item.name}</li>
-                    ))}
-                </ol>
-              </div>
-            ))}
-          </div>
-        </details>
-
-        {request.status === "pending" ? (
-          <button
-            type="button"
-            className="nf-button nf-button-primary"
-            disabled={reviewing}
-            onClick={onMarkReviewed}
-          >
-            <CheckCheck className="size-4" aria-hidden />
-            {reviewing ? "Позначаємо…" : "Позначити як переглянуте"}
-          </button>
-        ) : null}
-      </div>
-    </article>
-  );
-}
-
-function ChangeComparisonTables({
-  changes,
-}: {
-  changes: MenuFieldChange[];
-}) {
-  return (
-    <div className="grid gap-4 bg-white p-4 xl:grid-cols-2">
-      <ComparisonTable side="before" changes={changes} />
-      <ComparisonTable side="after" changes={changes} />
-    </div>
-  );
-}
-
-function ComparisonTable({
-  side,
-  changes,
-}: {
-  side: "before" | "after";
-  changes: MenuFieldChange[];
-}) {
-  const isBefore = side === "before";
-
-  return (
-    <div
-      className={`overflow-hidden border ${
-        isBefore ? "border-rose-200" : "border-emerald-200"
+    <button
+      type="button"
+      className={`group flex w-full items-center gap-4 border bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${
+        pending ? "border-amber-200" : "border-slate-200"
       }`}
+      aria-label={`Переглянути зміни від школи ${request.school_name}`}
+      onClick={onOpen}
     >
-      <div
-        className={`border-b px-3 py-2 text-sm font-bold ${
-          isBefore
-            ? "border-rose-200 bg-rose-50 text-rose-900"
-            : "border-emerald-200 bg-emerald-50 text-emerald-900"
+      <span
+        className={`flex size-11 shrink-0 items-center justify-center border ${
+          pending
+            ? "border-amber-200 bg-amber-50 text-amber-800"
+            : "border-emerald-200 bg-emerald-50 text-emerald-800"
         }`}
       >
-        {isBefore ? "Було" : "Стало"}
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[420px] border-collapse text-sm">
-          <thead>
-            <tr className="bg-slate-50 text-left text-[11px] uppercase tracking-wide text-slate-600">
-              <th className="w-40 border-b border-slate-200 px-3 py-2">
-                Поле
-              </th>
-              <th className="border-b border-slate-200 px-3 py-2">Значення</th>
-            </tr>
-          </thead>
-          <tbody>
-            {changes.map((change) => (
-              <tr
-                key={`${change.item_id}-${change.field}-${side}`}
-                className="border-b border-slate-100 last:border-b-0"
-              >
-                <th
-                  scope="row"
-                  className="bg-slate-50/70 px-3 py-3 text-left align-top text-xs font-bold text-slate-700"
-                >
-                  {FIELD_LABELS[change.field] ?? change.field}
-                </th>
-                <td
-                  className={`border-l-4 px-3 py-3 align-top ${
-                    isBefore
-                      ? "border-l-rose-400 bg-rose-50/70"
-                      : "border-l-emerald-500 bg-emerald-50/70"
-                  }`}
-                >
-                  <ValuePreview
-                    field={change.field}
-                    value={
-                      isBefore ? change.before_value : change.after_value
-                    }
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+        {pending ? (
+          <BellRing className="size-5" aria-hidden />
+        ) : (
+          <CheckCheck className="size-5" aria-hidden />
+        )}
+      </span>
+
+      <span className="min-w-0 flex-1">
+        <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="font-bold text-slate-900">{request.school_name}</span>
+          {pending ? (
+            <span className="border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-amber-800">
+              Нове
+            </span>
+          ) : null}
+        </span>
+        <span className="mt-1 block text-sm text-slate-700">
+          Внесла зміни до денного меню за {dateLabel}
+        </span>
+        <span className="mt-1 block text-xs text-slate-500">
+          {request.menu_title} · змінено страв: {changedDishCount} · {formatDate(request.created_at)}
+        </span>
+      </span>
+
+      <ChevronRight
+        className="size-5 shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5 group-hover:text-emerald-700"
+        aria-hidden
+      />
+    </button>
   );
 }
 
-function ValuePreview({
-  field,
-  value,
-}: {
-  field: string;
-  value: unknown;
-}) {
-  if (value === null || value === undefined || value === "") {
-    return <span className="text-slate-500">Не вказано</span>;
-  }
-
-  if (field === "kind") {
-    return value === "dish_card" ? "Страва з техкарти" : "Промисловий виріб";
-  }
-
-  if (field === "portions" && Array.isArray(value)) {
-    return <PortionsPreview portions={value} />;
-  }
-
-  if (Array.isArray(value)) {
-    if (value.every((item) => typeof item === "string")) {
-      return value.length > 0 ? value.join(", ") : "Немає";
-    }
-
-    return "Дані оновлено";
-  }
-
-  if (typeof value === "object") {
-    return "Дані оновлено";
-  }
-
-  return <span className="break-words text-slate-800">{String(value)}</span>;
-}
-
-function PortionsPreview({ portions }: { portions: unknown[] }) {
-  if (portions.length === 0) {
-    return <span className="text-slate-500">Не вказано</span>;
-  }
-
+function EmptyState({ text }: { text: string }) {
   return (
-    <ul className="space-y-2">
-      {portions.map((portion, index) => {
-        if (!isRecord(portion)) {
-          return <li key={index}>Дані порції оновлено</li>;
-        }
-
-        const ageGroup =
-          typeof portion.age_group === "string"
-            ? (AGE_GROUP_LABELS[
-                portion.age_group as keyof typeof AGE_GROUP_LABELS
-              ] ?? portion.age_group)
-            : "Вікова група";
-        const yieldAmount =
-          typeof portion.yield_amount === "string"
-            ? `${portion.yield_amount} г`
-            : "вагу не вказано";
-        const nutritionValues = isRecord(portion.nutrition)
-          ? portion.nutrition
-          : null;
-        const nutrition = nutritionValues
-          ? Object.entries(NUTRITION_LABELS)
-              .flatMap(([key, label]) => {
-                const nutritionValue = nutritionValues[key];
-                return nutritionValue === null ||
-                  nutritionValue === undefined ||
-                  nutritionValue === ""
-                  ? []
-                  : [`${label}: ${String(nutritionValue)}`];
-              })
-              .join(" · ")
-          : "";
-
-        return (
-          <li key={`${String(portion.age_group)}-${index}`}>
-            <span className="font-bold text-slate-800">{ageGroup}:</span>{" "}
-            {yieldAmount}
-            {nutrition ? ` · ${nutrition}` : ""}
-          </li>
-        );
-      })}
-    </ul>
+    <section className="nf-panel">
+      <div className="nf-panel-body">
+        <div className="nf-empty">{text}</div>
+      </div>
+    </section>
   );
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function groupChanges(request: MenuChangeRequest) {
-  const groups = new Map<
-    string,
-    {
-      weekday: MenuFieldChange["weekday"];
-      position: number;
-      date: string | null;
-      visibleChanges: MenuFieldChange[];
-    }
-  >();
-
-  for (const change of request.changes) {
-    const key = `${change.weekday}:${change.position}`;
-    const existing = groups.get(key) ?? {
-      weekday: change.weekday,
-      position: change.position,
-      date:
-        request.days_snapshot.find((day) => day.weekday === change.weekday)
-          ?.date ?? null,
-      visibleChanges: [],
-    };
-
-    if (!HIDDEN_TECHNICAL_FIELDS.has(change.field)) {
-      existing.visibleChanges.push(change);
-    }
-
-    groups.set(key, existing);
+function getChangedDateLabel(request: MenuChangeRequest): string {
+  const changedWeekdays = new Set(
+    request.changes.map((change) => change.weekday),
+  );
+  const dates = request.days_snapshot
+    .flatMap((day) =>
+      changedWeekdays.has(day.weekday) && day.date ? [day.date] : [],
+    )
+    .sort();
+  if (dates.length > 0) {
+    return dates.map(formatDayDate).join(", ");
   }
-
-  return [...groups.values()]
-    .filter((group) => group.visibleChanges.length > 0)
-    .map((group) => ({
-      weekday: group.weekday,
-      position: group.position,
-      date: group.date,
-      changes: group.visibleChanges,
-    }));
+  return request.starts_on ? formatDayDate(request.starts_on) : "дату меню";
 }
 
 function formatDayDate(value: string): string {
@@ -463,7 +316,6 @@ function formatDayDate(value: string): string {
   if (Number.isNaN(date.getTime())) {
     return value;
   }
-
   return new Intl.DateTimeFormat("uk-UA", {
     day: "2-digit",
     month: "2-digit",

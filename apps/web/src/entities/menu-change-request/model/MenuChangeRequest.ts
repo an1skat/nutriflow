@@ -45,9 +45,21 @@ export const menuChangeRequestListSchema = z.object({
   limit: z.number().int().positive(),
 });
 
+export const menuChangeRequestSchoolOptionSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+});
+
+export const menuChangeRequestSchoolOptionsSchema = z.array(
+  menuChangeRequestSchoolOptionSchema,
+);
+
 export type MenuChangeRequestStatus = z.infer<
   typeof menuChangeRequestStatusSchema
 >;
 export type MenuFieldChange = z.infer<typeof menuFieldChangeSchema>;
 export type MenuChangeRequest = z.infer<typeof menuChangeRequestSchema>;
 export type MenuChangeRequestList = z.infer<typeof menuChangeRequestListSchema>;
+export type MenuChangeRequestSchoolOption = z.infer<
+  typeof menuChangeRequestSchoolOptionSchema
+>;
