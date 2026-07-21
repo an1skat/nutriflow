@@ -120,7 +120,7 @@ def import_workbook_bytes() -> bytes:
     sheet["A6"] = "ТК № 1.54"
     sheet["B6"] = "ГЦ"
     sheet["C6"] = "Салат з пекінської капусти"
-    sheet["D6"] = 100
+    sheet["D6"] = 120
     sheet["E6"] = 46
     sheet["F6"] = 1.29
     sheet["G6"] = 1.27
@@ -191,6 +191,7 @@ def test_admin_previews_and_commits_imported_weekly_menu(seeded_client):
         client,
         card_number="1.54",
         allergen_codes=["ГЦ"],
+        output_grams="120",
     )
 
     preview_response = client.post(
@@ -207,7 +208,7 @@ def test_admin_previews_and_commits_imported_weekly_menu(seeded_client):
 
     assert preview_response.status_code == 202
     preview = preview_response.json()
-    assert preview["commit_ready"] is True
+    assert preview["commit_ready"] is True, preview["diagnostics"]
     assert preview["available_sheet_names"] == ["І тиждень"]
     assert preview["selected_sheet_name"] == "І тиждень"
     assert preview["diagnostics"] == []
@@ -223,7 +224,10 @@ def test_admin_previews_and_commits_imported_weekly_menu(seeded_client):
     )
 
     assert commit_response.status_code == 201
-    menu = commit_response.json()
+    commit = commit_response.json()
+    assert len(commit["created_menu_ids"]) == 1
+    menu = commit["menu"]
+    assert menu is not None
     assert menu["school_id"] == str(identities.own_school.id)
     assert menu["days"][0]["items"][0]["dish_card_id"] == dish_card_id
     assert menu["days"][0]["items"][0]["allergen_codes"] == ["ГЦ"]
@@ -249,7 +253,7 @@ def test_weekly_menu_export_generates_roundtrip_workbook(seeded_client):
         export_response.headers["content-type"]
         == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-    assert export_response.headers["content-disposition"].endswith(".xlsx\"")
+    assert "filename*=UTF-8''1.xlsx" in export_response.headers["content-disposition"]
 
     workbook = openpyxl.load_workbook(BytesIO(export_response.content))
     sheet = workbook.active
@@ -650,13 +654,22 @@ def test_school_user_can_edit_content_but_not_change_daily_dish_count(seeded_cli
     create_response = client.post(
         "/api/v1/menus/weekly",
         json=weekly_menu_payload(
-            school_id=str(identities.own_school.id),
             items=[dish_item()],
         ),
         headers=csrf_headers(client),
     )
     assert create_response.status_code == 201
-    menu = create_response.json()
+    source_id = create_response.json()["id"]
+    publish_response = client.post(
+        f"/api/v1/menus/weekly/{source_id}/publish",
+        json={"school_ids": [str(identities.own_school.id)]},
+        headers=csrf_headers(client),
+    )
+    assert publish_response.status_code == 200
+    menu_id = publish_response.json()["created_menu_ids"][0]
+    menu_response = client.get(f"/api/v1/menus/weekly/{menu_id}")
+    assert menu_response.status_code == 200
+    menu = menu_response.json()
 
     login(client, identities.school_user.username, identities.school_user_password)
 
@@ -675,7 +688,7 @@ def test_school_user_can_edit_content_but_not_change_daily_dish_count(seeded_cli
         json={"days": changed_days},
         headers=csrf_headers(client),
     )
-    assert edit_response.status_code == 200
+    assert edit_response.status_code == 200, edit_response.text
     assert edit_response.json()["days"][0]["items"][0]["name"] == "Салат оновлений школою"
     assert edit_response.json()["days"][0]["items"][0]["servings"][0]["children_count"] == 12
 
@@ -715,6 +728,7 @@ def create_confirmed_dish_card(
     *,
     card_number: str,
     allergen_codes: list[str] | None = None,
+    output_grams: str = "100",
 ) -> tuple[str, str]:
     create_card = client.post(
         "/api/v1/recipes/dish-cards",
@@ -746,7 +760,7 @@ def create_confirmed_dish_card(
                 {
                     "id": str(variant_id),
                     "age_group": "6-11",
-                    "output_grams": "100",
+                    "output_grams": output_grams,
                     "nutrition": {},
                 }
             ],

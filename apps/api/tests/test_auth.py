@@ -88,6 +88,7 @@ def test_cookie_auth_flow_and_csrf(seeded_client):
         "school_groups.manage",
         "menus.manage",
         "recipes.manage",
+        "recipes.view",
     }
 
     refresh_without_csrf = client.post("/api/v1/auth/refresh")
@@ -287,7 +288,7 @@ def test_import_preview_requires_authentication_and_csrf(seeded_client):
     }
 
     unauthenticated_response = client.post(
-        "/api/v1/imports/dish-cards/preview",
+        "/api/v1/menus/weekly/import-preview?meal_type=lunch",
         files=files,
     )
 
@@ -295,14 +296,14 @@ def test_import_preview_requires_authentication_and_csrf(seeded_client):
 
     login_response = login(
         client,
-        identities.school_user.username,
-        identities.school_user_password,
+        identities.admin.username,
+        identities.admin_password,
     )
 
     assert login_response.status_code == 204
 
     missing_csrf_response = client.post(
-        "/api/v1/imports/dish-cards/preview",
+        "/api/v1/menus/weekly/import-preview?meal_type=lunch",
         files=files,
     )
 
@@ -310,7 +311,7 @@ def test_import_preview_requires_authentication_and_csrf(seeded_client):
 
     csrf_token = client.cookies.get(settings.csrf_cookie_name)
     authenticated_response = client.post(
-        "/api/v1/imports/dish-cards/preview",
+        "/api/v1/menus/weekly/import-preview?meal_type=lunch",
         files=files,
         headers={"X-CSRF-Token": csrf_token},
     )

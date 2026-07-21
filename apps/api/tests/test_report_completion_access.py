@@ -4,15 +4,13 @@ import pytest
 from beanie import PydanticObjectId
 
 from app.modules.identity.models import School, User, UserRole
-from app.modules.menu_requirements import service as menu_requirement_service
+from app.modules.menu_requirements import reporting as menu_requirement_reporting
+from app.modules.menu_requirements.errors import MenuRequirementValidationError
+from app.modules.menu_requirements.reporting import _validate_complete_aggregate_report
 from app.modules.menu_requirements.schemas import (
     MenuRequirementAggregateStatus,
     MenuRequirementCalendarDayResponse,
     MenuRequirementReportGranularity,
-)
-from app.modules.menu_requirements.service import (
-    MenuRequirementValidationError,
-    _validate_complete_aggregate_report,
 )
 from app.modules.norm_compliance import service as norm_compliance_service
 from app.modules.norm_compliance.service import NormComplianceValidationError
@@ -111,17 +109,17 @@ async def test_owner_can_open_an_incomplete_monthly_menu_requirement(
     async def get_statuses(*_args, **_kwargs):
         return {}
 
-    monkeypatch.setattr(menu_requirement_service, "_get_accessible_school", get_school)
-    monkeypatch.setattr(menu_requirement_service, "_expected_menu_days", get_expected_days)
+    monkeypatch.setattr(menu_requirement_reporting, "_get_accessible_school", get_school)
+    monkeypatch.setattr(menu_requirement_reporting, "_expected_menu_days", get_expected_days)
     monkeypatch.setattr(
-        menu_requirement_service,
+        menu_requirement_reporting,
         "_find_requirements_for_report",
         get_requirements,
     )
-    monkeypatch.setattr(menu_requirement_service, "_requirement_statuses", get_statuses)
+    monkeypatch.setattr(menu_requirement_reporting, "_requirement_statuses", get_statuses)
 
     owner = User.model_construct(id=PydanticObjectId(), role=UserRole.OWNER)
-    report = await menu_requirement_service.get_menu_requirement_report(
+    report = await menu_requirement_reporting.get_menu_requirement_report(
         school.id,
         date(2026, 7, 1),
         date(2026, 7, 31),
@@ -132,7 +130,7 @@ async def test_owner_can_open_an_incomplete_monthly_menu_requirement(
 
     admin = User.model_construct(id=PydanticObjectId(), role=UserRole.ADMIN)
     with pytest.raises(MenuRequirementValidationError, match="every participating day"):
-        await menu_requirement_service.get_menu_requirement_report(
+        await menu_requirement_reporting.get_menu_requirement_report(
             school.id,
             date(2026, 7, 1),
             date(2026, 7, 31),

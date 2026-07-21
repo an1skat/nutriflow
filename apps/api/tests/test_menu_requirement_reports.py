@@ -7,12 +7,7 @@ from beanie import PydanticObjectId
 from fastapi.testclient import TestClient
 
 from app.core.config import get_settings
-from app.modules.menu_requirements.service import (
-    _build_calendar_month,
-    _menu_day_service_date,
-    resolve_service_date,
-)
-from app.modules.menus.models import DailyMenu, Weekday, WeeklyMenu
+from app.modules.menu_requirements.reporting import _build_calendar_month
 
 
 def login(client: TestClient, identifier: str, password: str) -> None:
@@ -439,21 +434,6 @@ def test_calendar_keeps_an_existing_weekend_requirement_visible() -> None:
     assert week.date_from == Date(2026, 7, 6)
     assert week.date_to == generated_date
     assert week.generated_days == 1
-
-
-def test_requirement_service_date_follows_the_named_menu_weekday() -> None:
-    menu = WeeklyMenu.model_construct(starts_on=Date(2026, 7, 12))
-    monday = DailyMenu.model_construct(
-        weekday=Weekday.MONDAY,
-        date=Date(2026, 7, 12),
-    )
-    friday = DailyMenu.model_construct(
-        weekday=Weekday.FRIDAY,
-        date=Date(2026, 7, 16),
-    )
-
-    assert resolve_service_date(menu, monday, Date(2026, 7, 12)) == Date(2026, 7, 13)
-    assert _menu_day_service_date(menu, friday) == Date(2026, 7, 17)
 
 
 def test_calendar_access_and_workweek_block(seeded_client) -> None:

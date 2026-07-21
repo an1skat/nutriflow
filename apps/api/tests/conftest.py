@@ -38,8 +38,9 @@ def pytest_configure(config: pytest.Config) -> None:
     os.environ["REDOC_ENABLED"] = "false"
     os.environ["OPENAPI_ENABLED"] = "false"
     os.environ["DATABASE_HEALTH_ENABLED"] = "false"
-    os.environ["MONGO_URI"] = (
-        "mongodb://nutriflow:nutriflow_dev_password@localhost:27017/?authSource=admin"
+    os.environ["MONGO_URI"] = os.getenv(
+        "TEST_MONGO_URI",
+        "mongodb://nutriflow:nutriflow_dev_password@localhost:27017/?authSource=admin",
     )
     os.environ["MONGO_DB"] = TEST_DATABASE_NAME
     os.environ["JWT_SECRET_KEY"] = "test-jwt-secret-key-test-jwt-secret-key"
