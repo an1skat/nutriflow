@@ -42,7 +42,7 @@ const technologist: AuthUser = {
   email: "technologist@example.com",
   role: "TECHNOLOGIST",
   school_id: null,
-  permissions: ["menus.manage", "recipes.view"],
+  permissions: ["menus.manage", "recipes.view", "recipes.manage"],
   is_active: true,
 };
 
@@ -125,7 +125,7 @@ describe("authorization", () => {
   it("gives the technologist menu and recipe access without school management", () => {
     expect(hasPermission(technologist, "menus.manage")).toBe(true);
     expect(hasPermission(technologist, "recipes.view")).toBe(true);
-    expect(hasPermission(technologist, "recipes.manage")).toBe(false);
+    expect(hasPermission(technologist, "recipes.manage")).toBe(true);
     expect(hasPermission(technologist, "schools.manage")).toBe(false);
     expect(
       getRouteAccess(technologist, {

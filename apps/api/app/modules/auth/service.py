@@ -307,6 +307,7 @@ def technologist_permissions() -> list[AdminPermission]:
     return [
         AdminPermission.MENUS_MANAGE,
         AdminPermission.RECIPES_VIEW,
+        AdminPermission.RECIPES_MANAGE,
     ]
 
 

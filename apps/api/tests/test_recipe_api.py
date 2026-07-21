@@ -366,6 +366,34 @@ def test_school_user_can_read_recipe_catalog(school_client):
     assert client.get("/api/v1/recipes/dish-cards").status_code == 200
 
 
+def test_technologist_can_create_dish_card(seeded_client):
+    client, identities = seeded_client
+    login(client, identities.admin.username, identities.admin_password)
+
+    response = client.post(
+        "/api/v1/admin/admins",
+        json={
+            "username": "recipe.tech",
+            "email": "recipe.tech@example.com",
+            "password": "tech-password-123",
+            "role": "TECHNOLOGIST",
+            "permissions": [],
+        },
+        headers=csrf_headers(client),
+    )
+    assert response.status_code == 201
+
+    login(client, "recipe.tech", "tech-password-123")
+    response = client.post(
+        "/api/v1/recipes/dish-cards",
+        json={"card_number": "99.06", "name": "Технологічна страва"},
+        headers=csrf_headers(client),
+    )
+
+    assert response.status_code == 201
+    assert response.json()["card_number"] == "99.06"
+
+
 def _create_dish_card(client: TestClient, *, number: str) -> str:
     response = client.post(
         "/api/v1/recipes/dish-cards",
