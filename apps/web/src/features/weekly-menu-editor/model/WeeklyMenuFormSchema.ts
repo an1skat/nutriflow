@@ -39,6 +39,13 @@ const weeklyMenuPortionFormSchema = z.object({
     .min(1, "Вкажіть вихід")
     .max(40, "Значення надто довге"),
   dish_card_portion_variant_id: z.string().min(1).nullable(),
+  calculated_from: z
+    .object({
+      portion_variant_id: z.string().min(1),
+      yield_amount: z.string().trim().min(1).max(40),
+    })
+    .nullable()
+    .default(null),
   nutrition: z.object({
     kcal: optionalDecimalInput,
     proteins: optionalDecimalInput,
@@ -121,6 +128,7 @@ export function createBlankPortion(ageGroup: z.infer<typeof ageGroupSchema>) {
     age_group: ageGroup,
     yield_amount: "",
     dish_card_portion_variant_id: null,
+    calculated_from: null,
     nutrition: {
       kcal: "",
       proteins: "",
@@ -211,6 +219,7 @@ export function weeklyMenuToFormValues(menu: WeeklyMenu): WeeklyMenuFormValues {
               yield_amount: portion.yield_amount,
               dish_card_portion_variant_id:
                 portion.dish_card_portion_variant_id,
+              calculated_from: portion.calculated_from,
               nutrition: {
                 kcal: portion.nutrition.kcal ?? "",
                 proteins: portion.nutrition.proteins ?? "",
@@ -268,6 +277,7 @@ export function formValuesToWeeklyMenuPayload(
           age_group: portion.age_group,
           yield_amount: portion.yield_amount.trim(),
           dish_card_portion_variant_id: portion.dish_card_portion_variant_id,
+          calculated_from: portion.calculated_from,
           nutrition: {
             kcal: normalizeOptionalText(portion.nutrition.kcal),
             proteins: normalizeOptionalText(portion.nutrition.proteins),

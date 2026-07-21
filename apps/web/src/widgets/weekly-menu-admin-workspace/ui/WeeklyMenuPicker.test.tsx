@@ -46,6 +46,7 @@ function createMenu(
                 age_group: "6-11",
                 yield_amount: "200",
                 dish_card_portion_variant_id: null,
+                calculated_from: null,
                 nutrition: {
                   kcal: null,
                   proteins: null,

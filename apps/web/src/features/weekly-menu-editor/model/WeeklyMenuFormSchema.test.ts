@@ -39,6 +39,10 @@ describe("weekly menu form schema", () => {
     values.days[0].items[0].allergen_codes = [" a1 ", "b2", "a1"];
     values.days[0].items[0].notes = "  Без цукру ";
     values.days[0].items[0].portions[0].yield_amount = "250";
+    values.days[0].items[0].portions[0].calculated_from = {
+      portion_variant_id: "source-portion-id",
+      yield_amount: "240",
+    };
     values.days[0].items[0].portions[0].nutrition.kcal = "120.5";
     values.days[0].items[0].portions[1].yield_amount = "300";
     values.days[0].items[0].portions[2].yield_amount = "350";
@@ -54,6 +58,10 @@ describe("weekly menu form schema", () => {
     expect(payload.days[0].items[0].allergen_codes).toEqual(["A1", "B2"]);
     expect(payload.days[0].items[0].notes).toBe("Без цукру");
     expect(payload.days[0].items[0].portions[0].nutrition.kcal).toBe("120.5");
+    expect(payload.days[0].items[0].portions[0].calculated_from).toEqual({
+      portion_variant_id: "source-portion-id",
+      yield_amount: "240",
+    });
   });
 
   it("uses the next Monday when week start is omitted", () => {

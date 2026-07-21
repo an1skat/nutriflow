@@ -987,6 +987,7 @@ def _to_menu_portion(data: MenuPortionPayload) -> MenuPortion:
         age_group=data.age_group,
         yield_amount=data.yield_amount,
         dish_card_portion_variant_id=data.dish_card_portion_variant_id,
+        calculated_from=data.calculated_from,
         nutrition=MenuNutrition(**data.nutrition.model_dump()),
     )
 

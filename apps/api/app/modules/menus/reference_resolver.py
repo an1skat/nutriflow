@@ -3,14 +3,20 @@ from dataclasses import dataclass
 
 from beanie import PydanticObjectId
 
-from app.modules.menus.models import DailyMenuItem, MenuItemKind
+from app.modules.menus.models import (
+    DailyMenuItem,
+    MenuItemKind,
+    MenuNutrition,
+    MenuPortionCalculationSource,
+)
 from app.modules.nutrition.domain import normalize_lookup_text
 from app.modules.recipe.models import (
     Allergen,
     DishCard,
     DishCardVersion,
     Ingredient,
-    find_portion_variant_by_yield,
+    resolve_portion_variant_by_yield,
+    scale_nutrition,
 )
 
 
@@ -138,6 +144,9 @@ async def resolve_menu_item_references(items: list[DailyMenuItem]) -> None:
     catalog = await MenuReferenceCatalog.load(items)
     for item in items:
         if item.kind == MenuItemKind.PRODUCT:
+            for portion in item.portions:
+                portion.dish_card_portion_variant_id = None
+                portion.calculated_from = None
             ingredient = catalog.product_ingredient(item)
             if item.product_ingredient_id is not None and ingredient is None:
                 raise MenuReferenceError("Product ingredient not found")
@@ -150,6 +159,9 @@ async def resolve_menu_item_references(items: list[DailyMenuItem]) -> None:
         if item.dish_card_id is not None and dish_card is None:
             raise MenuReferenceError("Dish card not found")
         if dish_card is None:
+            for portion in item.portions:
+                portion.dish_card_portion_variant_id = None
+                portion.calculated_from = None
             continue
 
         item.dish_card_id = dish_card.id
@@ -164,12 +176,29 @@ async def resolve_menu_item_references(items: list[DailyMenuItem]) -> None:
             )
 
         for portion in item.portions:
-            variant = find_portion_variant_by_yield(
+            resolution = resolve_portion_variant_by_yield(
                 version.portion_variants,
                 portion.yield_amount,
                 preferred_variant_id=portion.dish_card_portion_variant_id,
             )
-            portion.dish_card_portion_variant_id = variant.id if variant is not None else None
+            if resolution is None:
+                portion.dish_card_portion_variant_id = None
+                portion.calculated_from = None
+                portion.nutrition = MenuNutrition()
+                continue
+
+            variant = resolution.variant
+            nutrition = scale_nutrition(variant.nutrition, resolution.factor)
+            portion.nutrition = MenuNutrition(**nutrition.model_dump())
+            if resolution.is_scaled:
+                portion.dish_card_portion_variant_id = None
+                portion.calculated_from = MenuPortionCalculationSource(
+                    portion_variant_id=variant.id,
+                    yield_amount=str(variant.output_grams),
+                )
+            else:
+                portion.dish_card_portion_variant_id = variant.id
+                portion.calculated_from = None
 
         if not item.allergen_codes:
             item.allergen_codes = catalog.allergen_codes(version)

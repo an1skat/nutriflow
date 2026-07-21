@@ -54,6 +54,7 @@ from app.modules.menus.models import (
     DailyMenuItem,
     MealType,
     MenuItemKind,
+    MenuPortionCalculationSource,
     Weekday,
     WeeklyMenu,
     WeeklyMenuStatus,
@@ -73,9 +74,11 @@ from app.modules.recipe.models import (
     Ingredient,
     IngredientAmount,
     PortionVariant,
-    find_portion_variant_by_yield,
     normalize_lookup_text,
+    parse_menu_yield_grams,
+    resolve_portion_variant_by_yield,
 )
+
 
 @dataclass(frozen=True)
 class IngredientCatalogEntry:
@@ -592,6 +595,7 @@ async def _build_dish_calculations(
             ) = await _dish_card_ingredient_lines(
                 item,
                 portion.dish_card_portion_variant_id,
+                portion.calculated_from,
                 portion.yield_amount,
                 catalog_by_id=catalog_by_id,
                 catalog_by_name=catalog_by_name,
@@ -625,6 +629,7 @@ async def _build_dish_calculations(
 async def _dish_card_ingredient_lines(
     item: DailyMenuItem,
     portion_variant_id: PydanticObjectId | None,
+    calculated_from: MenuPortionCalculationSource | None,
     yield_amount: str,
     *,
     catalog_by_id: dict[PydanticObjectId, Ingredient],
@@ -651,18 +656,13 @@ async def _dish_card_ingredient_lines(
             f'Dish card version for "{item.name}" is not confirmed'
         )
 
-    # Даже если в старом меню ID равен null, пытаемся
-    # восстановить вариант по выходу блюда.
-    variant = find_portion_variant_by_yield(
-        version.portion_variants,
+    variant, factor = _resolve_requirement_portion_variant(
+        version,
+        portion_variant_id,
+        calculated_from,
         yield_amount,
-        preferred_variant_id=portion_variant_id,
+        item.name,
     )
-
-    if variant is None:
-        raise MenuRequirementValidationError(
-            f'Dish "{item.name}" has no portion variant for output {yield_amount} g'
-        )
 
     amounts = [
         amount for amount in version.ingredient_amounts if amount.portion_variant_id == variant.id
@@ -676,12 +676,17 @@ async def _dish_card_ingredient_lines(
     lines = [
         _ingredient_line(
             amount,
+            factor=factor,
             catalog_by_id=catalog_by_id,
             catalog_by_name=catalog_by_name,
         )
         for amount in amounts
     ]
-    explicit = _portion_variant_contribution_snapshots(variant, item.name)
+    explicit = _portion_variant_contribution_snapshots(
+        variant,
+        item.name,
+        factor=factor,
+    )
     fallback = ingredient_contribution_snapshots(
         lines,
         catalog_by_id=catalog_by_id,
@@ -690,6 +695,46 @@ async def _dish_card_ingredient_lines(
         source_type=NormativeContributionSource.INGREDIENT,
     )
     return variant.id, lines, [*explicit, *fallback]
+
+
+def _resolve_requirement_portion_variant(
+    version: DishCardVersion,
+    portion_variant_id: PydanticObjectId | None,
+    calculated_from: MenuPortionCalculationSource | None,
+    yield_amount: str,
+    dish_name: str,
+) -> tuple[PortionVariant, Decimal]:
+    if calculated_from is not None:
+        variant = next(
+            (
+                candidate
+                for candidate in version.portion_variants
+                if candidate.id == calculated_from.portion_variant_id
+            ),
+            None,
+        )
+        target = parse_menu_yield_grams(yield_amount)
+        source = parse_menu_yield_grams(calculated_from.yield_amount)
+        if variant is None:
+            raise MenuRequirementValidationError(
+                f'Calculation source for dish "{dish_name}" was not found'
+            )
+        if target is None or source is None or target <= 0 or source <= 0:
+            raise MenuRequirementValidationError(
+                f'Dish "{dish_name}" has invalid calculated portion data'
+            )
+        return variant, target / source
+
+    resolution = resolve_portion_variant_by_yield(
+        version.portion_variants,
+        yield_amount,
+        preferred_variant_id=portion_variant_id,
+    )
+    if resolution is None:
+        raise MenuRequirementValidationError(
+            f'Dish "{dish_name}" has no portion variant for output {yield_amount} g'
+        )
+    return resolution.variant, resolution.factor
 
 
 async def _product_ingredient_lines(
@@ -740,13 +785,19 @@ async def _product_ingredient_lines(
 def _portion_variant_contribution_snapshots(
     variant: PortionVariant,
     dish_name: str,
+    *,
+    factor: Decimal = Decimal("1"),
 ) -> list[NormativeContributionSnapshot]:
     return [
         NormativeContributionSnapshot(
             group_code=contribution.group_code,
-            amount=contribution.amount,
+            amount=contribution.amount * factor,
             unit=contribution.unit,
-            portion_equivalent=contribution.portion_equivalent,
+            portion_equivalent=(
+                contribution.portion_equivalent * factor
+                if contribution.portion_equivalent is not None
+                else None
+            ),
             product_variant=contribution.product_variant,
             source_type=NormativeContributionSource.PORTION_VARIANT,
             source_id=str(variant.id),
@@ -760,6 +811,7 @@ def _portion_variant_contribution_snapshots(
 def _ingredient_line(
     amount: IngredientAmount,
     *,
+    factor: Decimal = Decimal("1"),
     catalog_by_id: dict[PydanticObjectId, Ingredient],
     catalog_by_name: dict[str, Ingredient],
 ) -> IngredientLine:
@@ -774,7 +826,7 @@ def _ingredient_line(
         key=ingredient_key(ingredient_id, name),
         ingredient_id=ingredient_id,
         name=name,
-        net_per_person_g=convert_to_grams(amount.net_amount, amount.unit),
+        net_per_person_g=convert_to_grams(amount.net_amount, amount.unit) * factor,
     )
 
 

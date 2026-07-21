@@ -9,12 +9,20 @@ from app.modules.menu_requirements.service import (
     DishCalculation,
     IngredientCatalogEntry,
     MenuRequirementValidationError,
+    _resolve_requirement_portion_variant,
     build_ingredient_rows,
     convert_to_grams,
     resolve_service_date,
 )
-from app.modules.menus.models import DailyMenu, MenuItemKind, Weekday, WeeklyMenu
+from app.modules.menus.models import (
+    DailyMenu,
+    MenuItemKind,
+    MenuPortionCalculationSource,
+    Weekday,
+    WeeklyMenu,
+)
 from app.modules.nutrition.contributions import IngredientLine
+from app.modules.recipe.models import DishCardVersion, PortionVariant
 
 pytestmark = pytest.mark.no_clean_database
 
@@ -151,6 +159,32 @@ def test_rejects_units_without_a_mass_conversion() -> None:
         match="cannot be converted to grams",
     ):
         convert_to_grams(Decimal("1"), "шт")
+
+
+def test_resolves_saved_calculation_source_for_menu_requirement() -> None:
+    source = PortionVariant(
+        portion_grams=Decimal("120"),
+        output_grams=Decimal("120"),
+    )
+    version = DishCardVersion.model_construct(
+        dish_card_id=PydanticObjectId(),
+        version=1,
+        portion_variants=[source],
+    )
+
+    variant, factor = _resolve_requirement_portion_variant(
+        version,
+        None,
+        MenuPortionCalculationSource(
+            portion_variant_id=source.id,
+            yield_amount="120",
+        ),
+        "100",
+        "Суп",
+    )
+
+    assert variant.id == source.id
+    assert factor == Decimal("100") / Decimal("120")
 
 
 def test_uses_requested_date_when_menu_has_no_persisted_dates() -> None:

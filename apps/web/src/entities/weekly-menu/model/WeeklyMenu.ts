@@ -57,10 +57,16 @@ export const menuNutritionSchema = z.object({
   carbs: decimalStringSchema.nullable(),
 });
 
+const menuPortionCalculationSourceSchema = z.object({
+  portion_variant_id: z.string().min(1),
+  yield_amount: z.string().trim().min(1).max(40),
+});
+
 export const menuPortionSchema = z.object({
   age_group: ageGroupSchema,
   yield_amount: z.string().trim().min(1).max(40),
   dish_card_portion_variant_id: z.string().min(1).nullable(),
+  calculated_from: menuPortionCalculationSourceSchema.nullable().default(null),
   nutrition: menuNutritionSchema,
 });
 
@@ -190,6 +196,10 @@ export type WeeklyMenuPayload = {
         age_group: AgeGroup;
         yield_amount: string;
         dish_card_portion_variant_id?: string | null;
+        calculated_from?: {
+          portion_variant_id: string;
+          yield_amount: string;
+        } | null;
         nutrition: {
           kcal?: string | null;
           proteins?: string | null;

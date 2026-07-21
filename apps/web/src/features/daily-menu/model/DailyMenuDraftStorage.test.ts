@@ -145,6 +145,7 @@ function createItem({
         age_group: "6-11",
         yield_amount: "100",
         dish_card_portion_variant_id: `portion-${id}`,
+        calculated_from: null,
         nutrition: {
           kcal: "120",
           proteins: "4",

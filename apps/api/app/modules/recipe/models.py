@@ -1,6 +1,7 @@
 import re
+from dataclasses import dataclass
 from datetime import datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
 from typing import Annotated, Any
 
@@ -169,6 +170,13 @@ def parse_menu_yield_grams(value: str) -> Decimal | None:
     return amount
 
 
+@dataclass(frozen=True)
+class PortionVariantResolution:
+    variant: PortionVariant
+    factor: Decimal
+    is_scaled: bool
+
+
 def find_portion_variant_by_yield(
     portion_variants: list[PortionVariant],
     yield_amount: str,
@@ -213,6 +221,73 @@ def find_portion_variant_by_yield(
             return matches[0]
 
     return None
+
+
+def resolve_portion_variant_by_yield(
+    portion_variants: list[PortionVariant],
+    yield_amount: str,
+    *,
+    preferred_variant_id: PydanticObjectId | None = None,
+) -> PortionVariantResolution | None:
+    target = parse_menu_yield_grams(yield_amount)
+    if target is None or target <= 0:
+        return None
+
+    exact = find_portion_variant_by_yield(
+        portion_variants,
+        yield_amount,
+        preferred_variant_id=preferred_variant_id,
+    )
+    if exact is not None:
+        return PortionVariantResolution(
+            variant=exact,
+            factor=Decimal("1"),
+            is_scaled=False,
+        )
+
+    candidates = [
+        variant for variant in portion_variants if variant.output_grams > 0
+    ]
+    if not candidates:
+        return None
+
+    nearest = min(
+        candidates,
+        key=lambda variant: (
+            abs(variant.output_grams - target),
+            -variant.output_grams,
+        ),
+    )
+
+    return PortionVariantResolution(
+        variant=nearest,
+        factor=target / nearest.output_grams,
+        is_scaled=True,
+    )
+
+
+NUTRITION_QUANTUM = Decimal("0.01")
+
+
+def scale_nutrition(
+    nutrition: Nutrition,
+    factor: Decimal,
+) -> Nutrition:
+    if factor == 1:
+        return nutrition.model_copy(deep=True)
+
+    def scaled(value: Decimal) -> Decimal:
+        return (value * factor).quantize(
+            NUTRITION_QUANTUM,
+            rounding=ROUND_HALF_UP,
+        )
+
+    return Nutrition(
+        kcal=scaled(nutrition.kcal),
+        proteins=scaled(nutrition.proteins),
+        fats=scaled(nutrition.fats),
+        carbs=scaled(nutrition.carbs),
+    )
 
 
 class IngredientAmount(BaseModel):

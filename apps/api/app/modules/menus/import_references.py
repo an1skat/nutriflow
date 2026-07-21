@@ -1,9 +1,17 @@
 from app.modules.menus.diagnostics import build_import_diagnostic
-from app.modules.menus.models import MenuImportDiagnosticLevel, MenuItemKind
+from app.modules.menus.models import (
+    MenuImportDiagnosticLevel,
+    MenuItemKind,
+    MenuPortionCalculationSource,
+)
 from app.modules.menus.reference_resolver import MenuReferenceCatalog
-from app.modules.menus.schemas import DailyMenuItemPayload
+from app.modules.menus.schemas import DailyMenuItemPayload, MenuNutritionPayload
 from app.modules.menus.xlsx import ParsedWeeklyMenuPreview
-from app.modules.recipe.models import Allergen, find_portion_variant_by_yield
+from app.modules.recipe.models import (
+    Allergen,
+    resolve_portion_variant_by_yield,
+    scale_nutrition,
+)
 
 
 async def hydrate_preview_references(preview: ParsedWeeklyMenuPreview) -> None:
@@ -117,12 +125,12 @@ def _hydrate_dish(
         return
 
     for portion_index, portion in enumerate(item.portions):
-        variant = find_portion_variant_by_yield(
+        resolution = resolve_portion_variant_by_yield(
             version.portion_variants,
             portion.yield_amount,
             preferred_variant_id=portion.dish_card_portion_variant_id,
         )
-        if variant is None:
+        if resolution is None:
             preview.diagnostics.append(
                 build_import_diagnostic(
                     level=MenuImportDiagnosticLevel.ERROR,
@@ -136,8 +144,34 @@ def _hydrate_dish(
                     column_number=4 + portion_index * 5,
                 )
             )
+            continue
+
+        variant = resolution.variant
+        nutrition = scale_nutrition(variant.nutrition, resolution.factor)
+        portion.nutrition = MenuNutritionPayload(**nutrition.model_dump())
+        if resolution.is_scaled:
+            portion.dish_card_portion_variant_id = None
+            portion.calculated_from = MenuPortionCalculationSource(
+                portion_variant_id=variant.id,
+                yield_amount=str(variant.output_grams),
+            )
+            preview.diagnostics.append(
+                build_import_diagnostic(
+                    level=MenuImportDiagnosticLevel.WARNING,
+                    code="portion_variant_scaled",
+                    message=(
+                        f'Dish "{item.name}" has no exact portion '
+                        f"{portion.yield_amount} g; nutrition was calculated "
+                        f"from {variant.output_grams} g"
+                    ),
+                    sheet_name=sheet_name,
+                    row_number=row_number,
+                    column_number=4 + portion_index * 5,
+                )
+            )
         else:
             portion.dish_card_portion_variant_id = variant.id
+            portion.calculated_from = None
 
     if not item.allergen_codes:
         item.allergen_codes = catalog.allergen_codes(version)

@@ -283,6 +283,10 @@ export function MenuItemReferenceSync({
         null,
       );
       form.setValue(
+        `days.${dayIndex}.items.${itemIndex}.portions.${portionIndex}.calculated_from`,
+        null,
+      );
+      form.setValue(
         `days.${dayIndex}.items.${itemIndex}.portions.${portionIndex}.nutrition.kcal`,
         "",
       );

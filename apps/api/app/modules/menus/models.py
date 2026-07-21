@@ -71,10 +71,16 @@ class MenuNutrition(BaseModel):
     carbs: AmountDecimal | None = None
 
 
+class MenuPortionCalculationSource(BaseModel):
+    portion_variant_id: PydanticObjectId
+    yield_amount: YieldAmount
+
+
 class MenuPortion(BaseModel):
     age_group: AgeGroup
     yield_amount: YieldAmount
     dish_card_portion_variant_id: PydanticObjectId | None = None
+    calculated_from: MenuPortionCalculationSource | None = None
     nutrition: MenuNutrition = Field(default_factory=MenuNutrition)
 
 

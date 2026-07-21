@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import {
   useFieldArray,
   useWatch,
@@ -13,6 +13,7 @@ import {
   AGE_GROUP_LABELS,
   WEEKDAY_ORDER,
 } from "@/entities/weekly-menu/model/WeeklyMenu";
+import { normalizeGramAmount } from "@/shared/lib/Portion";
 
 import {
   createBlankItem,
@@ -442,51 +443,68 @@ export function DailyMenuDayEditor({
                                 itemErrors?.portions?.[portionIndex];
 
                               return (
-                                <tr key={portion.age_group}>
-                                  <td className="font-medium text-slate-700">
-                                    {AGE_GROUP_LABELS[portion.age_group]}
-                                  </td>
-                                  <td>
-                                    {allowValueEdits ? (
-                                      <input
-                                        {...form.register(
-                                          `days.${dayIndex}.items.${itemIndex}.portions.${portionIndex}.yield_amount` as const,
-                                        )}
-                                        readOnly={!allowValueEdits}
-                                        aria-invalid={
-                                          portionErrors?.yield_amount
-                                            ? "true"
-                                            : "false"
-                                        }
-                                        className="nf-input"
-                                      />
-                                    ) : (
-                                      <div className="text-sm text-slate-700">
-                                        {portion.yield_amount}
-                                      </div>
-                                    )}
-                                    {portionErrors?.yield_amount ? (
-                                      <p
-                                        role="alert"
-                                        className="nf-field-error"
-                                      >
-                                        {portionErrors.yield_amount.message}
-                                      </p>
-                                    ) : null}
-                                  </td>
-                                  <NutritionCell
-                                    value={portion.nutrition.kcal}
-                                  />
-                                  <NutritionCell
-                                    value={portion.nutrition.proteins}
-                                  />
-                                  <NutritionCell
-                                    value={portion.nutrition.fats}
-                                  />
-                                  <NutritionCell
-                                    value={portion.nutrition.carbs}
-                                  />
-                                </tr>
+                                <Fragment key={portion.age_group}>
+                                  <tr>
+                                    <td className="font-medium text-slate-700">
+                                      {AGE_GROUP_LABELS[portion.age_group]}
+                                    </td>
+                                    <td>
+                                      {allowValueEdits ? (
+                                        <input
+                                          {...form.register(
+                                            `days.${dayIndex}.items.${itemIndex}.portions.${portionIndex}.yield_amount` as const,
+                                          )}
+                                          readOnly={!allowValueEdits}
+                                          aria-invalid={
+                                            portionErrors?.yield_amount
+                                              ? "true"
+                                              : "false"
+                                          }
+                                          className="nf-input"
+                                        />
+                                      ) : (
+                                        <div className="text-sm text-slate-700">
+                                          {portion.yield_amount}
+                                        </div>
+                                      )}
+                                      {portionErrors?.yield_amount ? (
+                                        <p
+                                          role="alert"
+                                          className="nf-field-error"
+                                        >
+                                          {portionErrors.yield_amount.message}
+                                        </p>
+                                      ) : null}
+                                    </td>
+                                    <NutritionCell
+                                      value={portion.nutrition.kcal}
+                                    />
+                                    <NutritionCell
+                                      value={portion.nutrition.proteins}
+                                    />
+                                    <NutritionCell
+                                      value={portion.nutrition.fats}
+                                    />
+                                    <NutritionCell
+                                      value={portion.nutrition.carbs}
+                                    />
+                                  </tr>
+                                  {portion.calculated_from ? (
+                                    <tr>
+                                      <td colSpan={6} className="bg-amber-50">
+                                        <p
+                                          role="status"
+                                          className="text-xs font-medium text-amber-800"
+                                        >
+                                          {getCalculationWarning(
+                                            portion.yield_amount,
+                                            portion.calculated_from.yield_amount,
+                                          )}
+                                        </p>
+                                      </td>
+                                    </tr>
+                                  ) : null}
+                                </Fragment>
                               );
                             },
                           )}
@@ -579,4 +597,25 @@ export function DailyMenuDayEditor({
       </div>
     </div>
   );
+}
+
+function formatScaleFactor(targetValue: string, sourceValue: string) {
+  const target = normalizeGramAmount(targetValue);
+  const source = normalizeGramAmount(sourceValue);
+  if (target === null || source === null || source <= 0) {
+    return "—";
+  }
+
+  return (target / source).toLocaleString("uk-UA", {
+    maximumFractionDigits: 4,
+  });
+}
+
+function getCalculationWarning(targetValue: string, sourceValue: string) {
+  const factor = formatScaleFactor(targetValue, sourceValue);
+  return [
+    `У ТК немає порції ${targetValue}.`,
+    "Порцію задано вручну; КБЖВ автоматично розраховано",
+    `на основі порції ${sourceValue}, коефіцієнт ${factor}.`,
+  ].join(" ");
 }

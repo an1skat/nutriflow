@@ -160,6 +160,10 @@ def test_admin_creates_weekly_menu_and_links_current_dish_card(seeded_client):
     assert menu["days"][0]["items"][0]["dish_card_id"] == dish_card_id
     assert menu["days"][0]["items"][0]["dish_card_version_id"] == version_id
     assert menu["days"][0]["items"][0]["allergen_codes"] == []
+    assert menu["days"][0]["items"][0]["portions"][0]["calculated_from"] is None
+    assert menu["days"][0]["items"][0]["portions"][1]["calculated_from"][
+        "yield_amount"
+    ] == "100"
     assert menu["days"][0]["items"][1]["kind"] == "product"
     assert menu["days"][0]["items"][1]["product_name_snapshot"] == "Хліб цільнозерновий"
 
@@ -211,7 +215,9 @@ def test_admin_previews_and_commits_imported_weekly_menu(seeded_client):
     assert preview["commit_ready"] is True, preview["diagnostics"]
     assert preview["available_sheet_names"] == ["І тиждень"]
     assert preview["selected_sheet_name"] == "І тиждень"
-    assert preview["diagnostics"] == []
+    assert [diagnostic["code"] for diagnostic in preview["diagnostics"]] == [
+        "portion_variant_scaled"
+    ]
     assert preview["menu"]["days"][0]["items"][0]["recipe_card_number"] == "1.54"
 
     commit_response = client.post(

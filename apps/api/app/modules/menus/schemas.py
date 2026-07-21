@@ -21,6 +21,7 @@ from app.modules.menus.models import (
     MenuItemServingCount,
     MenuNutrition,
     MenuPortion,
+    MenuPortionCalculationSource,
     Weekday,
     WeeklyMenu,
     WeeklyMenuStatus,
@@ -39,6 +40,7 @@ class MenuPortionPayload(BaseModel):
     age_group: AgeGroup
     yield_amount: str = Field(min_length=1, max_length=40)
     dish_card_portion_variant_id: PydanticObjectId | None = None
+    calculated_from: MenuPortionCalculationSource | None = None
     nutrition: MenuNutritionPayload = Field(default_factory=MenuNutritionPayload)
 
     @field_validator("yield_amount", mode="before")

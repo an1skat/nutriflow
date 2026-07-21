@@ -100,7 +100,13 @@ export function applyIngredientSelection(
     shouldDirty: true,
   });
 }
-function findPortionVariantByYield(
+type PortionVariantResolution = {
+  variant: PortionVariant;
+  factor: number;
+  isScaled: boolean;
+};
+
+function findExactPortionVariantByYield(
   variants: PortionVariant[],
   yieldAmount: string,
   preferredVariantId: string | null,
@@ -141,6 +147,54 @@ function findPortionVariantByYield(
 
   return null;
 }
+
+export function resolvePortionVariantByYield(
+  variants: PortionVariant[],
+  yieldAmount: string,
+  preferredVariantId: string | null,
+): PortionVariantResolution | null {
+  const target = normalizeGramAmount(yieldAmount);
+  if (target === null || target <= 0) {
+    return null;
+  }
+
+  const exact = findExactPortionVariantByYield(
+    variants,
+    yieldAmount,
+    preferredVariantId,
+  );
+  if (exact) {
+    return { variant: exact, factor: 1, isScaled: false };
+  }
+
+  const candidates = variants
+    .map((variant) => ({
+      variant,
+      output: normalizeGramAmount(variant.output_grams),
+    }))
+    .filter(
+      (
+        candidate,
+      ): candidate is { variant: PortionVariant; output: number } =>
+        candidate.output !== null && candidate.output > 0,
+    )
+    .sort(
+      (left, right) =>
+        Math.abs(left.output - target) - Math.abs(right.output - target) ||
+        right.output - left.output,
+    );
+
+  const nearest = candidates[0];
+  if (!nearest) {
+    return null;
+  }
+
+  return {
+    variant: nearest.variant,
+    factor: target / nearest.output,
+    isScaled: true,
+  };
+}
 export function syncNutritionFromVersion(
   form: UseFormReturn<WeeklyMenuFormValues>,
   dayIndex: number,
@@ -149,10 +203,12 @@ export function syncNutritionFromVersion(
   version: DishCardVersion,
 ) {
   item.portions.forEach((portion, portionIndex) => {
-    const variant = findPortionVariantByYield(
+    const resolution = resolvePortionVariantByYield(
       version.portion_variants,
       portion.yield_amount,
-      portion.dish_card_portion_variant_id,
+      portion.dish_card_portion_variant_id ??
+        portion.calculated_from?.portion_variant_id ??
+        null,
     );
 
     applyVariantToPortion(
@@ -161,7 +217,7 @@ export function syncNutritionFromVersion(
       itemIndex,
       portionIndex,
       portion.yield_amount,
-      variant ?? undefined,
+      resolution ?? undefined,
     );
   });
 }
@@ -206,27 +262,49 @@ function applyVariantToPortion(
   itemIndex: number,
   portionIndex: number,
   currentYieldAmount: string,
-  variant: PortionVariant | undefined,
+  resolution: PortionVariantResolution | undefined,
 ) {
+  const variant = resolution?.variant;
+  const nutrition = resolution?.isScaled
+    ? {
+        kcal: scaleNutritionValue(variant?.nutrition.kcal, resolution.factor),
+        proteins: scaleNutritionValue(
+          variant?.nutrition.proteins,
+          resolution.factor,
+        ),
+        fats: scaleNutritionValue(variant?.nutrition.fats, resolution.factor),
+        carbs: scaleNutritionValue(variant?.nutrition.carbs, resolution.factor),
+      }
+    : variant?.nutrition;
+
   form.setValue(
     `days.${dayIndex}.items.${itemIndex}.portions.${portionIndex}.dish_card_portion_variant_id`,
-    variant?.id ?? null,
+    resolution && !resolution.isScaled ? variant?.id ?? null : null,
+  );
+  form.setValue(
+    `days.${dayIndex}.items.${itemIndex}.portions.${portionIndex}.calculated_from`,
+    resolution?.isScaled && variant
+      ? {
+          portion_variant_id: variant.id,
+          yield_amount: variant.output_grams,
+        }
+      : null,
   );
   form.setValue(
     `days.${dayIndex}.items.${itemIndex}.portions.${portionIndex}.nutrition.kcal`,
-    variant?.nutrition.kcal ?? "",
+    nutrition?.kcal ?? "",
   );
   form.setValue(
     `days.${dayIndex}.items.${itemIndex}.portions.${portionIndex}.nutrition.proteins`,
-    variant?.nutrition.proteins ?? "",
+    nutrition?.proteins ?? "",
   );
   form.setValue(
     `days.${dayIndex}.items.${itemIndex}.portions.${portionIndex}.nutrition.fats`,
-    variant?.nutrition.fats ?? "",
+    nutrition?.fats ?? "",
   );
   form.setValue(
     `days.${dayIndex}.items.${itemIndex}.portions.${portionIndex}.nutrition.carbs`,
-    variant?.nutrition.carbs ?? "",
+    nutrition?.carbs ?? "",
   );
 
   if (!currentYieldAmount.trim() && variant?.output_grams) {
@@ -236,4 +314,15 @@ function applyVariantToPortion(
       { shouldDirty: true },
     );
   }
+}
+
+function scaleNutritionValue(value: string | undefined, factor: number) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return "";
+  }
+
+  const scaled =
+    Math.round((numericValue * factor + Number.EPSILON) * 100) / 100;
+  return String(scaled);
 }
