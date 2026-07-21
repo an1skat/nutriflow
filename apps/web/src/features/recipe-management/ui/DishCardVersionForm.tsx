@@ -13,6 +13,7 @@ import {
 import { useAllergens } from "@/entities/recipe/api/RecipeQueries";
 import type { DishCardVersion } from "@/entities/recipe/model/Recipe";
 import { getApiErrorMessage } from "@/shared/api/HttpClient";
+import { createObjectId } from "@/shared/lib/ObjectId";
 import { FormField as Field, FormSection as Section } from "@/shared/ui/FormLayout";
 
 import {
@@ -27,10 +28,6 @@ import {
   useCreateDishCardVersion,
   useUpdateDishCardVersion,
 } from "../model/UseRecipeMutations";
-
-function newId(): string {
-  return Math.random().toString(36).slice(2, 12);
-}
 
 const NUTRITION_FIELDS = ["kcal", "proteins", "fats", "carbs"] as const;
 
@@ -77,7 +74,7 @@ function versionToFormValues(version: DishCardVersion): DishCardVersionFormValue
         version.ingredient_amounts.map((a) => [
           a.ingredient_name_snapshot,
           {
-            tempId: newId(),
+            tempId: createObjectId(),
             ingredient_id: a.ingredient_id,
             ingredient_name_snapshot: a.ingredient_name_snapshot,
             notes: a.notes ?? "",
@@ -107,7 +104,7 @@ function emptyValues(): DishCardVersionFormValues {
     allergen_ids: [],
     portions: [
       {
-        tempId: newId(),
+        tempId: createObjectId(),
         portion_grams: "120",
         kcal: "",
         proteins: "",
@@ -118,7 +115,7 @@ function emptyValues(): DishCardVersionFormValues {
     ],
     ingredients: [
       {
-        tempId: newId(),
+        tempId: createObjectId(),
         ingredient_id: null,
         ingredient_name_snapshot: "",
         notes: "",
@@ -177,7 +174,7 @@ export function DishCardVersionForm({
 
   const addPortion = () =>
     portions.append({
-      tempId: newId(),
+      tempId: createObjectId(),
       portion_grams: "",
       kcal: "",
       proteins: "",
@@ -187,7 +184,7 @@ export function DishCardVersionForm({
     });
   const addIngredient = () =>
     ingredients.append({
-      tempId: newId(),
+      tempId: createObjectId(),
       ingredient_id: null,
       ingredient_name_snapshot: "",
       notes: "",
@@ -446,7 +443,7 @@ export function DishCardVersionForm({
             <IngredientRow
               key={field.id}
               index={index}
-              portions={portions.fields}
+              portions={watchedPortions}
               register={form.register}
               errors={form.formState.errors.ingredients?.[index]}
               onRemove={ingredients.fields.length > 1 ? () => ingredients.remove(index) : undefined}
@@ -480,7 +477,7 @@ export function DishCardVersionForm({
 
 type IngredientRowProps = {
   index: number;
-  portions: { id: string; tempId: string; portion_grams: string }[];
+  portions: Pick<VersionPortionFormValues, "tempId" | "portion_grams">[];
   register: ReturnType<typeof useForm<DishCardVersionFormValues>>["register"];
   errors: unknown;
   onRemove: (() => void) | undefined;
@@ -545,7 +542,7 @@ function IngredientRow({
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             {portions.map((portion) => (
               <AmountCell
-                key={portion.id}
+                key={portion.tempId}
                 index={index}
                 portionTempId={portion.tempId}
                 portionGrams={portion.portion_grams || "?"}

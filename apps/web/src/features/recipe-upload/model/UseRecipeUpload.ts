@@ -13,6 +13,7 @@ import {
   validateDishCardVersion,
 } from "@/entities/recipe/api/RecipeApi";
 import { getApiErrorMessage } from "@/shared/api/HttpClient";
+import { createObjectId } from "@/shared/lib/ObjectId";
 
 import { orNull, orZero, type RecipeUploadFormValues } from "./RecipeUploadSchema";
 
@@ -36,24 +37,6 @@ export class RecipeUploadError extends Error {
     super(message);
     this.name = "RecipeUploadError";
   }
-}
-
-/**
- * Generate a 24-char hex id compatible with Beanie's PydanticObjectId.
- * The backend validates portion_variant_id / portion id as ObjectId, so a
- * crypto.randomUUID() (with dashes) is rejected. 24 random hex characters
- * parse cleanly as a BSON ObjectId.
- */
-function newObjectId(): string {
-  const bytes = new Uint8Array(12);
-  if (typeof crypto !== "undefined" && "getRandomValues" in crypto) {
-    crypto.getRandomValues(bytes);
-  } else {
-    for (let i = 0; i < 12; i += 1) {
-      bytes[i] = Math.floor(Math.random() * 256);
-    }
-  }
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function normalizeLookupText(value: string): string {
@@ -206,7 +189,7 @@ async function uploadDishCard(
   // Must be 24-char hex (PydanticObjectId-compatible); crypto.randomUUID() is rejected.
   const portionIds: Record<string, string> = {};
   for (const portion of values.portions) {
-    portionIds[portion.tempId] = newObjectId();
+    portionIds[portion.tempId] = createObjectId();
   }
 
   onProgress({ step: "creating-version", message: "Зберігаємо версію техкарти…" });
