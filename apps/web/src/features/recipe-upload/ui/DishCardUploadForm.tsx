@@ -6,7 +6,7 @@ import { useState } from "react";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 
-import { useAllergens } from "@/entities/recipe/api/RecipeQueries";
+import { useAllergens, useDishCards } from "@/entities/recipe/api/RecipeQueries";
 import { getApiErrorMessage } from "@/shared/api/HttpClient";
 import { FormField as Field, FormSection as Section } from "@/shared/ui/FormLayout";
 
@@ -70,6 +70,7 @@ export function DishCardUploadForm() {
   const [success, setSuccess] = useState<string | null>(null);
   const upload = useUploadDishCard();
   const allergenQuery = useAllergens("");
+  const dishCardsQuery = useDishCards("");
 
   const form = useForm<RecipeUploadFormValues>({
     resolver: zodResolver(recipeUploadSchema),
@@ -84,6 +85,13 @@ export function DishCardUploadForm() {
   });
 
   const allergens = allergenQuery.data?.items ?? [];
+  const categories = Array.from(
+    new Set(
+      (dishCardsQuery.data?.items ?? [])
+        .map((card) => card.category)
+        .filter((category): category is string => category !== null),
+    ),
+  ).sort((left, right) => left.localeCompare(right, "uk"));
   const selectedAllergenIds = useWatch({
     control: form.control,
     name: "selected_allergen_ids",
@@ -172,10 +180,16 @@ export function DishCardUploadForm() {
           <Field label="Категорія" error={form.formState.errors.category?.message as string | undefined}>
             <input
               id="dish-category"
+              list="dish-categories"
               className="nf-input"
-              placeholder="холодні страви"
+              placeholder="Оберіть або введіть нову категорію"
               {...form.register("category")}
             />
+            <datalist id="dish-categories">
+              {categories.map((category) => (
+                <option key={category} value={category} />
+              ))}
+            </datalist>
           </Field>
           <Field label="Джерело" error={form.formState.errors.source?.message as string | undefined}>
             <input
