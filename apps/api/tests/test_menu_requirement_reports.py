@@ -252,9 +252,7 @@ def test_week_report_aggregates_daily_requirements_with_cell_breakdown(
     assert group["school_group_id"] == group_id
     assert group["dishes"][0]["children_count_total"] == 5
 
-    carrot = next(
-        row for row in group["ingredient_rows"] if row["ingredient_id"] == ingredient_id
-    )
+    carrot = next(row for row in group["ingredient_rows"] if row["ingredient_id"] == ingredient_id)
     cell = carrot["cells"][0]
     assert Decimal(cell["net_per_person_g"]) == Decimal("40.50")
     assert Decimal(cell["issue_total_raw_g"]) == Decimal("101.25")
@@ -286,11 +284,7 @@ def test_week_report_aggregates_daily_requirements_with_cell_breakdown(
     sheet = workbook.active
     assert sheet["A1"].value == "МЕНЮ-ВИМОГА"
     assert sheet["B2"].value == identities.own_school.name
-    assert any(
-        cell.value == "Морква"
-        for row in sheet.iter_rows()
-        for cell in row
-    )
+    assert any(cell.value == "Морква" for row in sheet.iter_rows() for cell in row)
 
     login(client, identities.school_user.username, identities.school_user_password)
     school_export_response = client.get(
@@ -299,8 +293,7 @@ def test_week_report_aggregates_daily_requirements_with_cell_breakdown(
     )
     assert school_export_response.status_code == 400
     assert school_export_response.json()["detail"] == (
-        "Weekly menu requirement report requires complete menu requirements "
-        "for all five weekdays"
+        "Weekly menu requirement report requires complete menu requirements for all five weekdays"
     )
 
 
@@ -427,9 +420,9 @@ def test_calendar_keeps_an_existing_weekend_requirement_visible() -> None:
         stale_dates=set(),
     )
 
-    week = next(item for item in july.weeks if generated_date in {
-        day.service_date for day in item.days
-    })
+    week = next(
+        item for item in july.weeks if generated_date in {day.service_date for day in item.days}
+    )
     assert july.generated_days == 1
     assert week.date_from == Date(2026, 7, 6)
     assert week.date_to == generated_date

@@ -108,9 +108,7 @@ def test_lower_admin_sees_and_manages_only_owned_schools(seeded_client):
     assert str(identities.own_school.id) in school_ids
     assert str(identities.other_school.id) not in school_ids
 
-    other_school_response = client.get(
-        f"/api/v1/admin/schools/{identities.other_school.id}"
-    )
+    other_school_response = client.get(f"/api/v1/admin/schools/{identities.other_school.id}")
 
     assert other_school_response.status_code == 403
 

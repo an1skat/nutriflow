@@ -25,9 +25,7 @@ async def hydrate_preview_references(preview: ParsedWeeklyMenuPreview) -> None:
         for item in day.items
     ]
     catalog = await MenuReferenceCatalog.load(items)
-    known_allergen_codes = {
-        allergen.code for allergen in await Allergen.find_all().to_list()
-    }
+    known_allergen_codes = {allergen.code for allergen in await Allergen.find_all().to_list()}
 
     for preview_item in preview.menus:
         for day in preview_item.menu.days:

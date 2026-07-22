@@ -585,9 +585,7 @@ async def publish_weekly_menu(
         WeeklyMenu.source_menu_id == source.id,
         {"school_id": {"$in": target_school_ids}},
     ).to_list()
-    existing_school_ids = {
-        copy.school_id for copy in existing_copies if copy.school_id is not None
-    }
+    existing_school_ids = {copy.school_id for copy in existing_copies if copy.school_id is not None}
     skipped_existing_school_ids = [
         school_id for school_id in target_school_ids if school_id in existing_school_ids
     ]
@@ -954,9 +952,7 @@ async def _to_daily_menus(data: list[DailyMenuPayload]) -> list[DailyMenu]:
         for day in data
     ]
     try:
-        await resolve_menu_item_references(
-            [item for day in days for item in day.items]
-        )
+        await resolve_menu_item_references([item for day in days for item in day.items])
     except MenuReferenceError as exc:
         raise MenuValidationError(str(exc)) from exc
 

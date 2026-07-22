@@ -60,33 +60,23 @@ class MenuReferenceCatalog:
             for candidate in card_number_candidates(item.recipe_card_number or "")
         }
         dish_cards = await _load_dish_cards(dish_card_ids, card_numbers)
-        dish_cards_by_id = {
-            card.id: card for card in dish_cards if card.id is not None
-        }
+        dish_cards_by_id = {card.id: card for card in dish_cards if card.id is not None}
         dish_cards_by_number = {card.card_number: card for card in dish_cards}
 
         version_ids = {
-            item.dish_card_version_id
-            for item in items
-            if item.dish_card_version_id is not None
+            item.dish_card_version_id for item in items if item.dish_card_version_id is not None
         }
         version_ids.update(
-            card.current_version_id
-            for card in dish_cards
-            if card.current_version_id is not None
+            card.current_version_id for card in dish_cards if card.current_version_id is not None
         )
         versions = (
             await DishCardVersion.find({"_id": {"$in": list(version_ids)}}).to_list()
             if version_ids
             else []
         )
-        versions_by_id = {
-            version.id: version for version in versions if version.id is not None
-        }
+        versions_by_id = {version.id: version for version in versions if version.id is not None}
 
-        allergen_ids = {
-            allergen_id for version in versions for allergen_id in version.allergen_ids
-        }
+        allergen_ids = {allergen_id for version in versions for allergen_id in version.allergen_ids}
         allergens = (
             await Allergen.find({"_id": {"$in": list(allergen_ids)}}).to_list()
             if allergen_ids
@@ -95,9 +85,7 @@ class MenuReferenceCatalog:
 
         return cls(
             ingredients_by_id={
-                ingredient.id: ingredient
-                for ingredient in ingredients
-                if ingredient.id is not None
+                ingredient.id: ingredient for ingredient in ingredients if ingredient.id is not None
             },
             ingredients_by_name=_ingredients_by_name(ingredients),
             dish_cards_by_id=dish_cards_by_id,
@@ -171,9 +159,7 @@ async def resolve_menu_item_references(items: list[DailyMenuItem]) -> None:
 
         version = catalog.dish_card_version(item, dish_card)
         if version is None or version.dish_card_id != dish_card.id:
-            raise MenuReferenceError(
-                "Dish card version does not belong to menu item dish card"
-            )
+            raise MenuReferenceError("Dish card version does not belong to menu item dish card")
 
         for portion in item.portions:
             resolution = resolve_portion_variant_by_yield(

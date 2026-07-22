@@ -225,8 +225,7 @@ async def _call_asgi(
 
 def _headers_dict(message):
     return {
-        key.decode("latin1").lower(): value.decode("latin1")
-        for key, value in message["headers"]
+        key.decode("latin1").lower(): value.decode("latin1") for key, value in message["headers"]
     }
 
 

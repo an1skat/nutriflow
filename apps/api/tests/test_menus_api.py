@@ -161,9 +161,7 @@ def test_admin_creates_weekly_menu_and_links_current_dish_card(seeded_client):
     assert menu["days"][0]["items"][0]["dish_card_version_id"] == version_id
     assert menu["days"][0]["items"][0]["allergen_codes"] == []
     assert menu["days"][0]["items"][0]["portions"][0]["calculated_from"] is None
-    assert menu["days"][0]["items"][0]["portions"][1]["calculated_from"][
-        "yield_amount"
-    ] == "100"
+    assert menu["days"][0]["items"][0]["portions"][1]["calculated_from"]["yield_amount"] == "100"
     assert menu["days"][0]["items"][1]["kind"] == "product"
     assert menu["days"][0]["items"][1]["product_name_snapshot"] == "Хліб цільнозерновий"
 
@@ -558,9 +556,7 @@ def test_admin_archives_restores_and_hard_deletes_weekly_menu_from_archive(seede
     assert active_list_response.status_code == 200
     assert active_list_response.json()["items"] == []
 
-    archive_list_response = client.get(
-        "/api/v1/menus/weekly?template_only=true&status=archived"
-    )
+    archive_list_response = client.get("/api/v1/menus/weekly?template_only=true&status=archived")
     assert archive_list_response.status_code == 200
     assert [item["id"] for item in archive_list_response.json()["items"]] == [menu_id]
 
@@ -750,13 +746,13 @@ def create_confirmed_dish_card(
     allergen_ids: list[str] = []
 
     for code in allergen_codes or []:
-      create_allergen = client.post(
-          "/api/v1/recipes/allergens",
-          json={"code": code, "name": f"Алерген {code}"},
-          headers=csrf_headers(client),
-      )
-      assert create_allergen.status_code == 201
-      allergen_ids.append(create_allergen.json()["id"])
+        create_allergen = client.post(
+            "/api/v1/recipes/allergens",
+            json={"code": code, "name": f"Алерген {code}"},
+            headers=csrf_headers(client),
+        )
+        assert create_allergen.status_code == 201
+        allergen_ids.append(create_allergen.json()["id"])
 
     create_version = client.post(
         f"/api/v1/recipes/dish-cards/{dish_card_id}/versions",

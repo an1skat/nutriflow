@@ -115,10 +115,7 @@ def _write_report_group(
     headers = [
         "Інгредієнт",
         *[
-            (
-                f"{dish.name}\nВихід: {dish.yield_amount} г\n"
-                f"Дітей: {dish.children_count_total}"
-            )
+            (f"{dish.name}\nВихід: {dish.yield_amount} г\nДітей: {dish.children_count_total}")
             for dish in group.dishes
         ],
         "Разом нетто, г",
@@ -131,9 +128,7 @@ def _write_report_group(
         cells_by_dish = {cell.dish_key: cell for cell in ingredient.cells}
         values: list[Any] = [ingredient.ingredient_name]
         values.extend(
-            cells_by_dish[dish_key].issue_total_rounded_g
-            if dish_key in cells_by_dish
-            else None
+            cells_by_dish[dish_key].issue_total_rounded_g if dish_key in cells_by_dish else None
             for dish_key in dish_keys
         )
         values.extend(

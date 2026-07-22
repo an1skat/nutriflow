@@ -340,23 +340,32 @@ def test_admin_endpoints_require_csrf_token(admin_client):
 def test_school_user_cannot_mutate_recipe_catalog(school_client):
     client, _ = school_client
 
-    assert client.post(
-        "/api/v1/recipes/ingredients",
-        json={"name": "Шкільний інгредієнт", "unit": "g"},
-        headers=csrf_headers(client),
-    ).status_code == 403
+    assert (
+        client.post(
+            "/api/v1/recipes/ingredients",
+            json={"name": "Шкільний інгредієнт", "unit": "g"},
+            headers=csrf_headers(client),
+        ).status_code
+        == 403
+    )
 
-    assert client.post(
-        "/api/v1/recipes/dish-cards",
-        json={"card_number": "99.05", "name": "Шкільна страва"},
-        headers=csrf_headers(client),
-    ).status_code == 403
+    assert (
+        client.post(
+            "/api/v1/recipes/dish-cards",
+            json={"card_number": "99.05", "name": "Шкільна страва"},
+            headers=csrf_headers(client),
+        ).status_code
+        == 403
+    )
 
-    assert client.post(
-        "/api/v1/recipes/dish-cards/6a4700000000000000000000/versions",
-        json={"portion_variants": [], "ingredient_amounts": []},
-        headers=csrf_headers(client),
-    ).status_code == 403
+    assert (
+        client.post(
+            "/api/v1/recipes/dish-cards/6a4700000000000000000000/versions",
+            json={"portion_variants": [], "ingredient_amounts": []},
+            headers=csrf_headers(client),
+        ).status_code
+        == 403
+    )
 
 
 def test_school_user_can_read_recipe_catalog(school_client):

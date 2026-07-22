@@ -273,11 +273,7 @@ def test_school_generates_and_regenerates_menu_requirement(seeded_client) -> Non
     exported_sheet = exported_workbook.active
     assert exported_sheet["A1"].value == "МЕНЮ-ВИМОГА"
     assert exported_sheet["B2"].value == identities.own_school.name
-    assert any(
-        cell.value == "Морква"
-        for row in exported_sheet.iter_rows()
-        for cell in row
-    )
+    assert any(cell.value == "Морква" for row in exported_sheet.iter_rows() for cell in row)
 
     regenerate_response = client.post(
         "/api/v1/menu-requirements/generate",
@@ -333,14 +329,10 @@ def test_school_generates_and_regenerates_menu_requirement(seeded_client) -> Non
     assert updated_carrot["issue_total_raw_g"] == "64.5"
     assert updated_carrot["issue_total_rounded_g"] == 65
 
-    owner_export_response = client.get(
-        f"/api/v1/menu-requirements/{requirement['id']}/export.xlsx"
-    )
+    owner_export_response = client.get(f"/api/v1/menu-requirements/{requirement['id']}/export.xlsx")
     assert owner_export_response.status_code == 200
 
-    list_response = client.get(
-        f"/api/v1/menu-requirements?weekly_menu_id={menu['id']}"
-    )
+    list_response = client.get(f"/api/v1/menu-requirements?weekly_menu_id={menu['id']}")
     assert list_response.status_code == 200
     assert list_response.json()["total"] == 1
 
@@ -361,9 +353,7 @@ def test_school_generates_and_regenerates_menu_requirement(seeded_client) -> Non
     missing_response = client.get(f"/api/v1/menu-requirements/{requirement['id']}")
     assert missing_response.status_code == 404
 
-    empty_list_response = client.get(
-        f"/api/v1/menu-requirements?weekly_menu_id={menu['id']}"
-    )
+    empty_list_response = client.get(f"/api/v1/menu-requirements?weekly_menu_id={menu['id']}")
     assert empty_list_response.status_code == 200
     assert empty_list_response.json()["total"] == 0
 
@@ -447,9 +437,7 @@ def test_school_closes_day_and_locks_saved_daily_menu(seeded_client) -> None:
     assert closed_day["closed_by"] == str(identities.school_user.id)
     assert closed_day["close_reason"] == "manual"
 
-    requirements_response = client.get(
-        f"/api/v1/menu-requirements?weekly_menu_id={menu['id']}"
-    )
+    requirements_response = client.get(f"/api/v1/menu-requirements?weekly_menu_id={menu['id']}")
     assert requirements_response.status_code == 200
     requirements = requirements_response.json()["items"]
     assert len(requirements) == 1
@@ -496,10 +484,7 @@ def test_school_closes_day_and_locks_saved_daily_menu(seeded_client) -> None:
     )
     assert reopened_edit_response.status_code == 200
     assert (
-        reopened_edit_response.json()["days"][0]["items"][0]["servings"][0][
-            "children_count"
-        ]
-        == 6
+        reopened_edit_response.json()["days"][0]["items"][0]["servings"][0]["children_count"] == 6
     )
 
 

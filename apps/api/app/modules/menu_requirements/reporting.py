@@ -157,10 +157,7 @@ async def get_menu_requirement_report(
         school_group_id=school_group_id,
     )
     requirement_statuses = await _requirement_statuses(requirements)
-    if (
-        current_user.role != UserRole.OWNER
-        and granularity != MenuRequirementReportGranularity.DAY
-    ):
+    if current_user.role != UserRole.OWNER and granularity != MenuRequirementReportGranularity.DAY:
         day_summaries = _build_calendar_day_summaries(
             expected_days,
             requirements,
@@ -357,8 +354,7 @@ def _build_calendar_month(
     date_from = Date(year, month, 1)
     date_to = Date(year, month, last_day)
     month_dates = {
-        date_from + timedelta(days=offset)
-        for offset in range((date_to - date_from).days + 1)
+        date_from + timedelta(days=offset) for offset in range((date_to - date_from).days + 1)
     }
     expected = expected_dates & month_dates
     generated = generated_dates & month_dates
@@ -375,10 +371,7 @@ def _build_calendar_month(
             block_from + timedelta(days=offset)
             for offset in range((block_to - block_from).days + 1)
         }
-        full_week_dates = {
-            block_from + timedelta(days=offset)
-            for offset in range(7)
-        }
+        full_week_dates = {block_from + timedelta(days=offset) for offset in range(7)}
         weekend_activity_dates = (
             (expected_dates | generated_dates | stale_dates) & full_week_dates
         ) - workday_dates
@@ -505,13 +498,10 @@ def _validate_complete_aggregate_report(
 
     if granularity == MenuRequirementReportGranularity.WEEK:
         required_dates = [date_from + timedelta(days=offset) for offset in range(5)]
-        is_complete = (
-            date_to == date_from + timedelta(days=4)
-            and all(
-                (summary := period_summaries.get(service_date)) is not None
-                and _is_complete_calendar_day(summary)
-                for service_date in required_dates
-            )
+        is_complete = date_to == date_from + timedelta(days=4) and all(
+            (summary := period_summaries.get(service_date)) is not None
+            and _is_complete_calendar_day(summary)
+            for service_date in required_dates
         )
         if not is_complete:
             raise MenuRequirementValidationError(
@@ -522,9 +512,7 @@ def _validate_complete_aggregate_report(
 
     if granularity == MenuRequirementReportGranularity.MONTH:
         participating_days = [
-            summary
-            for summary in period_summaries.values()
-            if summary.expected_requirements > 0
+            summary for summary in period_summaries.values() if summary.expected_requirements > 0
         ]
         is_complete = (
             bool(participating_days)

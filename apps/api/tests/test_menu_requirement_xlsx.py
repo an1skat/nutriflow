@@ -142,9 +142,7 @@ def test_builds_one_report_sheet_per_school_group() -> None:
         }
     )
 
-    workbook = openpyxl.load_workbook(
-        BytesIO(build_menu_requirement_report_workbook(report))
-    )
+    workbook = openpyxl.load_workbook(BytesIO(build_menu_requirement_report_workbook(report)))
 
     assert workbook.sheetnames == ["1-А", "1-Б"]
     assert all(sheet["A1"].value == "МЕНЮ-ВИМОГА" for sheet in workbook.worksheets)

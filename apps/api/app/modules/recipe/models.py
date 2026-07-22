@@ -181,7 +181,7 @@ def find_portion_variant_by_yield(
     portion_variants: list[PortionVariant],
     yield_amount: str,
     *,
-    preferred_variant_id: PydanticObjectId | None = None
+    preferred_variant_id: PydanticObjectId | None = None,
 ) -> PortionVariant | None:
     target = parse_menu_yield_grams(yield_amount)
 
@@ -190,28 +190,15 @@ def find_portion_variant_by_yield(
             return None
 
         return next(
-            (
-                variant
-                for variant in portion_variants
-                if variant.id == preferred_variant_id
-            ),
-            None
+            (variant for variant in portion_variants if variant.id == preferred_variant_id), None
         )
 
     for attribute in ("output_grams", "portion_grams"):
-        matches = [
-            variant
-            for variant in portion_variants
-            if getattr(variant, attribute) == target
-        ]
+        matches = [variant for variant in portion_variants if getattr(variant, attribute) == target]
 
         if preferred_variant_id is not None:
             preferred = next(
-                (
-                    variant
-                    for variant in matches
-                    if variant.id == preferred_variant_id
-                ),
+                (variant for variant in matches if variant.id == preferred_variant_id),
                 None,
             )
             if preferred is not None:
@@ -245,9 +232,7 @@ def resolve_portion_variant_by_yield(
             is_scaled=False,
         )
 
-    candidates = [
-        variant for variant in portion_variants if variant.output_grams > 0
-    ]
+    candidates = [variant for variant in portion_variants if variant.output_grams > 0]
     if not candidates:
         return None
 

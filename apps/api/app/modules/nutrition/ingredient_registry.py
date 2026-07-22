@@ -104,42 +104,18 @@ INGREDIENT_NORM_RULES: dict[str, IngredientNormRule] = {
     "вівсяна каша чи вівсяні пластівці «геркулес»": _rule(
         NormativeGroupCode.CEREALS_GRAINS_LEGUMES
     ),
-    "горох жовтий сухий": _rule(
-        NormativeGroupCode.CEREALS_GRAINS_LEGUMES
-    ),
-    "горох сушений": _rule(
-        NormativeGroupCode.CEREALS_GRAINS_LEGUMES
-    ),
-    "горошок зелений свіжоморожений": _rule(
-        NormativeGroupCode.CEREALS_GRAINS_LEGUMES
-    ),
-    "гречана крупа": _rule(
-        NormativeGroupCode.CEREALS_GRAINS_LEGUMES
-    ),
-    "крупа булгур": _rule(
-        NormativeGroupCode.CEREALS_GRAINS_LEGUMES
-    ),
-    "крупа гречана": _rule(
-        NormativeGroupCode.CEREALS_GRAINS_LEGUMES
-    ),
-    "крупа перлова": _rule(
-        NormativeGroupCode.CEREALS_GRAINS_LEGUMES
-    ),
-    "крупа пшенична": _rule(
-        NormativeGroupCode.CEREALS_GRAINS_LEGUMES
-    ),
-    "крупа рисова": _rule(
-        NormativeGroupCode.CEREALS_GRAINS_LEGUMES
-    ),
-    "крупа рисова або пшенична": _rule(
-        NormativeGroupCode.CEREALS_GRAINS_LEGUMES
-    ),
-    "макарони з твердих сортів пшениці": _rule(
-        NormativeGroupCode.CEREALS_GRAINS_LEGUMES
-    ),
-    "макаронні вироби": _rule(
-        NormativeGroupCode.CEREALS_GRAINS_LEGUMES
-    ),
+    "горох жовтий сухий": _rule(NormativeGroupCode.CEREALS_GRAINS_LEGUMES),
+    "горох сушений": _rule(NormativeGroupCode.CEREALS_GRAINS_LEGUMES),
+    "горошок зелений свіжоморожений": _rule(NormativeGroupCode.CEREALS_GRAINS_LEGUMES),
+    "гречана крупа": _rule(NormativeGroupCode.CEREALS_GRAINS_LEGUMES),
+    "крупа булгур": _rule(NormativeGroupCode.CEREALS_GRAINS_LEGUMES),
+    "крупа гречана": _rule(NormativeGroupCode.CEREALS_GRAINS_LEGUMES),
+    "крупа перлова": _rule(NormativeGroupCode.CEREALS_GRAINS_LEGUMES),
+    "крупа пшенична": _rule(NormativeGroupCode.CEREALS_GRAINS_LEGUMES),
+    "крупа рисова": _rule(NormativeGroupCode.CEREALS_GRAINS_LEGUMES),
+    "крупа рисова або пшенична": _rule(NormativeGroupCode.CEREALS_GRAINS_LEGUMES),
+    "макарони з твердих сортів пшениці": _rule(NormativeGroupCode.CEREALS_GRAINS_LEGUMES),
+    "макаронні вироби": _rule(NormativeGroupCode.CEREALS_GRAINS_LEGUMES),
     # Bread and bread products.
     "хліб цільнозерновий": _rule(NormativeGroupCode.BREAD),
     "сухарики (хліб сімейний)": _rule(NormativeGroupCode.BREAD),
@@ -148,9 +124,7 @@ INGREDIENT_NORM_RULES: dict[str, IngredientNormRule] = {
     "свинина великими шматками охолоджена": _rule(NormativeGroupCode.RED_MEAT),
     "яловичина великими шматками охолоджена": _rule(NormativeGroupCode.RED_MEAT),
     "філе куряче": _rule(NormativeGroupCode.POULTRY),
-    "філе минтая зі шкірою, що вироблене промисловістю": _rule(
-        NormativeGroupCode.FISH
-    ),
+    "філе минтая зі шкірою, що вироблене промисловістю": _rule(NormativeGroupCode.FISH),
     # Appendix 9/9-1 counts eggs as whole items: one portion is one piece.
     "яйце": _rule(
         NormativeGroupCode.EGGS,
@@ -197,14 +171,10 @@ INGREDIENT_NORM_RULES: dict[str, IngredientNormRule] = {
         unit=NormativeUnit.MILLILITER,
         product_variant="milk",
     ),
-    "сир кисломолочний": _rule(
-        NormativeGroupCode.DAIRY, product_variant="cottage_cheese"
-    ),
+    "сир кисломолочний": _rule(NormativeGroupCode.DAIRY, product_variant="cottage_cheese"),
     "сир твердий": _rule(NormativeGroupCode.DAIRY, product_variant="hard_cheese"),
     "сметана": _rule(NormativeGroupCode.DAIRY, product_variant="sour_cream"),
-    "сметана для подачі": _rule(
-        NormativeGroupCode.DAIRY, product_variant="sour_cream"
-    ),
+    "сметана для подачі": _rule(NormativeGroupCode.DAIRY, product_variant="sour_cream"),
     # Fats.
     "вершкове масло": _rule(NormativeGroupCode.ANIMAL_FATS),
     "масло вершкове": _rule(NormativeGroupCode.ANIMAL_FATS),

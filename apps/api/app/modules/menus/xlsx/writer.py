@@ -300,7 +300,7 @@ def _week_sheet_title(cycle_week: int) -> str:
 
 
 def _unique_sheet_title(preferred: str, used_titles: set[str]) -> str:
-    sanitized = re.sub(r'[:\\/?*\[\]]', "-", preferred).strip() or "Меню"
+    sanitized = re.sub(r"[:\\/?*\[\]]", "-", preferred).strip() or "Меню"
     sanitized = sanitized[:31]
     if sanitized not in used_titles:
         return sanitized

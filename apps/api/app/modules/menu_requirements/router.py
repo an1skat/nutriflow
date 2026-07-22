@@ -40,6 +40,8 @@ router = APIRouter()
 SchoolUser = Annotated[User, Depends(require_roles(UserRole.SCHOOL_USER))]
 Offset = Annotated[int, Query(ge=0)]
 Limit = Annotated[int, Query(ge=1, le=100)]
+
+
 @router.post(
     "/generate",
     response_model=GenerateMenuRequirementsResponse,

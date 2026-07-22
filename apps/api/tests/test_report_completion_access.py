@@ -64,9 +64,7 @@ def test_weekly_report_still_requires_five_complete_days() -> None:
     date_from = date(2026, 7, 6)
     date_to = date(2026, 7, 10)
     summaries = {
-        date_from + timedelta(days=offset): _complete_day(
-            date_from + timedelta(days=offset)
-        )
+        date_from + timedelta(days=offset): _complete_day(date_from + timedelta(days=offset))
         for offset in range(5)
     }
 

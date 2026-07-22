@@ -87,8 +87,7 @@ class ParsedWeeklyMenuPreview:
     @property
     def commit_ready(self) -> bool:
         return bool(self.menus) and not any(
-            diagnostic.level == MenuImportDiagnosticLevel.ERROR
-            for diagnostic in self.diagnostics
+            diagnostic.level == MenuImportDiagnosticLevel.ERROR for diagnostic in self.diagnostics
         )
 
 
@@ -172,8 +171,7 @@ def preview_weekly_menu_workbook(
     return ParsedWeeklyMenuPreview(
         available_sheet_names=menu_sheet_names,
         selected_sheet_name=(
-            sheet_name
-            or (menu_sheet_names[0] if len(target_sheet_names) == 1 else None)
+            sheet_name or (menu_sheet_names[0] if len(target_sheet_names) == 1 else None)
         ),
         parsed_sheet_names=parsed_sheet_names,
         diagnostics=diagnostics,
@@ -313,9 +311,7 @@ def _detect_columns(
                 source_col = column_number
             elif allergen_col is None and "алерген" in text:
                 allergen_col = column_number
-            elif name_col is None and (
-                "найменування" in text or "назва страв" in text
-            ):
+            elif name_col is None and ("найменування" in text or "назва страв" in text):
                 name_col = column_number
 
     if source_col is None or allergen_col is None or name_col is None:
@@ -508,9 +504,7 @@ def _parse_portions(
         strict=True,
     ):
         yield_amount = _format_yield_amount(sheet.cell(row_number, start_col).value)
-        raw_nutrition = [
-            sheet.cell(row_number, start_col + offset).value for offset in range(1, 5)
-        ]
+        raw_nutrition = [sheet.cell(row_number, start_col + offset).value for offset in range(1, 5)]
         if not yield_amount and not any(_cell_text(value) for value in raw_nutrition):
             continue
         if not yield_amount:

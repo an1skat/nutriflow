@@ -186,9 +186,7 @@ def _apply_manual_ingredient_rules_from_catalog(
     catalog: list[Ingredient],
 ) -> None:
     catalog_by_id = {ingredient.id: ingredient for ingredient in catalog}
-    catalog_by_name = {
-        normalize_lookup_text(ingredient.name): ingredient for ingredient in catalog
-    }
+    catalog_by_name = {normalize_lookup_text(ingredient.name): ingredient for ingredient in catalog}
 
     for requirement in requirements:
         for dish in requirement.dishes:
@@ -254,14 +252,12 @@ def _validate_complete_requirement_week(
     date_to: Date,
 ) -> None:
     week_dates = {
-        date_from + timedelta(days=offset)
-        for offset in range((date_to - date_from).days + 1)
+        date_from + timedelta(days=offset) for offset in range((date_to - date_from).days + 1)
     }
     expected_dates = {item.service_date for item in expected}
     missing_dates = week_dates - expected_dates
     requirement_keys = {
-        (item.weekly_menu_id, item.weekday, item.school_group_id)
-        for item in requirements
+        (item.weekly_menu_id, item.weekday, item.school_group_id) for item in requirements
     }
     for item in expected:
         key = (item.weekly_menu_id, item.weekday, item.school_group.id)
