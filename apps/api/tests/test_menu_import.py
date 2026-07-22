@@ -4,6 +4,7 @@ import openpyxl
 import pytest
 
 from app.modules.menus.models import MealType, MenuImportDiagnosticLevel, MenuItemKind, Weekday
+from app.modules.menus.reference_resolver import card_number_candidates
 from app.modules.menus.service import parse_weekly_menu_workbook, preview_weekly_menu_workbook
 
 pytestmark = pytest.mark.no_clean_database
@@ -128,3 +129,8 @@ def test_weekly_menu_preview_reports_exact_invalid_cell() -> None:
     assert diagnostic.row_number == 6
     assert diagnostic.column_letter == "E"
     assert diagnostic.cell == "E6"
+
+
+def test_card_number_candidates_accepts_final_separator_variant() -> None:
+    assert card_number_candidates("2.11.1") == ["2.11.1", "2.11_1"]
+    assert card_number_candidates("2.11_1") == ["2.11_1", "2.11.1"]

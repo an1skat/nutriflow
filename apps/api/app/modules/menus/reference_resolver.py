@@ -247,7 +247,15 @@ def card_number_candidates(card_number: str) -> list[str]:
     if not normalized:
         return []
     candidates = [normalized]
-    without_leading_zero = re.sub(r"\b0+(\d)", r"\1", normalized)
-    if without_leading_zero not in candidates:
-        candidates.append(without_leading_zero)
+    prefix, separator, suffix = normalized.rpartition("_")
+    if separator:
+        candidates.append(f"{prefix}.{suffix}")
+    else:
+        prefix, separator, suffix = normalized.rpartition(".")
+        if separator:
+            candidates.append(f"{prefix}_{suffix}")
+    for candidate in candidates.copy():
+        without_leading_zero = re.sub(r"\b0+(\d)", r"\1", candidate)
+        if without_leading_zero not in candidates:
+            candidates.append(without_leading_zero)
     return candidates
