@@ -1,41 +1,35 @@
-"use client";
+'use client';
 
-import {
-  keepPreviousData,
-  queryOptions,
-  useQuery,
-} from "@tanstack/react-query";
+import { keepPreviousData, queryOptions, useQuery } from '@tanstack/react-query';
 
 import type {
   MenuRequirementCalendarRequest,
   MenuRequirementListRequest,
   MenuRequirementReportRequest,
-} from "../model/MenuRequirement";
+} from '../model/MenuRequirement';
 import {
-  fetchMenuRequirementCalendar,
   fetchMenuRequirement,
+  fetchMenuRequirementCalendar,
   fetchMenuRequirementReport,
   fetchMenuRequirements,
-} from "./MenuRequirementApi";
+} from './MenuRequirementApi';
 
 export const menuRequirementQueryKeys = {
-  all: ["protected", "menu-requirements"] as const,
-  lists: () => [...menuRequirementQueryKeys.all, "list"] as const,
+  all: ['protected', 'menu-requirements'] as const,
+  lists: () => [...menuRequirementQueryKeys.all, 'list'] as const,
   list: (request: MenuRequirementListRequest) =>
     [...menuRequirementQueryKeys.lists(), request] as const,
   detail: (requirementId: string) =>
-    [...menuRequirementQueryKeys.all, "detail", requirementId] as const,
-  calendars: () => [...menuRequirementQueryKeys.all, "calendar"] as const,
+    [...menuRequirementQueryKeys.all, 'detail', requirementId] as const,
+  calendars: () => [...menuRequirementQueryKeys.all, 'calendar'] as const,
   calendar: (request: MenuRequirementCalendarRequest) =>
     [...menuRequirementQueryKeys.calendars(), request] as const,
-  reports: () => [...menuRequirementQueryKeys.all, "report"] as const,
+  reports: () => [...menuRequirementQueryKeys.all, 'report'] as const,
   report: (request: MenuRequirementReportRequest) =>
     [...menuRequirementQueryKeys.reports(), request] as const,
 };
 
-export function menuRequirementsQueryOptions(
-  request: MenuRequirementListRequest,
-) {
+export function menuRequirementsQueryOptions(request: MenuRequirementListRequest) {
   return queryOptions({
     queryKey: menuRequirementQueryKeys.list(request),
     queryFn: () => fetchMenuRequirements(request),
@@ -52,9 +46,7 @@ export function menuRequirementQueryOptions(requirementId: string) {
   });
 }
 
-export function menuRequirementCalendarQueryOptions(
-  request: MenuRequirementCalendarRequest,
-) {
+export function menuRequirementCalendarQueryOptions(request: MenuRequirementCalendarRequest) {
   return queryOptions({
     queryKey: menuRequirementQueryKeys.calendar(request),
     queryFn: () => fetchMenuRequirementCalendar(request),
@@ -63,9 +55,7 @@ export function menuRequirementCalendarQueryOptions(
   });
 }
 
-export function menuRequirementReportQueryOptions(
-  request: MenuRequirementReportRequest,
-) {
+export function menuRequirementReportQueryOptions(request: MenuRequirementReportRequest) {
   return queryOptions({
     queryKey: menuRequirementQueryKeys.report(request),
     queryFn: () => fetchMenuRequirementReport(request),
@@ -86,14 +76,10 @@ export function useMenuRequirement(requirementId: string) {
   return useQuery(menuRequirementQueryOptions(requirementId));
 }
 
-export function useMenuRequirementCalendar(
-  request: MenuRequirementCalendarRequest,
-) {
+export function useMenuRequirementCalendar(request: MenuRequirementCalendarRequest) {
   return useQuery(menuRequirementCalendarQueryOptions(request));
 }
 
-export function useMenuRequirementReport(
-  request: MenuRequirementReportRequest,
-) {
+export function useMenuRequirementReport(request: MenuRequirementReportRequest) {
   return useQuery(menuRequirementReportQueryOptions(request));
 }

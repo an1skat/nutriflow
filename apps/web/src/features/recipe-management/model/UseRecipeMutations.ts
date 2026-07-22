@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import {
   confirmDishCardVersion,
@@ -11,8 +11,8 @@ import {
   updateDishCard,
   updateDishCardVersion,
   updateIngredient,
-} from "@/entities/recipe/api/RecipeApi";
-import { recipeQueryKeys } from "@/entities/recipe/api/RecipeQueries";
+} from '@/entities/recipe/api/RecipeApi';
+import { recipeQueryKeys } from '@/entities/recipe/api/RecipeQueries';
 import type {
   CreateAllergenPayload,
   CreateDishCardVersionPayload,
@@ -21,7 +21,7 @@ import type {
   UpdateDishCardPayload,
   UpdateDishCardVersionPayload,
   UpdateIngredientPayload,
-} from "@/entities/recipe/model/Recipe";
+} from '@/entities/recipe/model/Recipe';
 
 export function useCreateIngredient() {
   const queryClient = useQueryClient();
@@ -36,13 +36,8 @@ export function useCreateIngredient() {
 export function useUpdateIngredient() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      id,
-      payload,
-    }: {
-      id: string;
-      payload: UpdateIngredientPayload;
-    }) => updateIngredient(id, payload),
+    mutationFn: ({ id, payload }: { id: string; payload: UpdateIngredientPayload }) =>
+      updateIngredient(id, payload),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: recipeQueryKeys.all });
     },
@@ -62,13 +57,8 @@ export function useCreateAllergen() {
 export function useUpdateAllergen() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      id,
-      payload,
-    }: {
-      id: string;
-      payload: UpdateAllergenPayload;
-    }) => updateAllergen(id, payload),
+    mutationFn: ({ id, payload }: { id: string; payload: UpdateAllergenPayload }) =>
+      updateAllergen(id, payload),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: recipeQueryKeys.all });
     },
@@ -78,13 +68,8 @@ export function useUpdateAllergen() {
 export function useUpdateDishCard() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      id,
-      payload,
-    }: {
-      id: string;
-      payload: UpdateDishCardPayload;
-    }) => updateDishCard(id, payload),
+    mutationFn: ({ id, payload }: { id: string; payload: UpdateDishCardPayload }) =>
+      updateDishCard(id, payload),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: recipeQueryKeys.all });
     },
@@ -94,13 +79,8 @@ export function useUpdateDishCard() {
 export function useUpdateDishCardVersion() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      id,
-      payload,
-    }: {
-      id: string;
-      payload: UpdateDishCardVersionPayload;
-    }) => updateDishCardVersion(id, payload),
+    mutationFn: ({ id, payload }: { id: string; payload: UpdateDishCardVersionPayload }) =>
+      updateDishCardVersion(id, payload),
     onSuccess: async (version) => {
       queryClient.invalidateQueries({
         queryKey: recipeQueryKeys.versions(version.dish_card_id),

@@ -1,13 +1,13 @@
-"use client";
+'use client';
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import {
   deleteMenuRequirement,
   updateMenuRequirement,
-} from "@/entities/menu-requirement/api/MenuRequirementApi";
-import { menuRequirementQueryKeys } from "@/entities/menu-requirement/api/MenuRequirementQueries";
-import type { UpdateMenuRequirementPayload } from "@/entities/menu-requirement/model/MenuRequirement";
+} from '@/entities/menu-requirement/api/MenuRequirementApi';
+import { menuRequirementQueryKeys } from '@/entities/menu-requirement/api/MenuRequirementQueries';
+import type { UpdateMenuRequirementPayload } from '@/entities/menu-requirement/model/MenuRequirement';
 
 export function useUpdateMenuRequirement(requirementId: string) {
   const queryClient = useQueryClient();
@@ -16,10 +16,7 @@ export function useUpdateMenuRequirement(requirementId: string) {
     mutationFn: (payload: UpdateMenuRequirementPayload) =>
       updateMenuRequirement(requirementId, payload),
     onSuccess: async (requirement) => {
-      queryClient.setQueryData(
-        menuRequirementQueryKeys.detail(requirement.id),
-        requirement,
-      );
+      queryClient.setQueryData(menuRequirementQueryKeys.detail(requirement.id), requirement);
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: menuRequirementQueryKeys.lists(),

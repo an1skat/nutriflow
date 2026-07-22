@@ -1,17 +1,18 @@
-"use client";
+'use client';
 
-import { AlertTriangle, X } from "lucide-react";
 import {
+  type ReactNode,
   createContext,
   useCallback,
   useContext,
   useEffect,
   useRef,
   useState,
-  type ReactNode,
-} from "react";
+} from 'react';
 
-type ConfirmVariant = "warning" | "danger";
+import { AlertTriangle, X } from 'lucide-react';
+
+type ConfirmVariant = 'warning' | 'danger';
 
 type ConfirmOptions = {
   title: string;
@@ -21,19 +22,15 @@ type ConfirmOptions = {
   variant?: ConfirmVariant;
 };
 
-type PendingConfirm = Required<
-  Pick<ConfirmOptions, "confirmLabel" | "cancelLabel" | "variant">
-> &
-  Pick<ConfirmOptions, "title" | "description">;
+type PendingConfirm = Required<Pick<ConfirmOptions, 'confirmLabel' | 'cancelLabel' | 'variant'>> &
+  Pick<ConfirmOptions, 'title' | 'description'>;
 
-const ConfirmDialogContext = createContext<
-  ((options: ConfirmOptions) => Promise<boolean>) | null
->(null);
+const ConfirmDialogContext = createContext<((options: ConfirmOptions) => Promise<boolean>) | null>(
+  null
+);
 
 export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
-  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(
-    null,
-  );
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
   const resolveRef = useRef<((confirmed: boolean) => void) | null>(null);
 
   const close = useCallback((confirmed: boolean) => {
@@ -50,9 +47,9 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
       setPendingConfirm({
         title: options.title,
         description: options.description,
-        confirmLabel: options.confirmLabel ?? "Підтвердити",
-        cancelLabel: options.cancelLabel ?? "Скасувати",
-        variant: options.variant ?? "warning",
+        confirmLabel: options.confirmLabel ?? 'Підтвердити',
+        cancelLabel: options.cancelLabel ?? 'Скасувати',
+        variant: options.variant ?? 'warning',
       });
     });
   }, []);
@@ -63,17 +60,17 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === 'Escape') {
         close(false);
       }
     };
     const previousOverflow = document.body.style.overflow;
 
-    document.addEventListener("keydown", handleKeyDown);
-    document.body.style.overflow = "hidden";
+    document.addEventListener('keydown', handleKeyDown);
+    document.body.style.overflow = 'hidden';
 
     return () => {
-      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = previousOverflow;
     };
   }, [close, pendingConfirm]);
@@ -83,7 +80,7 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
       resolveRef.current?.(false);
       resolveRef.current = null;
     },
-    [],
+    []
   );
 
   return (
@@ -106,18 +103,15 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
               <div className="flex min-w-0 items-start gap-3">
                 <span
                   className={`mt-0.5 inline-flex size-8 shrink-0 items-center justify-center border ${
-                    pendingConfirm.variant === "danger"
-                      ? "border-red-200 bg-red-50 text-[var(--nf-danger)]"
-                      : "border-amber-200 bg-amber-50 text-[var(--nf-warning)]"
+                    pendingConfirm.variant === 'danger'
+                      ? 'border-red-200 bg-red-50 text-[var(--nf-danger)]'
+                      : 'border-amber-200 bg-amber-50 text-[var(--nf-warning)]'
                   }`}
                 >
                   <AlertTriangle className="size-4" aria-hidden />
                 </span>
                 <div className="min-w-0">
-                  <h2
-                    id="confirm-dialog-title"
-                    className="text-base font-bold text-slate-900"
-                  >
+                  <h2 id="confirm-dialog-title" className="text-base font-bold text-slate-900">
                     {pendingConfirm.title}
                   </h2>
                   {pendingConfirm.description ? (
@@ -148,9 +142,7 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
               <button
                 type="button"
                 className={`nf-button ${
-                  pendingConfirm.variant === "danger"
-                    ? "nf-button-danger"
-                    : "nf-button-primary"
+                  pendingConfirm.variant === 'danger' ? 'nf-button-danger' : 'nf-button-primary'
                 }`}
                 onClick={() => close(true)}
               >
@@ -168,7 +160,7 @@ export function useConfirm() {
   const confirm = useContext(ConfirmDialogContext);
 
   if (!confirm) {
-    throw new Error("useConfirm must be used inside ConfirmDialogProvider");
+    throw new Error('useConfirm must be used inside ConfirmDialogProvider');
   }
 
   return confirm;

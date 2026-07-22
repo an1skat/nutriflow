@@ -1,20 +1,18 @@
-"use client";
+'use client';
 
-import { keepPreviousData, queryOptions, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, queryOptions, useQuery } from '@tanstack/react-query';
 
-import type { NormComplianceReportRequest } from "../model/NormCompliance";
-import { fetchNormComplianceReport } from "./NormComplianceApi";
+import type { NormComplianceReportRequest } from '../model/NormCompliance';
+import { fetchNormComplianceReport } from './NormComplianceApi';
 
 export const normComplianceQueryKeys = {
-  all: ["protected", "norm-compliance"] as const,
-  reports: () => [...normComplianceQueryKeys.all, "report"] as const,
+  all: ['protected', 'norm-compliance'] as const,
+  reports: () => [...normComplianceQueryKeys.all, 'report'] as const,
   report: (request: NormComplianceReportRequest) =>
     [...normComplianceQueryKeys.reports(), request] as const,
 };
 
-export function normComplianceReportQueryOptions(
-  request: NormComplianceReportRequest,
-) {
+export function normComplianceReportQueryOptions(request: NormComplianceReportRequest) {
   return queryOptions({
     queryKey: normComplianceQueryKeys.report(request),
     queryFn: () => fetchNormComplianceReport(request),

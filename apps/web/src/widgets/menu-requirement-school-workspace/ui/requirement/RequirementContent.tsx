@@ -1,20 +1,21 @@
-"use client";
+'use client';
 
-import { Building2, Pencil, Save, Trash2, UserRound, X } from "lucide-react";
-import { useMemo, useState } from "react";
-import { toast } from "sonner";
+import { useMemo, useState } from 'react';
+
+import { Building2, Pencil, Save, Trash2, UserRound, X } from 'lucide-react';
+import { toast } from 'sonner';
 
 import type {
   MenuRequirement,
   MenuRequirementCell,
   MenuRequirementIngredientRow,
   UpdateMenuRequirementPayload,
-} from "@/entities/menu-requirement/model/MenuRequirement";
-import type { AuthUser, UserRole } from "@/entities/session/model/Session";
-import { AGE_GROUP_LABELS } from "@/entities/weekly-menu/model/WeeklyMenu";
-import { MenuRequirementExportButton } from "@/features/menu-requirement-export/ui/MenuRequirementExportButton";
-import { formatDate } from "@/shared/lib/FormatDate";
-import { useConfirm } from "@/shared/ui/ConfirmDialog";
+} from '@/entities/menu-requirement/model/MenuRequirement';
+import type { AuthUser, UserRole } from '@/entities/session/model/Session';
+import { AGE_GROUP_LABELS } from '@/entities/weekly-menu/model/WeeklyMenu';
+import { MenuRequirementExportButton } from '@/features/menu-requirement-export/ui/MenuRequirementExportButton';
+import { formatDate } from '@/shared/lib/FormatDate';
+import { useConfirm } from '@/shared/ui/ConfirmDialog';
 
 type RequirementSchoolGroup = {
   schoolId: string;
@@ -47,15 +48,13 @@ export function RequirementNavigator({
 }) {
   const schoolGroups = groupRequirementsBySchool(requirements);
   const adminGroups = groupRequirementsByAdminAndSchool(requirements);
-  const isSchoolUser = viewerRole === "SCHOOL_USER";
-  const isAdmin = viewerRole === "ADMIN";
+  const isSchoolUser = viewerRole === 'SCHOOL_USER';
+  const isAdmin = viewerRole === 'ADMIN';
 
   return (
     <aside className="nf-panel overflow-hidden xl:sticky xl:top-4">
       <div className="nf-panel-header">
-        <h2 className="nf-panel-title">
-          {isSchoolUser ? "Меню-вимоги" : "Школи та меню-вимоги"}
-        </h2>
+        <h2 className="nf-panel-title">{isSchoolUser ? 'Меню-вимоги' : 'Школи та меню-вимоги'}</h2>
       </div>
       <div className="max-h-[72vh] overflow-y-auto">
         {isSchoolUser ? (
@@ -83,9 +82,7 @@ export function RequirementNavigator({
               >
                 <div className="flex items-center gap-2 bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700">
                   <UserRound className="size-4 shrink-0" aria-hidden />
-                  <span className="truncate">
-                    Адміністратор: {adminGroup.adminName}
-                  </span>
+                  <span className="truncate">Адміністратор: {adminGroup.adminName}</span>
                 </div>
                 {adminGroup.schools.map((school) => (
                   <SchoolRequirementGroup
@@ -115,10 +112,7 @@ function SchoolRequirementGroup({
   return (
     <div className="border-t border-slate-200 first:border-t-0">
       <div className="flex items-center gap-2 bg-white px-3 py-2 text-sm font-bold text-slate-900">
-        <Building2
-          className="size-4 shrink-0 text-emerald-700"
-          aria-hidden
-        />
+        <Building2 className="size-4 shrink-0 text-emerald-700" aria-hidden />
         <span className="truncate">{school.schoolName}</span>
         <span className="ml-auto shrink-0 text-[11px] font-normal text-slate-500">
           {school.requirements.length}
@@ -153,20 +147,18 @@ function RequirementList({
             type="button"
             className={`w-full border px-3 py-2 text-left transition-colors ${
               selected
-                ? "border-emerald-700 bg-emerald-700 text-white"
-                : "border-slate-200 bg-white text-slate-800 hover:border-emerald-400 hover:bg-emerald-50"
+                ? 'border-emerald-700 bg-emerald-700 text-white'
+                : 'border-slate-200 bg-white text-slate-800 hover:border-emerald-400 hover:bg-emerald-50'
             }`}
             aria-pressed={selected}
             onClick={() => onSelect(requirement.id)}
           >
             <span className="block text-xs font-bold">
-              {formatServiceDate(requirement.service_date)} ·{" "}
-              {requirement.meal_type === "lunch" ? "Обід" : "Сніданок"}
+              {formatServiceDate(requirement.service_date)} ·{' '}
+              {requirement.meal_type === 'lunch' ? 'Обід' : 'Сніданок'}
             </span>
             <span
-              className={`mt-1 block text-xs ${
-                selected ? "text-emerald-50" : "text-slate-600"
-              }`}
+              className={`mt-1 block text-xs ${selected ? 'text-emerald-50' : 'text-slate-600'}`}
             >
               {requirement.school_group_name} · {requirement.menu_title}
             </span>
@@ -201,7 +193,7 @@ export function MenuRequirementTable({
   const confirm = useConfirm();
   const [isEditing, setIsEditing] = useState(false);
   const [draftRows, setDraftRows] = useState<EditableRequirementRow[]>(() =>
-    createEditableRows(requirement),
+    createEditableRows(requirement)
   );
   const canSubmit = editable && Boolean(onSave);
   const canDelete = deletable && Boolean(onDelete);
@@ -214,7 +206,7 @@ export function MenuRequirementTable({
   const handleSave = async () => {
     const payload = buildUpdatePayload(draftRows);
     if (!payload) {
-      toast.error("Перевірте назви інгредієнтів і грамовки.");
+      toast.error('Перевірте назви інгредієнтів і грамовки.');
       return;
     }
 
@@ -228,10 +220,10 @@ export function MenuRequirementTable({
 
   const handleDelete = async () => {
     const confirmed = await confirm({
-      title: "Видалити меню-вимогу?",
+      title: 'Видалити меню-вимогу?',
       description: `Меню-вимогу "${requirement.menu_title}" для групи ${requirement.school_group_name} буде видалено остаточно.`,
-      confirmLabel: "Видалити",
-      variant: "danger",
+      confirmLabel: 'Видалити',
+      variant: 'danger',
     });
 
     if (!confirmed) {
@@ -250,33 +242,28 @@ export function MenuRequirementTable({
       <div className="nf-panel-header items-start">
         <div>
           <p className="nf-eyebrow">
-            {showSchoolName
-              ? requirement.school_name
-              : requirement.school_group_name}
+            {showSchoolName ? requirement.school_name : requirement.school_group_name}
           </p>
           <h2 className="nf-panel-title">{requirement.menu_title}</h2>
           <p className="mt-1 text-xs text-slate-600">
             {showSchoolName ? `${requirement.school_group_name} · ` : null}
-            {formatServiceDate(requirement.service_date)} ·{" "}
-            {AGE_GROUP_LABELS[requirement.age_group]} ·{" "}
-            {requirement.meal_type === "lunch" ? "обід" : "сніданок"}
+            {formatServiceDate(requirement.service_date)} ·{' '}
+            {AGE_GROUP_LABELS[requirement.age_group]} ·{' '}
+            {requirement.meal_type === 'lunch' ? 'обід' : 'сніданок'}
           </p>
           {showAdministrator ? (
             <p className="mt-1 text-xs text-slate-500">
-              Адміністратор:{" "}
-              {requirement.school_admin_owner_username ?? "не призначений"}
+              Адміністратор: {requirement.school_admin_owner_username ?? 'не призначений'}
             </p>
           ) : null}
         </div>
         <div className="text-right text-xs text-slate-600">
           <p>Версія {requirement.revision}</p>
-          <p className="mt-1">
-            Сформовано {formatDate(requirement.generated_at)}
-          </p>
+          <p className="mt-1">Сформовано {formatDate(requirement.generated_at)}</p>
           <div className="mt-3 flex flex-wrap justify-end gap-2">
             <MenuRequirementExportButton
               target={{
-                kind: "requirement",
+                kind: 'requirement',
                 requirementId: requirement.id,
               }}
               label="Експорт меню-вимоги"
@@ -302,7 +289,7 @@ export function MenuRequirementTable({
                       disabled={isSaving || isDeleting}
                     >
                       <Save className="size-4" aria-hidden />
-                      {isSaving ? "Зберігаємо…" : "Зберегти"}
+                      {isSaving ? 'Зберігаємо…' : 'Зберегти'}
                     </button>
                   </>
                 ) : (
@@ -324,7 +311,7 @@ export function MenuRequirementTable({
                     disabled={isSaving || isDeleting}
                   >
                     <Trash2 className="size-4" aria-hidden />
-                    {isDeleting ? "Видаляємо…" : "Видалити"}
+                    {isDeleting ? 'Видаляємо…' : 'Видалити'}
                   </button>
                 ) : null}
               </>
@@ -378,21 +365,15 @@ export function MenuRequirementTable({
                 key={row.key}
                 row={row}
                 draftRow={
-                  isEditing
-                    ? draftRows.find((draftRow) => draftRow.key === row.key)
-                    : undefined
+                  isEditing ? draftRows.find((draftRow) => draftRow.key === row.key) : undefined
                 }
                 dishIds={requirement.dishes.map((dish) => dish.menu_item_id)}
                 isEditing={isEditing}
                 onIngredientChange={(value) =>
-                  setDraftRows((current) =>
-                    updateDraftIngredientName(current, row.key, value),
-                  )
+                  setDraftRows((current) => updateDraftIngredientName(current, row.key, value))
                 }
                 onCellChange={(dishId, value) =>
-                  setDraftRows((current) =>
-                    updateDraftCell(current, row.key, dishId, value),
-                  )
+                  setDraftRows((current) => updateDraftCell(current, row.key, dishId, value))
                 }
               />
             ))}
@@ -401,8 +382,8 @@ export function MenuRequirementTable({
       </div>
 
       <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
-        «До видачі» враховує окрему кількість дітей для кожної страви та
-        округлюється вгору до цілого грама.
+        «До видачі» враховує окрему кількість дітей для кожної страви та округлюється вгору до
+        цілого грама.
       </div>
     </section>
   );
@@ -425,17 +406,12 @@ function IngredientRow({
 }) {
   const cells = useMemo(
     () => new Map(row.cells.map((cell) => [cell.menu_item_id, cell])),
-    [row.cells],
+    [row.cells]
   );
   const draftCells = useMemo(
     () =>
-      new Map(
-        (draftRow?.cells ?? []).map((cell) => [
-          cell.menu_item_id,
-          cell.net_per_person_g,
-        ]),
-      ),
-    [draftRow?.cells],
+      new Map((draftRow?.cells ?? []).map((cell) => [cell.menu_item_id, cell.net_per_person_g])),
+    [draftRow?.cells]
   );
 
   return (
@@ -467,14 +443,14 @@ function IngredientRow({
               <input
                 className="h-8 w-full border border-slate-300 bg-white px-1.5 text-right text-xs tabular-nums focus:border-emerald-700 focus:outline-none"
                 inputMode="decimal"
-                value={draftCells.get(dishId) ?? ""}
+                value={draftCells.get(dishId) ?? ''}
                 onChange={(event) => onCellChange(dishId, event.target.value)}
                 aria-label={`${row.ingredient_name}, грамів`}
               />
             ) : cell ? (
               formatGrams(cell.net_per_person_g)
             ) : (
-              "—"
+              '—'
             )}
           </td>
         );
@@ -489,20 +465,16 @@ function IngredientRow({
   );
 }
 
-function createEditableRows(
-  requirement: MenuRequirement,
-): EditableRequirementRow[] {
+function createEditableRows(requirement: MenuRequirement): EditableRequirementRow[] {
   return requirement.ingredient_rows.map((row) => {
-    const cells = new Map(
-      row.cells.map((cell) => [cell.menu_item_id, cell.net_per_person_g]),
-    );
+    const cells = new Map(row.cells.map((cell) => [cell.menu_item_id, cell.net_per_person_g]));
 
     return {
       key: row.key,
       ingredient_name: row.ingredient_name,
       cells: requirement.dishes.map((dish) => ({
         menu_item_id: dish.menu_item_id,
-        net_per_person_g: cells.get(dish.menu_item_id) ?? "0",
+        net_per_person_g: cells.get(dish.menu_item_id) ?? '0',
       })),
     };
   });
@@ -511,37 +483,31 @@ function createEditableRows(
 function updateDraftIngredientName(
   rows: EditableRequirementRow[],
   rowKey: string,
-  value: string,
+  value: string
 ): EditableRequirementRow[] {
-  return rows.map((row) =>
-    row.key === rowKey ? { ...row, ingredient_name: value } : row,
-  );
+  return rows.map((row) => (row.key === rowKey ? { ...row, ingredient_name: value } : row));
 }
 
 function updateDraftCell(
   rows: EditableRequirementRow[],
   rowKey: string,
   dishId: string,
-  value: string,
+  value: string
 ): EditableRequirementRow[] {
   return rows.map((row) =>
     row.key === rowKey
       ? {
           ...row,
           cells: row.cells.map((cell) =>
-            cell.menu_item_id === dishId
-              ? { ...cell, net_per_person_g: value }
-              : cell,
+            cell.menu_item_id === dishId ? { ...cell, net_per_person_g: value } : cell
           ),
         }
-      : row,
+      : row
   );
 }
 
-function buildUpdatePayload(
-  rows: EditableRequirementRow[],
-): UpdateMenuRequirementPayload | null {
-  const ingredientRows: UpdateMenuRequirementPayload["ingredient_rows"] = [];
+function buildUpdatePayload(rows: EditableRequirementRow[]): UpdateMenuRequirementPayload | null {
+  const ingredientRows: UpdateMenuRequirementPayload['ingredient_rows'] = [];
 
   for (const row of rows) {
     const ingredientName = row.ingredient_name.trim();
@@ -549,8 +515,7 @@ function buildUpdatePayload(
       return null;
     }
 
-    const cells: UpdateMenuRequirementPayload["ingredient_rows"][number]["cells"] =
-      [];
+    const cells: UpdateMenuRequirementPayload['ingredient_rows'][number]['cells'] = [];
     for (const cell of row.cells) {
       const normalizedAmount = normalizeDecimalDraft(cell.net_per_person_g);
       if (normalizedAmount === null) {
@@ -574,9 +539,9 @@ function buildUpdatePayload(
 }
 
 function normalizeDecimalDraft(value: string): string | null {
-  const normalized = value.trim().replace(",", ".");
+  const normalized = value.trim().replace(',', '.');
   if (!normalized) {
-    return "0";
+    return '0';
   }
   if (!/^\d+(\.\d+)?$/.test(normalized)) {
     return null;
@@ -590,36 +555,30 @@ function formatServiceDate(value: string): string {
   if (Number.isNaN(parsed.getTime())) {
     return value;
   }
-  return new Intl.DateTimeFormat("uk-UA", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
+  return new Intl.DateTimeFormat('uk-UA', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
   }).format(parsed);
 }
 
 export function filterRequirementsForUser(
   requirements: MenuRequirement[],
-  user: AuthUser | null | undefined,
+  user: AuthUser | null | undefined
 ): MenuRequirement[] {
   if (!user) {
     return [];
   }
-  if (user.role === "SCHOOL_USER") {
-    return requirements.filter(
-      (requirement) => requirement.school_id === user.school_id,
-    );
+  if (user.role === 'SCHOOL_USER') {
+    return requirements.filter((requirement) => requirement.school_id === user.school_id);
   }
-  if (user.role === "ADMIN") {
-    return requirements.filter(
-      (requirement) => requirement.school_admin_owner_id === user.id,
-    );
+  if (user.role === 'ADMIN') {
+    return requirements.filter((requirement) => requirement.school_admin_owner_id === user.id);
   }
   return requirements;
 }
 
-function groupRequirementsBySchool(
-  requirements: MenuRequirement[],
-): RequirementSchoolGroup[] {
+function groupRequirementsBySchool(requirements: MenuRequirement[]): RequirementSchoolGroup[] {
   const schools = new Map<string, RequirementSchoolGroup>();
 
   for (const requirement of requirements) {
@@ -638,25 +597,21 @@ function groupRequirementsBySchool(
       ...school,
       requirements: sortRequirements(school.requirements),
     }))
-    .sort((left, right) =>
-      left.schoolName.localeCompare(right.schoolName, "uk"),
-    );
+    .sort((left, right) => left.schoolName.localeCompare(right.schoolName, 'uk'));
 }
 
-function sortRequirements(
-  requirements: MenuRequirement[],
-): MenuRequirement[] {
+function sortRequirements(requirements: MenuRequirement[]): MenuRequirement[] {
   return [...requirements].sort((left, right) => {
     const dateOrder = right.service_date.localeCompare(left.service_date);
     if (dateOrder !== 0) {
       return dateOrder;
     }
-    return left.school_group_name.localeCompare(right.school_group_name, "uk");
+    return left.school_group_name.localeCompare(right.school_group_name, 'uk');
   });
 }
 
 function groupRequirementsByAdminAndSchool(
-  requirements: MenuRequirement[],
+  requirements: MenuRequirement[]
 ): RequirementAdminGroup[] {
   const admins = new Map<
     string,
@@ -667,10 +622,8 @@ function groupRequirementsByAdminAndSchool(
   >();
 
   for (const requirement of requirements) {
-    const adminKey =
-      requirement.school_admin_owner_id ?? "unassigned-administrator";
-    const adminName =
-      requirement.school_admin_owner_username ?? "не призначений";
+    const adminKey = requirement.school_admin_owner_id ?? 'unassigned-administrator';
+    const adminName = requirement.school_admin_owner_username ?? 'не призначений';
     const admin = admins.get(adminKey) ?? {
       name: adminName,
       schools: new Map<string, RequirementSchoolGroup>(),
@@ -694,30 +647,23 @@ function groupRequirementsByAdminAndSchool(
         .map((school) => ({
           ...school,
           requirements: [...school.requirements].sort((left, right) => {
-            const dateOrder = right.service_date.localeCompare(
-              left.service_date,
-            );
+            const dateOrder = right.service_date.localeCompare(left.service_date);
             if (dateOrder !== 0) {
               return dateOrder;
             }
-            return left.school_group_name.localeCompare(
-              right.school_group_name,
-              "uk",
-            );
+            return left.school_group_name.localeCompare(right.school_group_name, 'uk');
           }),
         }))
-        .sort((left, right) =>
-          left.schoolName.localeCompare(right.schoolName, "uk"),
-        ),
+        .sort((left, right) => left.schoolName.localeCompare(right.schoolName, 'uk')),
     }))
     .sort((left, right) => {
-      if (left.adminKey === "unassigned-administrator") {
+      if (left.adminKey === 'unassigned-administrator') {
         return 1;
       }
-      if (right.adminKey === "unassigned-administrator") {
+      if (right.adminKey === 'unassigned-administrator') {
         return -1;
       }
-      return left.adminName.localeCompare(right.adminName, "uk");
+      return left.adminName.localeCompare(right.adminName, 'uk');
     });
 }
 
@@ -727,13 +673,13 @@ function formatGrams(value: string): string {
   if (!Number.isFinite(parsed)) {
     return value;
   }
-  return new Intl.NumberFormat("uk-UA", {
+  return new Intl.NumberFormat('uk-UA', {
     maximumFractionDigits: 6,
   }).format(parsed);
 }
 
 function formatInteger(value: number): string {
-  return new Intl.NumberFormat("uk-UA", {
+  return new Intl.NumberFormat('uk-UA', {
     maximumFractionDigits: 0,
   }).format(value);
 }

@@ -1,4 +1,9 @@
-"use client";
+'use client';
+
+import { type ComponentType, type ReactNode, useState } from 'react';
+
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 
 import {
   BookOpen,
@@ -13,28 +18,19 @@ import {
   ShieldCheck,
   UsersRound,
   X,
-} from "lucide-react";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useState, type ComponentType, type ReactNode } from "react";
-import { toast } from "sonner";
+} from 'lucide-react';
+import { toast } from 'sonner';
 
-import { useCurrentUser } from "@/entities/session/api/SessionQueries";
-import type {
-  AdminPermission,
-  UserRole,
-} from "@/entities/session/model/Session";
-import {
-  hasPermission,
-  isBackofficeUser,
-} from "@/features/access/model/AccessPolicy";
-import { useLogout } from "@/features/auth/model/UseSession";
-import { getApiErrorMessage } from "@/shared/api/HttpClient";
+import { useCurrentUser } from '@/entities/session/api/SessionQueries';
+import type { AdminPermission, UserRole } from '@/entities/session/model/Session';
+import { hasPermission, isBackofficeUser } from '@/features/access/model/AccessPolicy';
+import { useLogout } from '@/features/auth/model/UseSession';
+import { getApiErrorMessage } from '@/shared/api/HttpClient';
 
 type NavigationItem = {
   href: string;
   label: string;
-  icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
+  icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
   ownerOnly?: boolean;
   requiredPermission?: AdminPermission;
   excludedRoles?: readonly UserRole[];
@@ -44,67 +40,67 @@ type NavigationItem = {
 
 const navigation: NavigationItem[] = [
   {
-    href: "/",
-    label: "Огляд",
+    href: '/',
+    label: 'Огляд',
     icon: LayoutDashboard,
   },
   {
-    href: "/admin/schools",
-    label: "Школи",
+    href: '/admin/schools',
+    label: 'Школи',
     icon: Building2,
-    requiredPermission: "schools.manage",
+    requiredPermission: 'schools.manage',
   },
   {
-    href: "/admin/recipe",
-    label: "Техкарти",
+    href: '/admin/recipe',
+    label: 'Техкарти',
     icon: BookOpen,
-    requiredPermission: "recipes.view",
+    requiredPermission: 'recipes.view',
   },
   {
-    href: "/admin/menus",
-    label: "Тижневе меню",
+    href: '/admin/menus',
+    label: 'Тижневе меню',
     icon: CalendarDays,
-    requiredPermission: "menus.manage",
-    excludedRoles: ["ADMIN"],
+    requiredPermission: 'menus.manage',
+    excludedRoles: ['ADMIN'],
   },
   {
-    href: "/admin/menu-changes",
-    label: "Зміни від шкіл",
+    href: '/admin/menu-changes',
+    label: 'Зміни від шкіл',
     icon: ClipboardCheck,
     technologistOnly: true,
   },
   {
-    href: "/admin/access",
-    label: "Доступ",
+    href: '/admin/access',
+    label: 'Доступ',
     icon: ShieldCheck,
     ownerOnly: true,
   },
   {
-    href: "/menu",
-    label: "Тижневе меню",
+    href: '/menu',
+    label: 'Тижневе меню',
     icon: CalendarDays,
     schoolOnly: true,
   },
   {
-    href: "/daily-menu",
-    label: "Денне меню",
+    href: '/daily-menu',
+    label: 'Денне меню',
     icon: ClipboardList,
     schoolOnly: true,
   },
   {
-    href: "/menu-requirements",
-    label: "Меню-вимога",
+    href: '/menu-requirements',
+    label: 'Меню-вимога',
     icon: FileSpreadsheet,
   },
   {
-    href: "/menu-requirements/calendar",
-    label: "Календар вимог",
+    href: '/menu-requirements/calendar',
+    label: 'Календар вимог',
     icon: CalendarDays,
-    excludedRoles: ["SCHOOL_USER"],
+    excludedRoles: ['SCHOOL_USER'],
   },
   {
-    href: "/school/groups",
-    label: "Групи",
+    href: '/school/groups',
+    label: 'Групи',
     icon: UsersRound,
     schoolOnly: true,
   },
@@ -121,7 +117,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const handleLogout = async () => {
     try {
       await logout.mutateAsync();
-      router.replace("/login");
+      router.replace('/login');
       router.refresh();
     } catch (error) {
       toast.error(getApiErrorMessage(error));
@@ -134,22 +130,21 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const visibleNavigation = navigation.filter(
     (item) =>
-      (!item.ownerOnly || user.role === "OWNER") &&
+      (!item.ownerOnly || user.role === 'OWNER') &&
       (!item.excludedRoles || !item.excludedRoles.includes(user.role)) &&
       (!item.requiredPermission ||
-        (isBackofficeUser(user) &&
-          hasPermission(user, item.requiredPermission))) &&
-      (!item.schoolOnly || user.role === "SCHOOL_USER") &&
-      (!item.technologistOnly || user.role === "TECHNOLOGIST"),
+        (isBackofficeUser(user) && hasPermission(user, item.requiredPermission))) &&
+      (!item.schoolOnly || user.role === 'SCHOOL_USER') &&
+      (!item.technologistOnly || user.role === 'TECHNOLOGIST')
   );
   const roleLabel =
-    user.role === "OWNER"
-      ? "Власник"
-      : user.role === "ADMIN"
-        ? "Адміністратор"
-        : user.role === "TECHNOLOGIST"
-          ? "Технолог"
-          : "Користувач школи";
+    user.role === 'OWNER'
+      ? 'Власник'
+      : user.role === 'ADMIN'
+        ? 'Адміністратор'
+        : user.role === 'TECHNOLOGIST'
+          ? 'Технолог'
+          : 'Користувач школи';
 
   return (
     <div className="min-h-screen bg-[var(--nf-canvas)]">
@@ -174,15 +169,11 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <aside
         className={`fixed inset-y-0 left-0 z-40 flex w-56 flex-col border-r border-[var(--nf-line-strong)] bg-[var(--nf-sidebar)] transition-transform md:translate-x-0 ${
-          isMenuOpen ? "translate-x-0" : "-translate-x-full"
+          isMenuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         <div className="flex h-16 items-center justify-between border-b border-[var(--nf-line-strong)] bg-[var(--nf-brand)] px-4 text-white">
-          <Link
-            href="/"
-            onClick={() => setIsMenuOpen(false)}
-            className="font-bold tracking-wide"
-          >
+          <Link href="/" onClick={() => setIsMenuOpen(false)} className="font-bold tracking-wide">
             NutriFlow
           </Link>
           <button
@@ -196,9 +187,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
 
         <div className="border-b border-[var(--nf-line)] px-4 py-3">
-          <p className="truncate text-sm font-bold text-slate-900">
-            {user.username}
-          </p>
+          <p className="truncate text-sm font-bold text-slate-900">{user.username}</p>
           <p className="mt-0.5 text-xs text-slate-600">{roleLabel}</p>
         </div>
 
@@ -209,12 +198,11 @@ export function AppShell({ children }: { children: ReactNode }) {
           <ul className="space-y-1">
             {visibleNavigation.map((item) => {
               const isActive =
-                item.href === "/"
-                  ? pathname === "/"
-                  : item.href === "/menu-requirements"
+                item.href === '/'
+                  ? pathname === '/'
+                  : item.href === '/menu-requirements'
                     ? pathname === item.href
-                  : pathname === item.href ||
-                    pathname.startsWith(`${item.href}/`);
+                    : pathname === item.href || pathname.startsWith(`${item.href}/`);
               const Icon = item.icon;
 
               return (
@@ -222,11 +210,11 @@ export function AppShell({ children }: { children: ReactNode }) {
                   <Link
                     href={item.href}
                     onClick={() => setIsMenuOpen(false)}
-                    aria-current={isActive ? "page" : undefined}
+                    aria-current={isActive ? 'page' : undefined}
                     className={`flex min-h-9 items-center gap-2 border px-2.5 text-sm ${
                       isActive
-                        ? "border-[var(--nf-brand-dark)] bg-[var(--nf-brand)] font-bold text-white"
-                        : "border-transparent text-slate-800 hover:border-[var(--nf-line)] hover:bg-white"
+                        ? 'border-[var(--nf-brand-dark)] bg-[var(--nf-brand)] font-bold text-white'
+                        : 'border-transparent text-slate-800 hover:border-[var(--nf-line)] hover:bg-white'
                     }`}
                   >
                     <Icon className="size-4" aria-hidden />
@@ -246,11 +234,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             className="flex min-h-9 w-full items-center gap-2 border border-transparent px-2.5 text-left text-sm text-slate-700 hover:border-[var(--nf-line)] hover:bg-white disabled:opacity-50"
           >
             <LogOut className="size-4" aria-hidden />
-            {logout.isPending ? "Виходимо…" : "Вийти"}
+            {logout.isPending ? 'Виходимо…' : 'Вийти'}
           </button>
-          <p className="px-2.5 pt-2 text-[10px] text-slate-500">
-            NutriFlow · етап 1
-          </p>
+          <p className="px-2.5 pt-2 text-[10px] text-slate-500">NutriFlow · етап 1</p>
         </div>
       </aside>
 

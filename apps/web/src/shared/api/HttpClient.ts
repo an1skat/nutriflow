@@ -1,21 +1,17 @@
-import axios, {
-  type AxiosError,
-  type InternalAxiosRequestConfig,
-} from "axios";
+import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 
-import { detailTranslations } from "./ApiMessages";
+import { detailTranslations } from './ApiMessages';
 
-const apiBasePath = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1";
-const csrfCookieName =
-  process.env.NEXT_PUBLIC_CSRF_COOKIE_NAME ?? "nutriflow_csrf";
-const SESSION_EXPIRED_EVENT = "nutriflow:session-expired";
-const REFRESH_LOCK_NAME = "nutriflow:refresh";
+const apiBasePath = process.env.NEXT_PUBLIC_API_BASE_URL ?? '/api/v1';
+const csrfCookieName = process.env.NEXT_PUBLIC_CSRF_COOKIE_NAME ?? 'nutriflow_csrf';
+const SESSION_EXPIRED_EVENT = 'nutriflow:session-expired';
+const REFRESH_LOCK_NAME = 'nutriflow:refresh';
 
 const axiosOptions = {
   baseURL: apiBasePath,
   withCredentials: true,
   headers: {
-    Accept: "application/json",
+    Accept: 'application/json',
   },
 };
 
@@ -29,21 +25,19 @@ type RetryableRequest = InternalAxiosRequestConfig & {
 class MissingCsrfTokenError extends Error {}
 
 function readCookie(name: string): string | null {
-  if (typeof document === "undefined") {
+  if (typeof document === 'undefined') {
     return null;
   }
 
   const prefix = `${name}=`;
-  const cookie = document.cookie
-    .split("; ")
-    .find((item) => item.startsWith(prefix));
+  const cookie = document.cookie.split('; ').find((item) => item.startsWith(prefix));
 
   return cookie ? decodeURIComponent(cookie.slice(prefix.length)) : null;
 }
 
 export function getCsrfHeaders(): Record<string, string> {
   const token = readCookie(csrfCookieName);
-  return token ? { "X-CSRF-Token": token } : {};
+  return token ? { 'X-CSRF-Token': token } : {};
 }
 
 export function isHttpStatus(error: unknown, status: number): boolean {
@@ -51,15 +45,13 @@ export function isHttpStatus(error: unknown, status: number): boolean {
 }
 
 function notifySessionExpired(): void {
-  if (typeof window !== "undefined") {
+  if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
   }
 }
 
-export function subscribeToSessionExpired(
-  listener: () => void,
-): () => void {
-  if (typeof window === "undefined") {
+export function subscribeToSessionExpired(listener: () => void): () => void {
+  if (typeof window === 'undefined') {
     return () => undefined;
   }
 
@@ -71,16 +63,16 @@ export function subscribeToSessionExpired(
 }
 
 function isNonRefreshableAuthEndpoint(url: string | undefined): boolean {
-  const path = (url ?? "").split("?")[0];
+  const path = (url ?? '').split('?')[0];
 
-  return ["/auth/login", "/auth/refresh", "/auth/logout"].some((endpoint) =>
-    path.endsWith(endpoint),
+  return ['/auth/login', '/auth/refresh', '/auth/logout'].some((endpoint) =>
+    path.endsWith(endpoint)
   );
 }
 
 async function accessCookieIsUsable(): Promise<boolean> {
   try {
-    await rawApiClient.get("/auth/me");
+    await rawApiClient.get('/auth/me');
     return true;
   } catch (error) {
     if (isHttpStatus(error, 401)) {
@@ -107,16 +99,13 @@ async function performRefresh(): Promise<void> {
   }
 
   try {
-    await rawApiClient.post("/auth/refresh", undefined, {
+    await rawApiClient.post('/auth/refresh', undefined, {
       headers: {
-        "X-CSRF-Token": token,
+        'X-CSRF-Token': token,
       },
     });
   } catch (error) {
-    if (
-      (isHttpStatus(error, 401) || isHttpStatus(error, 403)) &&
-      (await accessCookieIsUsable())
-    ) {
+    if ((isHttpStatus(error, 401) || isHttpStatus(error, 403)) && (await accessCookieIsUsable())) {
       return;
     }
 
@@ -125,7 +114,7 @@ async function performRefresh(): Promise<void> {
 }
 
 async function withRefreshLock(task: () => Promise<void>): Promise<void> {
-  if (typeof navigator === "undefined" || !("locks" in navigator)) {
+  if (typeof navigator === 'undefined' || !('locks' in navigator)) {
     await task();
     return;
   }
@@ -149,9 +138,7 @@ function refreshSession(): Promise<void> {
 
 function isExpectedRefreshFailure(error: unknown): boolean {
   return (
-    error instanceof MissingCsrfTokenError ||
-    isHttpStatus(error, 401) ||
-    isHttpStatus(error, 403)
+    error instanceof MissingCsrfTokenError || isHttpStatus(error, 401) || isHttpStatus(error, 403)
   );
 }
 
@@ -160,11 +147,7 @@ apiClient.interceptors.response.use(
   async (error: AxiosError) => {
     const request = error.config as RetryableRequest | undefined;
 
-    if (
-      error.response?.status !== 401 ||
-      !request ||
-      isNonRefreshableAuthEndpoint(request.url)
-    ) {
+    if (error.response?.status !== 401 || !request || isNonRefreshableAuthEndpoint(request.url)) {
       throw error;
     }
 
@@ -187,19 +170,19 @@ apiClient.interceptors.response.use(
     }
 
     return apiClient.request(request);
-  },
+  }
 );
 
 export function getApiErrorMessage(
   error: unknown,
-  fallback = "Не вдалося виконати запит.",
+  fallback = 'Не вдалося виконати запит.'
 ): string {
   if (!axios.isAxiosError(error)) {
     return error instanceof Error ? error.message : fallback;
   }
 
   if (!error.response) {
-    return "API недоступний. Перевірте з’єднання та повторіть спробу.";
+    return 'API недоступний. Перевірте з’єднання та повторіть спробу.';
   }
 
   const data = error.response.data as
@@ -208,14 +191,12 @@ export function getApiErrorMessage(
       }
     | undefined;
 
-  if (typeof data?.detail === "string") {
+  if (typeof data?.detail === 'string') {
     return detailTranslations[data.detail] ?? data.detail;
   }
 
   if (Array.isArray(data?.detail)) {
-    const message = data.detail.find(
-      (issue) => typeof issue.msg === "string",
-    )?.msg;
+    const message = data.detail.find((issue) => typeof issue.msg === 'string')?.msg;
 
     if (message) {
       return message;
@@ -223,11 +204,11 @@ export function getApiErrorMessage(
   }
 
   if (error.response.status === 403) {
-    return "Операцію заборонено.";
+    return 'Операцію заборонено.';
   }
 
   if (error.response.status >= 500) {
-    return "Помилка сервера. Повторіть спробу пізніше.";
+    return 'Помилка сервера. Повторіть спробу пізніше.';
   }
 
   return fallback;

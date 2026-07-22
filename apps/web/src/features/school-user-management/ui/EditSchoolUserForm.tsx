@@ -1,33 +1,31 @@
-"use client";
+'use client';
 
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useEffect } from 'react';
 
-import type { SchoolUser } from "@/entities/school-user/model/SchoolUser";
-import { getApiErrorMessage } from "@/shared/api/HttpClient";
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+
+import type { SchoolUser } from '@/entities/school-user/model/SchoolUser';
+import { getApiErrorMessage } from '@/shared/api/HttpClient';
 
 import {
-  editSchoolUserFormSchema,
   type EditSchoolUserFormValues,
-} from "../model/SchoolUserFormSchemas";
-import { useUpdateSchoolUser } from "../model/UseSchoolUserMutations";
+  editSchoolUserFormSchema,
+} from '../model/SchoolUserFormSchemas';
+import { useUpdateSchoolUser } from '../model/UseSchoolUserMutations';
 
 type EditSchoolUserFormProps = {
   schoolId: string;
   user: SchoolUser;
 };
 
-export function EditSchoolUserForm({
-  schoolId,
-  user,
-}: EditSchoolUserFormProps) {
+export function EditSchoolUserForm({ schoolId, user }: EditSchoolUserFormProps) {
   const updateUser = useUpdateSchoolUser(schoolId, user.id);
   const form = useForm<EditSchoolUserFormValues>({
     resolver: zodResolver(editSchoolUserFormSchema),
     defaultValues: {
       username: user.username,
-      email: user.email ?? "",
+      email: user.email ?? '',
       is_active: user.is_active,
     },
   });
@@ -35,19 +33,19 @@ export function EditSchoolUserForm({
   useEffect(() => {
     form.reset({
       username: user.username,
-      email: user.email ?? "",
+      email: user.email ?? '',
       is_active: user.is_active,
     });
   }, [form, user]);
 
   const onSubmit = form.handleSubmit(async (values) => {
-    form.clearErrors("root");
+    form.clearErrors('root');
 
     try {
       await updateUser.mutateAsync(values);
     } catch (error) {
-      form.setError("root", {
-        type: "server",
+      form.setError('root', {
+        type: 'server',
         message: getApiErrorMessage(error),
       });
     }
@@ -57,17 +55,10 @@ export function EditSchoolUserForm({
     <form onSubmit={onSubmit} className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label
-            htmlFor={`username-${user.id}`}
-            className="nf-label"
-          >
+          <label htmlFor={`username-${user.id}`} className="nf-label">
             Логін
           </label>
-          <input
-            id={`username-${user.id}`}
-            {...form.register("username")}
-            className="nf-input"
-          />
+          <input id={`username-${user.id}`} {...form.register('username')} className="nf-input" />
           {form.formState.errors.username ? (
             <p role="alert" className="nf-field-error">
               {form.formState.errors.username.message}
@@ -76,16 +67,13 @@ export function EditSchoolUserForm({
         </div>
 
         <div>
-          <label
-            htmlFor={`email-${user.id}`}
-            className="nf-label"
-          >
+          <label htmlFor={`email-${user.id}`} className="nf-label">
             Email
           </label>
           <input
             id={`email-${user.id}`}
             type="email"
-            {...form.register("email")}
+            {...form.register('email')}
             className="nf-input"
           />
           {form.formState.errors.email ? (
@@ -97,15 +85,9 @@ export function EditSchoolUserForm({
       </div>
 
       <label className="nf-checkbox-row">
-        <input
-          type="checkbox"
-          {...form.register("is_active")}
-          className="mt-0.5 size-4"
-        />
+        <input type="checkbox" {...form.register('is_active')} className="mt-0.5 size-4" />
         <span>
-          <span className="block text-sm font-bold">
-            Обліковий запис активний
-          </span>
+          <span className="block text-sm font-bold">Обліковий запис активний</span>
           <span className="block text-xs text-slate-600">
             Деактивація негайно завершить поточні сесії користувача.
           </span>
@@ -128,7 +110,7 @@ export function EditSchoolUserForm({
         disabled={form.formState.isSubmitting}
         className="nf-button nf-button-primary"
       >
-        {form.formState.isSubmitting ? "Зберігаємо…" : "Зберегти"}
+        {form.formState.isSubmitting ? 'Зберігаємо…' : 'Зберегти'}
       </button>
     </form>
   );

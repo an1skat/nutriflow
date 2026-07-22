@@ -1,23 +1,23 @@
-import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 
-import type { MenuRequirementAggregateStatus } from "@/entities/menu-requirement/model/MenuRequirement";
+import type { MenuRequirementAggregateStatus } from '@/entities/menu-requirement/model/MenuRequirement';
 
 const statusLabels: Record<MenuRequirementAggregateStatus, string> = {
-  complete: "Готово",
-  missing: "Пропущено",
-  stale: "Застаріло",
-  mixed: "Є питання",
+  complete: 'Готово',
+  missing: 'Пропущено',
+  stale: 'Застаріло',
+  mixed: 'Є питання',
 };
 
 const statusClasses: Record<MenuRequirementAggregateStatus, string> = {
-  complete: "border-emerald-200 bg-emerald-50 text-emerald-800",
-  missing: "border-amber-200 bg-amber-50 text-amber-800",
-  stale: "border-rose-200 bg-rose-50 text-rose-800",
-  mixed: "border-orange-200 bg-orange-50 text-orange-800",
+  complete: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+  missing: 'border-amber-200 bg-amber-50 text-amber-800',
+  stale: 'border-rose-200 bg-rose-50 text-rose-800',
+  mixed: 'border-orange-200 bg-orange-50 text-orange-800',
 };
 
 export function StatusBadge({ status }: { status: MenuRequirementAggregateStatus }) {
-  const Icon = status === "complete" ? CheckCircle2 : AlertTriangle;
+  const Icon = status === 'complete' ? CheckCircle2 : AlertTriangle;
 
   return (
     <span

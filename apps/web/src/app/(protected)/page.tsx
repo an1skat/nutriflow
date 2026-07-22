@@ -1,12 +1,9 @@
-"use client";
+'use client';
 
-import Link from "next/link";
+import Link from 'next/link';
 
-import { useCurrentUser } from "@/entities/session/api/SessionQueries";
-import {
-  hasPermission,
-  isBackofficeUser,
-} from "@/features/access/model/AccessPolicy";
+import { useCurrentUser } from '@/entities/session/api/SessionQueries';
+import { hasPermission, isBackofficeUser } from '@/features/access/model/AccessPolicy';
 
 export default function HomePage() {
   const currentUser = useCurrentUser();
@@ -17,13 +14,13 @@ export default function HomePage() {
   }
 
   const roleLabel =
-    user.role === "OWNER"
-      ? "Власник"
-      : user.role === "ADMIN"
-        ? "Адміністратор"
-        : user.role === "TECHNOLOGIST"
-          ? "Технолог"
-          : "Користувач школи";
+    user.role === 'OWNER'
+      ? 'Власник'
+      : user.role === 'ADMIN'
+        ? 'Адміністратор'
+        : user.role === 'TECHNOLOGIST'
+          ? 'Технолог'
+          : 'Користувач школи';
 
   return (
     <main className="nf-page">
@@ -53,7 +50,7 @@ export default function HomePage() {
                 </tr>
                 <tr>
                   <th>Email</th>
-                  <td>{user.email ?? "Не вказано"}</td>
+                  <td>{user.email ?? 'Не вказано'}</td>
                 </tr>
               </tbody>
             </table>
@@ -67,23 +64,22 @@ export default function HomePage() {
           <div className="nf-panel-body">
             {isBackofficeUser(user) ? (
               <div>
-                {hasPermission(user, "schools.manage") ? (
+                {hasPermission(user, 'schools.manage') ? (
                   <Link href="/admin/schools" className="nf-link">
                     Школи та користувачі
                   </Link>
                 ) : null}
-                {user.role !== "ADMIN" &&
-                hasPermission(user, "menus.manage") ? (
+                {user.role !== 'ADMIN' && hasPermission(user, 'menus.manage') ? (
                   <Link href="/admin/menus" className="nf-link block">
                     Тижневе меню
                   </Link>
                 ) : null}
-                {user.role === "TECHNOLOGIST" ? (
+                {user.role === 'TECHNOLOGIST' ? (
                   <Link href="/admin/menu-changes" className="nf-link block">
                     Зміни меню від шкіл
                   </Link>
                 ) : null}
-                {user.role === "OWNER" ? (
+                {user.role === 'OWNER' ? (
                   <Link href="/admin/access" className="nf-link block">
                     Доступ адміністраторів
                   </Link>

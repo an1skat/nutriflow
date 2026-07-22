@@ -1,12 +1,12 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 import {
   dailyMenuSchema,
   mealTypeSchema,
   weekdaySchema,
-} from "@/entities/weekly-menu/model/WeeklyMenu";
+} from '@/entities/weekly-menu/model/WeeklyMenu';
 
-export const menuChangeRequestStatusSchema = z.enum(["pending", "reviewed"]);
+export const menuChangeRequestStatusSchema = z.enum(['pending', 'reviewed']);
 
 export const menuFieldChangeSchema = z.object({
   weekday: weekdaySchema,
@@ -50,16 +50,10 @@ export const menuChangeRequestSchoolOptionSchema = z.object({
   name: z.string().min(1),
 });
 
-export const menuChangeRequestSchoolOptionsSchema = z.array(
-  menuChangeRequestSchoolOptionSchema,
-);
+export const menuChangeRequestSchoolOptionsSchema = z.array(menuChangeRequestSchoolOptionSchema);
 
-export type MenuChangeRequestStatus = z.infer<
-  typeof menuChangeRequestStatusSchema
->;
+export type MenuChangeRequestStatus = z.infer<typeof menuChangeRequestStatusSchema>;
 export type MenuFieldChange = z.infer<typeof menuFieldChangeSchema>;
 export type MenuChangeRequest = z.infer<typeof menuChangeRequestSchema>;
 export type MenuChangeRequestList = z.infer<typeof menuChangeRequestListSchema>;
-export type MenuChangeRequestSchoolOption = z.infer<
-  typeof menuChangeRequestSchoolOptionSchema
->;
+export type MenuChangeRequestSchoolOption = z.infer<typeof menuChangeRequestSchoolOptionSchema>;

@@ -1,4 +1,4 @@
-import { getApiErrorMessage } from "@/shared/api/HttpClient";
+import { getApiErrorMessage } from '@/shared/api/HttpClient';
 
 type RequestErrorProps = {
   error: unknown;
@@ -7,17 +7,10 @@ type RequestErrorProps = {
 
 export function RequestError({ error, onRetry }: RequestErrorProps) {
   return (
-    <div
-      role="alert"
-      className="nf-error"
-    >
+    <div role="alert" className="nf-error">
       <p>{getApiErrorMessage(error)}</p>
       {onRetry ? (
-        <button
-          type="button"
-          onClick={onRetry}
-          className="nf-button mt-3"
-        >
+        <button type="button" onClick={onRetry} className="nf-button mt-3">
           Повторити
         </button>
       ) : null}

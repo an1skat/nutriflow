@@ -1,24 +1,15 @@
-"use client";
+'use client';
 
-import {
-  keepPreviousData,
-  queryOptions,
-  useQuery,
-} from "@tanstack/react-query";
+import { keepPreviousData, queryOptions, useQuery } from '@tanstack/react-query';
 
-import {
-  fetchWeeklyMenu,
-  fetchWeeklyMenus,
-} from "./WeeklyMenuApi";
-import type { WeeklyMenuListRequest } from "../model/WeeklyMenu";
+import type { WeeklyMenuListRequest } from '../model/WeeklyMenu';
+import { fetchWeeklyMenu, fetchWeeklyMenus } from './WeeklyMenuApi';
 
 export const weeklyMenuQueryKeys = {
-  all: ["protected", "weekly-menus"] as const,
-  lists: () => [...weeklyMenuQueryKeys.all, "list"] as const,
-  list: (request: WeeklyMenuListRequest) =>
-    [...weeklyMenuQueryKeys.lists(), request] as const,
-  detail: (menuId: string) =>
-    [...weeklyMenuQueryKeys.all, "detail", menuId] as const,
+  all: ['protected', 'weekly-menus'] as const,
+  lists: () => [...weeklyMenuQueryKeys.all, 'list'] as const,
+  list: (request: WeeklyMenuListRequest) => [...weeklyMenuQueryKeys.lists(), request] as const,
+  detail: (menuId: string) => [...weeklyMenuQueryKeys.all, 'detail', menuId] as const,
 };
 
 export function weeklyMenusQueryOptions(request: WeeklyMenuListRequest) {

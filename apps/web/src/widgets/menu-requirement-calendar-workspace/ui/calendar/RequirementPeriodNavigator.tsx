@@ -1,14 +1,15 @@
-"use client";
+'use client';
 
-import { ArrowLeft, ChevronRight, Eye, Scale } from "lucide-react";
-import Link from "next/link";
+import Link from 'next/link';
+
+import { ArrowLeft, ChevronRight, Eye, Scale } from 'lucide-react';
 
 import type {
   MenuRequirementCalendarDay,
   MenuRequirementCalendarMonth,
   MenuRequirementCalendarWeek,
-} from "@/entities/menu-requirement/model/MenuRequirement";
-import type { MealType } from "@/entities/weekly-menu/model/WeeklyMenu";
+} from '@/entities/menu-requirement/model/MenuRequirement';
+import type { MealType } from '@/entities/weekly-menu/model/WeeklyMenu';
 
 import {
   formatDayWithoutYear,
@@ -17,19 +18,14 @@ import {
   monthName,
   monthNameFromDate,
   weekdayName,
-} from "./CalendarFormatting";
-import {
-  CalendarStatusBadge,
-  EmptyStatusBadge,
-  Metric,
-  StatusBadge,
-} from "./RequirementStatus";
-import type { SelectedRange } from "./RequirementCalendarTypes";
+} from './CalendarFormatting';
+import type { SelectedRange } from './RequirementCalendarTypes';
+import { CalendarStatusBadge, EmptyStatusBadge, Metric, StatusBadge } from './RequirementStatus';
 
 const incompleteWeekHint =
-  "Щоб сформувати тижневу меню-вимогу або дотримання норм, спочатку сформуйте або оновіть меню-вимоги за всі 5 робочих днів.";
+  'Щоб сформувати тижневу меню-вимогу або дотримання норм, спочатку сформуйте або оновіть меню-вимоги за всі 5 робочих днів.';
 const incompleteMonthHint =
-  "Щоб сформувати місячну меню-вимогу, спочатку сформуйте або оновіть меню-вимоги за всі дні, що беруть участь у цьому місяці.";
+  'Щоб сформувати місячну меню-вимогу, спочатку сформуйте або оновіть меню-вимоги за всі дні, що беруть участь у цьому місяці.';
 
 export function RequirementPeriodNavigator({
   months,
@@ -69,10 +65,10 @@ export function RequirementPeriodNavigator({
       ? `Тижні · ${monthName(year, selectedMonth.month)}`
       : `Місяці · ${year}`;
   const description = selectedWeek
-    ? "Оберіть день, щоб переглянути меню-вимоги окремих груп."
+    ? 'Оберіть день, щоб переглянути меню-вимоги окремих груп.'
     : selectedMonth
-      ? "Оберіть тиждень, щоб перейти до його робочих днів."
-      : "Почніть із місяця, за який потрібно переглянути меню-вимоги.";
+      ? 'Оберіть тиждень, щоб перейти до його робочих днів.'
+      : 'Почніть із місяця, за який потрібно переглянути меню-вимоги.';
   const openCurrentReport = () => {
     if (selectedPeriodBlockReason) {
       return;
@@ -82,18 +78,18 @@ export function RequirementPeriodNavigator({
         ? {
             dateFrom: selectedWeek.date_from,
             dateTo: selectedWeek.date_to,
-            granularity: "week",
+            granularity: 'week',
             label: `Тиждень ${selectedWeek.week_index} · ${formatShortRange(
               selectedWeek.date_from,
-              selectedWeek.date_to,
+              selectedWeek.date_to
             )}`,
           }
         : {
-            dateFrom: selectedMonth?.date_from ?? "",
-            dateTo: selectedMonth?.date_to ?? "",
-            granularity: "month",
-            label: selectedMonth ? monthName(year, selectedMonth.month) : "",
-          },
+            dateFrom: selectedMonth?.date_from ?? '',
+            dateTo: selectedMonth?.date_to ?? '',
+            granularity: 'month',
+            label: selectedMonth ? monthName(year, selectedMonth.month) : '',
+          }
     );
   };
 
@@ -128,10 +124,7 @@ export function RequirementPeriodNavigator({
               <>
                 <ChevronRight className="size-3.5" aria-hidden />
                 <span className="text-slate-800">
-                  {formatShortRange(
-                    selectedWeek.date_from,
-                    selectedWeek.date_to,
-                  )}
+                  {formatShortRange(selectedWeek.date_from, selectedWeek.date_to)}
                 </span>
               </>
             ) : null}
@@ -180,9 +173,7 @@ export function RequirementPeriodNavigator({
                 onClick={openCurrentReport}
               >
                 <Eye className="size-4" aria-hidden />
-                {selectedWeek
-                  ? "Меню-вимога за тиждень"
-                  : "Меню-вимога за місяць"}
+                {selectedWeek ? 'Меню-вимога за тиждень' : 'Меню-вимога за місяць'}
               </button>
             </div>
             {selectedPeriodBlockReason ? (
@@ -202,16 +193,13 @@ export function RequirementPeriodNavigator({
               onOpenReport({
                 dateFrom: day.service_date,
                 dateTo: day.service_date,
-                granularity: "day",
+                granularity: 'day',
                 label: formatFullDay(day.service_date),
               })
             }
           />
         ) : selectedMonth ? (
-          <RequirementWeekGrid
-            weeks={selectedMonth.weeks}
-            onSelect={onSelectWeek}
-          />
+          <RequirementWeekGrid weeks={selectedMonth.weeks} onSelect={onSelectWeek} />
         ) : (
           <RequirementMonthGrid months={months} onSelect={onSelectMonth} />
         )}
@@ -236,16 +224,14 @@ export function buildNormComplianceHref({
     school_id: schoolId,
     date_from: dateFrom,
     date_to: dateTo,
-    source: "menu-requirements-calendar",
+    source: 'menu-requirements-calendar',
   });
-  if (mealType) params.set("meal_type", mealType);
-  if (schoolGroupId) params.set("school_group_id", schoolGroupId);
+  if (mealType) params.set('meal_type', mealType);
+  if (schoolGroupId) params.set('school_group_id', schoolGroupId);
   return `/norm-compliance?${params.toString()}`;
 }
 
-function getWeekReportBlockReason(
-  week: MenuRequirementCalendarWeek,
-): string | null {
+function getWeekReportBlockReason(week: MenuRequirementCalendarWeek): string | null {
   const allWeekdaysHaveRequirements =
     week.days.length === 5 &&
     week.days.every(
@@ -253,22 +239,20 @@ function getWeekReportBlockReason(
         day.expected_requirements > 0 &&
         day.generated_requirements >= day.expected_requirements &&
         day.missing_requirements === 0 &&
-        day.stale_requirements === 0,
+        day.stale_requirements === 0
     );
 
   return allWeekdaysHaveRequirements ? null : incompleteWeekHint;
 }
 
-function getMonthReportBlockReason(
-  month: MenuRequirementCalendarMonth,
-): string | null {
+function getMonthReportBlockReason(month: MenuRequirementCalendarMonth): string | null {
   const participatingDays = month.weeks
     .flatMap((week) => week.days)
     .filter(
       (day) =>
         day.service_date >= month.date_from &&
         day.service_date <= month.date_to &&
-        day.expected_requirements > 0,
+        day.expected_requirements > 0
     );
   const allParticipatingDaysHaveRequirements =
     participatingDays.length > 0 &&
@@ -276,7 +260,7 @@ function getMonthReportBlockReason(
       (day) =>
         day.generated_requirements >= day.expected_requirements &&
         day.missing_requirements === 0 &&
-        day.stale_requirements === 0,
+        day.stale_requirements === 0
     ) &&
     month.stale_days === 0;
 
@@ -313,10 +297,7 @@ function RequirementMonthGrid({
           <span className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
             <Metric label="Днів" value={month.working_days} />
             <Metric label="Є" value={month.generated_days} />
-            <Metric
-              label="Пробл."
-              value={month.missing_days + month.stale_days}
-            />
+            <Metric label="Пробл." value={month.missing_days + month.stale_days} />
           </span>
           <span className="mt-3 flex items-center justify-between text-xs font-bold text-emerald-800">
             Перейти до тижнів
@@ -391,8 +372,7 @@ function RequirementDayGrid({
   return (
     <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 md:grid md:grid-cols-2 md:overflow-visible md:pb-0 xl:grid-cols-5">
       {days.map((day) => {
-        const hasNoData =
-          day.expected_requirements === 0 && day.generated_requirements === 0;
+        const hasNoData = day.expected_requirements === 0 && day.generated_requirements === 0;
 
         return (
           <article
@@ -408,11 +388,7 @@ function RequirementDayGrid({
                   {formatDayWithoutYear(day.service_date)}
                 </h3>
               </div>
-              {hasNoData ? (
-                <EmptyStatusBadge />
-              ) : (
-                <StatusBadge status={day.status} />
-              )}
+              {hasNoData ? <EmptyStatusBadge /> : <StatusBadge status={day.status} />}
             </div>
 
             <dl className="mt-4 grid gap-2 text-sm">

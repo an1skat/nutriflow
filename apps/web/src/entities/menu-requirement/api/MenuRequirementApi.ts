@@ -1,28 +1,28 @@
-import { apiClient, getCsrfHeaders } from "@/shared/api/HttpClient";
-import { toApiPaginationParams } from "@/shared/api/Pagination";
+import { apiClient, getCsrfHeaders } from '@/shared/api/HttpClient';
+import { toApiPaginationParams } from '@/shared/api/Pagination';
 
 import {
-  generateMenuRequirementsResponseSchema,
-  menuRequirementCalendarSchema,
-  menuRequirementListSchema,
-  menuRequirementReportSchema,
-  menuRequirementSchema,
   type GenerateMenuRequirementsPayload,
   type GenerateMenuRequirementsResponse,
+  type MenuRequirement,
   type MenuRequirementCalendar,
   type MenuRequirementCalendarRequest,
-  type MenuRequirement,
   type MenuRequirementList,
   type MenuRequirementListRequest,
   type MenuRequirementReport,
   type MenuRequirementReportRequest,
   type UpdateMenuRequirementPayload,
-} from "../model/MenuRequirement";
+  generateMenuRequirementsResponseSchema,
+  menuRequirementCalendarSchema,
+  menuRequirementListSchema,
+  menuRequirementReportSchema,
+  menuRequirementSchema,
+} from '../model/MenuRequirement';
 
 export async function fetchMenuRequirements(
-  request: MenuRequirementListRequest,
+  request: MenuRequirementListRequest
 ): Promise<MenuRequirementList> {
-  const response = await apiClient.get<unknown>("/menu-requirements", {
+  const response = await apiClient.get<unknown>('/menu-requirements', {
     params: {
       ...toApiPaginationParams(request),
       weekly_menu_id: request.weekly_menu_id,
@@ -33,36 +33,29 @@ export async function fetchMenuRequirements(
   return menuRequirementListSchema.parse(response.data);
 }
 
-export async function fetchMenuRequirement(
-  requirementId: string,
-): Promise<MenuRequirement> {
-  const response = await apiClient.get<unknown>(
-    `/menu-requirements/${requirementId}`,
-  );
+export async function fetchMenuRequirement(requirementId: string): Promise<MenuRequirement> {
+  const response = await apiClient.get<unknown>(`/menu-requirements/${requirementId}`);
   return menuRequirementSchema.parse(response.data);
 }
 
 export async function fetchMenuRequirementCalendar(
-  request: MenuRequirementCalendarRequest,
+  request: MenuRequirementCalendarRequest
 ): Promise<MenuRequirementCalendar> {
-  const response = await apiClient.get<unknown>(
-    "/menu-requirements/calendar",
-    {
-      params: {
-        school_id: request.school_id,
-        year: request.year,
-        meal_type: request.meal_type,
-        school_group_id: request.school_group_id,
-      },
+  const response = await apiClient.get<unknown>('/menu-requirements/calendar', {
+    params: {
+      school_id: request.school_id,
+      year: request.year,
+      meal_type: request.meal_type,
+      school_group_id: request.school_group_id,
     },
-  );
+  });
   return menuRequirementCalendarSchema.parse(response.data);
 }
 
 export async function fetchMenuRequirementReport(
-  request: MenuRequirementReportRequest,
+  request: MenuRequirementReportRequest
 ): Promise<MenuRequirementReport> {
-  const response = await apiClient.get<unknown>("/menu-requirements/report", {
+  const response = await apiClient.get<unknown>('/menu-requirements/report', {
     params: {
       school_id: request.school_id,
       date_from: request.date_from,
@@ -76,35 +69,25 @@ export async function fetchMenuRequirementReport(
 }
 
 export async function generateMenuRequirements(
-  payload: GenerateMenuRequirementsPayload,
+  payload: GenerateMenuRequirementsPayload
 ): Promise<GenerateMenuRequirementsResponse> {
-  const response = await apiClient.post<unknown>(
-    "/menu-requirements/generate",
-    payload,
-    {
-      headers: getCsrfHeaders(),
-    },
-  );
+  const response = await apiClient.post<unknown>('/menu-requirements/generate', payload, {
+    headers: getCsrfHeaders(),
+  });
   return generateMenuRequirementsResponseSchema.parse(response.data);
 }
 
 export async function updateMenuRequirement(
   requirementId: string,
-  payload: UpdateMenuRequirementPayload,
+  payload: UpdateMenuRequirementPayload
 ): Promise<MenuRequirement> {
-  const response = await apiClient.patch<unknown>(
-    `/menu-requirements/${requirementId}`,
-    payload,
-    {
-      headers: getCsrfHeaders(),
-    },
-  );
+  const response = await apiClient.patch<unknown>(`/menu-requirements/${requirementId}`, payload, {
+    headers: getCsrfHeaders(),
+  });
   return menuRequirementSchema.parse(response.data);
 }
 
-export async function deleteMenuRequirement(
-  requirementId: string,
-): Promise<void> {
+export async function deleteMenuRequirement(requirementId: string): Promise<void> {
   await apiClient.delete(`/menu-requirements/${requirementId}`, {
     headers: getCsrfHeaders(),
   });

@@ -1,27 +1,25 @@
-"use client";
+'use client';
 
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useEffect } from 'react';
 
-import type { SchoolGroup } from "@/entities/school-group/model/SchoolGroup";
-import { getApiErrorMessage } from "@/shared/api/HttpClient";
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+
+import type { SchoolGroup } from '@/entities/school-group/model/SchoolGroup';
+import { getApiErrorMessage } from '@/shared/api/HttpClient';
 
 import {
-  editSchoolGroupFormSchema,
   type EditSchoolGroupFormValues,
-} from "../model/SchoolGroupFormSchemas";
-import { useUpdateSchoolGroup } from "../model/UseSchoolGroupMutations";
+  editSchoolGroupFormSchema,
+} from '../model/SchoolGroupFormSchemas';
+import { useUpdateSchoolGroup } from '../model/UseSchoolGroupMutations';
 
 type EditSchoolGroupFormProps = {
   schoolId: string;
   group: SchoolGroup;
 };
 
-export function EditSchoolGroupForm({
-  schoolId,
-  group,
-}: EditSchoolGroupFormProps) {
+export function EditSchoolGroupForm({ schoolId, group }: EditSchoolGroupFormProps) {
   const updateGroup = useUpdateSchoolGroup(schoolId, group.id);
   const form = useForm<EditSchoolGroupFormValues>({
     resolver: zodResolver(editSchoolGroupFormSchema),
@@ -39,13 +37,13 @@ export function EditSchoolGroupForm({
   }, [form, group]);
 
   const onSubmit = form.handleSubmit(async (values) => {
-    form.clearErrors("root");
+    form.clearErrors('root');
 
     try {
       await updateGroup.mutateAsync(values);
     } catch (error) {
-      form.setError("root", {
-        type: "server",
+      form.setError('root', {
+        type: 'server',
         message: getApiErrorMessage(error),
       });
     }
@@ -58,11 +56,7 @@ export function EditSchoolGroupForm({
           <label htmlFor={`group-${group.id}-name`} className="nf-label">
             Назва групи
           </label>
-          <input
-            id={`group-${group.id}-name`}
-            {...form.register("name")}
-            className="nf-input"
-          />
+          <input id={`group-${group.id}-name`} {...form.register('name')} className="nf-input" />
           {form.formState.errors.name ? (
             <p role="alert" className="nf-field-error">
               {form.formState.errors.name.message}
@@ -72,11 +66,7 @@ export function EditSchoolGroupForm({
       </div>
 
       <label className="nf-checkbox-row">
-        <input
-          type="checkbox"
-          {...form.register("is_active")}
-          className="mt-0.5 size-4"
-        />
+        <input type="checkbox" {...form.register('is_active')} className="mt-0.5 size-4" />
         <span>
           <span className="block text-sm font-bold">Група активна</span>
           <span className="block text-xs text-slate-600">
@@ -101,7 +91,7 @@ export function EditSchoolGroupForm({
         disabled={form.formState.isSubmitting}
         className="nf-button nf-button-primary"
       >
-        {form.formState.isSubmitting ? "Зберігаємо…" : "Зберегти групу"}
+        {form.formState.isSubmitting ? 'Зберігаємо…' : 'Зберегти групу'}
       </button>
     </form>
   );

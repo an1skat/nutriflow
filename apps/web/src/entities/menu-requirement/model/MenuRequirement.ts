@@ -1,11 +1,11 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 import {
   ageGroupSchema,
   mealTypeSchema,
   menuItemKindSchema,
   weekdaySchema,
-} from "@/entities/weekly-menu/model/WeeklyMenu";
+} from '@/entities/weekly-menu/model/WeeklyMenu';
 
 const decimalStringSchema = z.string().trim().min(1);
 
@@ -74,23 +74,16 @@ export const generateMenuRequirementsResponseSchema = z.object({
   items: z.array(menuRequirementSchema).min(1),
 });
 
-export const menuRequirementReportGranularitySchema = z.enum([
-  "day",
-  "week",
-  "month",
-]);
+export const menuRequirementReportGranularitySchema = z.enum(['day', 'week', 'month']);
 
 export const menuRequirementAggregateStatusSchema = z.enum([
-  "complete",
-  "missing",
-  "stale",
-  "mixed",
+  'complete',
+  'missing',
+  'stale',
+  'mixed',
 ]);
 
-export const menuRequirementDishKeyReliabilitySchema = z.enum([
-  "stable",
-  "name_fallback",
-]);
+export const menuRequirementDishKeyReliabilitySchema = z.enum(['stable', 'name_fallback']);
 
 export const menuRequirementCalendarDaySchema = z.object({
   service_date: z.string().min(1),
@@ -204,19 +197,15 @@ export const updateMenuRequirementPayloadSchema = z.object({
         z.object({
           menu_item_id: z.string().min(1),
           net_per_person_g: decimalStringSchema,
-        }),
+        })
       ),
-    }),
+    })
   ),
 });
 
-export type MenuRequirementDish = z.infer<
-  typeof menuRequirementDishSchema
->;
+export type MenuRequirementDish = z.infer<typeof menuRequirementDishSchema>;
 export type MenuRequirementCell = z.infer<typeof menuRequirementCellSchema>;
-export type MenuRequirementIngredientRow = z.infer<
-  typeof menuRequirementIngredientRowSchema
->;
+export type MenuRequirementIngredientRow = z.infer<typeof menuRequirementIngredientRowSchema>;
 export type MenuRequirement = z.infer<typeof menuRequirementSchema>;
 export type MenuRequirementList = z.infer<typeof menuRequirementListSchema>;
 export type GenerateMenuRequirementsResponse = z.infer<
@@ -225,39 +214,19 @@ export type GenerateMenuRequirementsResponse = z.infer<
 export type MenuRequirementReportGranularity = z.infer<
   typeof menuRequirementReportGranularitySchema
 >;
-export type MenuRequirementAggregateStatus = z.infer<
-  typeof menuRequirementAggregateStatusSchema
->;
-export type MenuRequirementCalendar = z.infer<
-  typeof menuRequirementCalendarSchema
->;
-export type MenuRequirementCalendarMonth = z.infer<
-  typeof menuRequirementCalendarMonthSchema
->;
-export type MenuRequirementCalendarWeek = z.infer<
-  typeof menuRequirementCalendarWeekSchema
->;
-export type MenuRequirementCalendarDay = z.infer<
-  typeof menuRequirementCalendarDaySchema
->;
-export type MenuRequirementReport = z.infer<
-  typeof menuRequirementReportSchema
->;
-export type MenuRequirementReportDish = z.infer<
-  typeof menuRequirementReportDishSchema
->;
-export type MenuRequirementReportCell = z.infer<
-  typeof menuRequirementReportCellSchema
->;
+export type MenuRequirementAggregateStatus = z.infer<typeof menuRequirementAggregateStatusSchema>;
+export type MenuRequirementCalendar = z.infer<typeof menuRequirementCalendarSchema>;
+export type MenuRequirementCalendarMonth = z.infer<typeof menuRequirementCalendarMonthSchema>;
+export type MenuRequirementCalendarWeek = z.infer<typeof menuRequirementCalendarWeekSchema>;
+export type MenuRequirementCalendarDay = z.infer<typeof menuRequirementCalendarDaySchema>;
+export type MenuRequirementReport = z.infer<typeof menuRequirementReportSchema>;
+export type MenuRequirementReportDish = z.infer<typeof menuRequirementReportDishSchema>;
+export type MenuRequirementReportCell = z.infer<typeof menuRequirementReportCellSchema>;
 export type MenuRequirementReportBreakdownItem = z.infer<
   typeof menuRequirementReportBreakdownItemSchema
 >;
-export type MenuRequirementReportGroup = z.infer<
-  typeof menuRequirementReportGroupSchema
->;
-export type UpdateMenuRequirementPayload = z.infer<
-  typeof updateMenuRequirementPayloadSchema
->;
+export type MenuRequirementReportGroup = z.infer<typeof menuRequirementReportGroupSchema>;
+export type UpdateMenuRequirementPayload = z.infer<typeof updateMenuRequirementPayloadSchema>;
 
 export type MenuRequirementListRequest = {
   offset: number;

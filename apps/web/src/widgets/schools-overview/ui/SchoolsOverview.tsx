@@ -1,14 +1,15 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useState } from "react";
+import { useState } from 'react';
 
-import { useSchools } from "@/entities/school/api/SchoolQueries";
-import { CreateSchoolForm } from "@/features/school-management/ui/CreateSchoolForm";
-import { formatDate } from "@/shared/lib/FormatDate";
-import { PaginationControls } from "@/shared/ui/PaginationControls";
-import { RequestError } from "@/shared/ui/RequestError";
-import { StatusBadge } from "@/shared/ui/StatusBadge";
+import Link from 'next/link';
+
+import { useSchools } from '@/entities/school/api/SchoolQueries';
+import { CreateSchoolForm } from '@/features/school-management/ui/CreateSchoolForm';
+import { formatDate } from '@/shared/lib/FormatDate';
+import { PaginationControls } from '@/shared/ui/PaginationControls';
+import { RequestError } from '@/shared/ui/RequestError';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 
 const PAGE_SIZE = 20;
 
@@ -24,9 +25,7 @@ export function SchoolsOverview() {
       <header className="nf-page-header">
         <p className="nf-eyebrow">Адміністрування</p>
         <h1 className="nf-title">Школи</h1>
-        <p className="nf-description">
-          Створюйте школи, керуйте їхнім статусом і користувачами.
-        </p>
+        <p className="nf-description">Створюйте школи, керуйте їхнім статусом і користувачами.</p>
       </header>
 
       <section aria-labelledby="create-school-heading" className="nf-panel">
@@ -40,19 +39,14 @@ export function SchoolsOverview() {
         </div>
       </section>
 
-      <section
-        aria-labelledby="school-list-heading"
-        className="nf-panel mt-5"
-      >
+      <section aria-labelledby="school-list-heading" className="nf-panel mt-5">
         <div className="nf-panel-header">
           <div>
             <h2 id="school-list-heading" className="nf-panel-title">
               Список шкіл
             </h2>
             {schools.data ? (
-              <p className="mt-0.5 text-xs text-slate-600">
-                Записів: {schools.data.total}
-              </p>
+              <p className="mt-0.5 text-xs text-slate-600">Записів: {schools.data.total}</p>
             ) : null}
           </div>
         </div>
@@ -65,10 +59,7 @@ export function SchoolsOverview() {
           ) : null}
 
           {schools.isError ? (
-            <RequestError
-              error={schools.error}
-              onRetry={() => void schools.refetch()}
-            />
+            <RequestError error={schools.error} onRetry={() => void schools.refetch()} />
           ) : null}
 
           {schools.data?.items.length === 0 ? (
@@ -90,10 +81,7 @@ export function SchoolsOverview() {
                   {schools.data.items.map((school) => (
                     <tr key={school.id}>
                       <td>
-                        <Link
-                          href={`/admin/schools/${school.id}`}
-                          className="nf-link"
-                        >
+                        <Link href={`/admin/schools/${school.id}`} className="nf-link">
                           {school.name}
                         </Link>
                       </td>

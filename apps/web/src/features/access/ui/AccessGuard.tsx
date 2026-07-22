@@ -1,19 +1,15 @@
-"use client";
+'use client';
 
-import { useEffect, useRef, type ReactNode } from "react";
-import { usePathname, useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { type ReactNode, useEffect, useRef } from 'react';
 
-import type {
-  AdminPermission,
-  UserRole,
-} from "@/entities/session/model/Session";
-import { useCurrentUser } from "@/entities/session/api/SessionQueries";
-import {
-  getHomePath,
-  getRouteAccess,
-} from "@/features/access/model/AccessPolicy";
-import { getApiErrorMessage } from "@/shared/api/HttpClient";
+import { usePathname, useRouter } from 'next/navigation';
+
+import { toast } from 'sonner';
+
+import { useCurrentUser } from '@/entities/session/api/SessionQueries';
+import type { AdminPermission, UserRole } from '@/entities/session/model/Session';
+import { getHomePath, getRouteAccess } from '@/features/access/model/AccessPolicy';
+import { getApiErrorMessage } from '@/shared/api/HttpClient';
 
 type AccessGuardProps = {
   children: ReactNode;
@@ -36,19 +32,19 @@ export function AccessGuard({
   const decision =
     currentUser.isPending || currentUser.isError
       ? null
-        : getRouteAccess(currentUser.data ?? null, {
+      : getRouteAccess(currentUser.data ?? null, {
           allowedRoles,
           requiredPermissions,
           schoolId,
         });
 
   useEffect(() => {
-    if (decision !== "unauthenticated") {
+    if (decision !== 'unauthenticated') {
       return;
     }
 
     const returnPath =
-      typeof window === "undefined"
+      typeof window === 'undefined'
         ? pathname
         : `${window.location.pathname}${window.location.search}`;
 
@@ -59,19 +55,19 @@ export function AccessGuard({
     if (
       redirectedRef.current ||
       !currentUser.data ||
-      (decision !== "forbidden-role" && decision !== "forbidden-tenant")
+      (decision !== 'forbidden-role' && decision !== 'forbidden-tenant')
     ) {
       return;
     }
 
     redirectedRef.current = true;
     toast.error(
-      decision === "forbidden-tenant"
-        ? "Ви не маєте доступу до даних цієї школи."
-        : "Цей розділ недоступний для вашої ролі.",
+      decision === 'forbidden-tenant'
+        ? 'Ви не маєте доступу до даних цієї школи.'
+        : 'Цей розділ недоступний для вашої ролі.',
       {
         id: `access-denied:${pathname}`,
-      },
+      }
     );
     router.replace(getHomePath(currentUser.data));
   }, [currentUser.data, decision, pathname, router]);
@@ -88,16 +84,14 @@ export function AccessGuard({
             <h1 className="nf-panel-title">Не вдалося перевірити сесію</h1>
           </div>
           <div className="nf-panel-body">
-            <p className="text-sm text-slate-600">
-              {getApiErrorMessage(currentUser.error)}
-            </p>
+            <p className="text-sm text-slate-600">{getApiErrorMessage(currentUser.error)}</p>
             <button
               type="button"
               onClick={() => void currentUser.refetch()}
               disabled={currentUser.isFetching}
               className="nf-button nf-button-primary mt-4"
             >
-              {currentUser.isFetching ? "Перевіряємо…" : "Повторити"}
+              {currentUser.isFetching ? 'Перевіряємо…' : 'Повторити'}
             </button>
           </div>
         </div>
@@ -105,7 +99,7 @@ export function AccessGuard({
     );
   }
 
-  if (decision !== "allow") {
+  if (decision !== 'allow') {
     return <SessionMessage text="Переспрямовуємо…" />;
   }
 

@@ -1,25 +1,27 @@
-"use client";
+'use client';
 
-import { Check, RotateCcw, Trash2 } from "lucide-react";
-import Link from "next/link";
-import { useMemo, useState } from "react";
-import { toast } from "sonner";
+import { useMemo, useState } from 'react';
 
-import { useWeeklyMenus } from "@/entities/weekly-menu/api/WeeklyMenuQueries";
-import type { WeeklyMenu } from "@/entities/weekly-menu/model/WeeklyMenu";
+import Link from 'next/link';
+
+import { Check, RotateCcw, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
+
+import { useWeeklyMenus } from '@/entities/weekly-menu/api/WeeklyMenuQueries';
+import type { WeeklyMenu } from '@/entities/weekly-menu/model/WeeklyMenu';
 import {
-  useDeleteWeeklyMenus,
   useDeleteWeeklyMenu,
-  useRestoreWeeklyMenus,
+  useDeleteWeeklyMenus,
   useRestoreWeeklyMenu,
-} from "@/features/weekly-menu-editor/model/UseWeeklyMenuMutations";
-import { getApiErrorMessage } from "@/shared/api/HttpClient";
-import { formatDate } from "@/shared/lib/FormatDate";
-import { useConfirm } from "@/shared/ui/ConfirmDialog";
-import { RequestError } from "@/shared/ui/RequestError";
+  useRestoreWeeklyMenus,
+} from '@/features/weekly-menu-editor/model/UseWeeklyMenuMutations';
+import { getApiErrorMessage } from '@/shared/api/HttpClient';
+import { formatDate } from '@/shared/lib/FormatDate';
+import { useConfirm } from '@/shared/ui/ConfirmDialog';
+import { RequestError } from '@/shared/ui/RequestError';
 
 function getMealTypeLabel(menu: WeeklyMenu) {
-  return menu.meal_type === "lunch" ? "Обід" : "Сніданок";
+  return menu.meal_type === 'lunch' ? 'Обід' : 'Сніданок';
 }
 
 export function WeeklyMenuArchiveWorkspace() {
@@ -29,20 +31,19 @@ export function WeeklyMenuArchiveWorkspace() {
     offset: 0,
     limit: 100,
     template_only: true,
-    status: "archived",
+    status: 'archived',
   });
   const archivedMenus = useMemo(() => menus.data?.items ?? [], [menus.data?.items]);
   const archivedMenuIds = useMemo(
     () => new Set(archivedMenus.map((menu) => menu.id)),
-    [archivedMenus],
+    [archivedMenus]
   );
   const effectiveSelectedMenuIds = useMemo(
     () => selectedMenuIds.filter((menuId) => archivedMenuIds.has(menuId)),
-    [archivedMenuIds, selectedMenuIds],
+    [archivedMenuIds, selectedMenuIds]
   );
   const allSelected =
-    archivedMenus.length > 0 &&
-    effectiveSelectedMenuIds.length === archivedMenus.length;
+    archivedMenus.length > 0 && effectiveSelectedMenuIds.length === archivedMenus.length;
   const restoreMenus = useRestoreWeeklyMenus();
   const deleteMenus = useDeleteWeeklyMenus();
   const bulkActionPending = restoreMenus.isPending || deleteMenus.isPending;
@@ -51,7 +52,7 @@ export function WeeklyMenuArchiveWorkspace() {
     setSelectedMenuIds((currentIds) =>
       currentIds.includes(menuId)
         ? currentIds.filter((id) => id !== menuId)
-        : [...currentIds, menuId],
+        : [...currentIds, menuId]
     );
   };
 
@@ -69,9 +70,9 @@ export function WeeklyMenuArchiveWorkspace() {
     }
 
     const confirmed = await confirm({
-      title: "Повернути вибрані меню з архіву?",
+      title: 'Повернути вибрані меню з архіву?',
       description: `У роботу буде повернуто меню: ${effectiveSelectedMenuIds.length}.`,
-      confirmLabel: "Повернути",
+      confirmLabel: 'Повернути',
     });
 
     if (!confirmed) {
@@ -93,10 +94,10 @@ export function WeeklyMenuArchiveWorkspace() {
     }
 
     const confirmed = await confirm({
-      title: "Остаточно видалити вибрані меню?",
+      title: 'Остаточно видалити вибрані меню?',
       description: `Буде видалено меню: ${effectiveSelectedMenuIds.length}. Цю дію неможливо скасувати.`,
-      confirmLabel: "Видалити",
-      variant: "danger",
+      confirmLabel: 'Видалити',
+      variant: 'danger',
     });
 
     if (!confirmed) {
@@ -118,8 +119,7 @@ export function WeeklyMenuArchiveWorkspace() {
         <p className="nf-eyebrow">Меню</p>
         <h1 className="nf-title">Архів тижневих меню</h1>
         <p className="nf-description">
-          Тут зберігаються архівовані меню. Їх можна повернути в роботу або
-          видалити остаточно.
+          Тут зберігаються архівовані меню. Їх можна повернути в роботу або видалити остаточно.
         </p>
         <div className="mt-4">
           <Link href="/admin/menus" className="nf-button nf-button-secondary">
@@ -166,7 +166,7 @@ export function WeeklyMenuArchiveWorkspace() {
                 onClick={() => void handleRestoreSelected()}
               >
                 <RotateCcw className="size-4" aria-hidden />
-                {restoreMenus.isPending ? "Повертаємо…" : "Повернути вибрані"}
+                {restoreMenus.isPending ? 'Повертаємо…' : 'Повернути вибрані'}
               </button>
               <button
                 type="button"
@@ -175,7 +175,7 @@ export function WeeklyMenuArchiveWorkspace() {
                 onClick={() => void handleDeleteSelected()}
               >
                 <Trash2 className="size-4" aria-hidden />
-                {deleteMenus.isPending ? "Видаляємо…" : "Видалити вибрані"}
+                {deleteMenus.isPending ? 'Видаляємо…' : 'Видалити вибрані'}
               </button>
             </div>
           </div>
@@ -187,10 +187,7 @@ export function WeeklyMenuArchiveWorkspace() {
           ) : null}
 
           {menus.isError ? (
-            <RequestError
-              error={menus.error}
-              onRetry={() => void menus.refetch()}
-            />
+            <RequestError error={menus.error} onRetry={() => void menus.refetch()} />
           ) : null}
 
           {!menus.isPending && !menus.isError && archivedMenus.length === 0 ? (
@@ -232,7 +229,7 @@ function WeeklyMenuArchiveItem({
   const handleRestore = async () => {
     try {
       await restoreMenu.mutateAsync();
-      toast.success("Меню повернуто з архіву.");
+      toast.success('Меню повернуто з архіву.');
     } catch (error) {
       toast.error(getApiErrorMessage(error));
     }
@@ -240,10 +237,10 @@ function WeeklyMenuArchiveItem({
 
   const handleDelete = async () => {
     const confirmed = await confirm({
-      title: "Остаточно видалити меню?",
+      title: 'Остаточно видалити меню?',
       description: `Меню "${menu.title}" буде видалено без можливості відновлення.`,
-      confirmLabel: "Видалити",
-      variant: "danger",
+      confirmLabel: 'Видалити',
+      variant: 'danger',
     });
 
     if (!confirmed) {
@@ -252,7 +249,7 @@ function WeeklyMenuArchiveItem({
 
     try {
       await deleteMenu.mutateAsync();
-      toast.success("Меню остаточно видалено.");
+      toast.success('Меню остаточно видалено.');
     } catch (error) {
       toast.error(getApiErrorMessage(error));
     }
@@ -262,8 +259,8 @@ function WeeklyMenuArchiveItem({
     <article
       className={`border p-4 shadow-[inset_0_1px_0_rgb(255_255_255/55%)] transition-colors ${
         selected
-          ? "border-[var(--nf-brand-dark)] bg-emerald-50 ring-1 ring-[var(--nf-brand)]"
-          : "border-slate-300 bg-slate-100"
+          ? 'border-[var(--nf-brand-dark)] bg-emerald-50 ring-1 ring-[var(--nf-brand)]'
+          : 'border-slate-300 bg-slate-100'
       }`}
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -279,8 +276,8 @@ function WeeklyMenuArchiveItem({
             <span
               className={`inline-flex size-6 items-center justify-center border ${
                 selected
-                  ? "border-[var(--nf-brand-dark)] bg-[var(--nf-brand)] text-white"
-                  : "border-slate-400 bg-white text-transparent"
+                  ? 'border-[var(--nf-brand-dark)] bg-[var(--nf-brand)] text-white'
+                  : 'border-slate-400 bg-white text-transparent'
               }`}
               aria-hidden
             >
@@ -289,12 +286,10 @@ function WeeklyMenuArchiveItem({
             <span className="sr-only">Обрати меню {menu.title}</span>
           </label>
           <div className="min-w-0">
-            <h3 className="truncate text-base font-bold text-slate-800">
-              {menu.title}
-            </h3>
+            <h3 className="truncate text-base font-bold text-slate-800">{menu.title}</h3>
             <p className="mt-1 text-sm text-slate-600">
               {getMealTypeLabel(menu)}
-              {menu.cycle_week ? ` · цикл ${menu.cycle_week}` : ""}
+              {menu.cycle_week ? ` · цикл ${menu.cycle_week}` : ''}
             </p>
             <p className="mt-1 text-xs text-slate-500">
               Архівовано/оновлено: {formatDate(menu.updated_at)}
@@ -310,7 +305,7 @@ function WeeklyMenuArchiveItem({
             onClick={() => void handleRestore()}
           >
             <RotateCcw className="size-4" aria-hidden />
-            {restoreMenu.isPending ? "Повертаємо…" : "Повернути"}
+            {restoreMenu.isPending ? 'Повертаємо…' : 'Повернути'}
           </button>
           <button
             type="button"
@@ -319,7 +314,7 @@ function WeeklyMenuArchiveItem({
             onClick={() => void handleDelete()}
           >
             <Trash2 className="size-4" aria-hidden />
-            {deleteMenu.isPending ? "Видаляємо…" : "Видалити"}
+            {deleteMenu.isPending ? 'Видаляємо…' : 'Видалити'}
           </button>
         </div>
       </div>

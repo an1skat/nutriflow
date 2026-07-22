@@ -1,6 +1,6 @@
-import "@testing-library/jest-dom/vitest";
-import { cleanup } from "@testing-library/react";
-import { afterEach } from "vitest";
+import '@testing-library/jest-dom/vitest';
+import { cleanup } from '@testing-library/react';
+import { afterEach } from 'vitest';
 
 function createMemoryStorage(): Storage {
   const entries = new Map<string, string>();
@@ -29,14 +29,14 @@ function createMemoryStorage(): Storage {
 
 function ensureLocalStorage() {
   try {
-    if (typeof window.localStorage !== "undefined") {
+    if (typeof window.localStorage !== 'undefined') {
       return;
     }
   } catch {
     // jsdom can expose localStorage as unavailable for opaque origins.
   }
 
-  Object.defineProperty(window, "localStorage", {
+  Object.defineProperty(window, 'localStorage', {
     configurable: true,
     value: createMemoryStorage(),
   });

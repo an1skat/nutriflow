@@ -1,11 +1,11 @@
-import type { Metadata } from "next";
+import type { Metadata } from 'next';
 
-import { AppProviders } from "./AppProviders";
-import "./globals.css";
+import { AppProviders } from './AppProviders';
+import './globals.css';
 
 export const metadata: Metadata = {
-  title: "NutriFlow",
-  description: "Керування шкільним харчуванням",
+  title: 'NutriFlow',
+  description: 'Керування шкільним харчуванням',
 };
 
 export default function RootLayout({

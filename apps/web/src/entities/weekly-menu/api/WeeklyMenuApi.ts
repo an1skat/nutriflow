@@ -1,10 +1,7 @@
-import { apiClient, getCsrfHeaders } from "@/shared/api/HttpClient";
-import { toApiPaginationParams } from "@/shared/api/Pagination";
+import { apiClient, getCsrfHeaders } from '@/shared/api/HttpClient';
+import { toApiPaginationParams } from '@/shared/api/Pagination';
 
 import {
-  publishWeeklyMenuResponseSchema,
-  weeklyMenuListSchema,
-  weeklyMenuSchema,
   type PublishWeeklyMenuPayload,
   type PublishWeeklyMenuResponse,
   type Weekday,
@@ -13,12 +10,13 @@ import {
   type WeeklyMenuListRequest,
   type WeeklyMenuPayload,
   type WeeklyMenuUpdatePayload,
-} from "../model/WeeklyMenu";
+  publishWeeklyMenuResponseSchema,
+  weeklyMenuListSchema,
+  weeklyMenuSchema,
+} from '../model/WeeklyMenu';
 
-export async function fetchWeeklyMenus(
-  request: WeeklyMenuListRequest,
-): Promise<WeeklyMenuList> {
-  const response = await apiClient.get<unknown>("/menus/weekly", {
+export async function fetchWeeklyMenus(request: WeeklyMenuListRequest): Promise<WeeklyMenuList> {
+  const response = await apiClient.get<unknown>('/menus/weekly', {
     params: {
       ...toApiPaginationParams(request),
       school_id: request.school_id,
@@ -37,10 +35,8 @@ export async function fetchWeeklyMenu(menuId: string): Promise<WeeklyMenu> {
   return weeklyMenuSchema.parse(response.data);
 }
 
-export async function createWeeklyMenu(
-  payload: WeeklyMenuPayload,
-): Promise<WeeklyMenu> {
-  const response = await apiClient.post<unknown>("/menus/weekly", payload, {
+export async function createWeeklyMenu(payload: WeeklyMenuPayload): Promise<WeeklyMenu> {
+  const response = await apiClient.post<unknown>('/menus/weekly', payload, {
     headers: getCsrfHeaders(),
   });
 
@@ -49,69 +45,46 @@ export async function createWeeklyMenu(
 
 export async function updateWeeklyMenu(
   menuId: string,
-  payload: WeeklyMenuUpdatePayload,
+  payload: WeeklyMenuUpdatePayload
 ): Promise<WeeklyMenu> {
-  const response = await apiClient.patch<unknown>(
-    `/menus/weekly/${menuId}`,
-    payload,
-    {
-      headers: getCsrfHeaders(),
-    },
-  );
+  const response = await apiClient.patch<unknown>(`/menus/weekly/${menuId}`, payload, {
+    headers: getCsrfHeaders(),
+  });
 
   return weeklyMenuSchema.parse(response.data);
 }
 
 export async function archiveWeeklyMenu(menuId: string): Promise<WeeklyMenu> {
-  const response = await apiClient.post<unknown>(
-    `/menus/weekly/${menuId}/archive`,
-    null,
-    {
-      headers: getCsrfHeaders(),
-    },
-  );
+  const response = await apiClient.post<unknown>(`/menus/weekly/${menuId}/archive`, null, {
+    headers: getCsrfHeaders(),
+  });
 
   return weeklyMenuSchema.parse(response.data);
 }
 
-export async function archiveSchoolWeeklyMenu(
-  menuId: string,
-): Promise<WeeklyMenu> {
-  const response = await apiClient.post<unknown>(
-    `/menus/weekly/${menuId}/school-archive`,
-    null,
-    {
-      headers: getCsrfHeaders(),
-    },
-  );
+export async function archiveSchoolWeeklyMenu(menuId: string): Promise<WeeklyMenu> {
+  const response = await apiClient.post<unknown>(`/menus/weekly/${menuId}/school-archive`, null, {
+    headers: getCsrfHeaders(),
+  });
 
   return weeklyMenuSchema.parse(response.data);
 }
 
-export async function restoreSchoolWeeklyMenu(
-  menuId: string,
-): Promise<WeeklyMenu> {
-  const response = await apiClient.post<unknown>(
-    `/menus/weekly/${menuId}/school-restore`,
-    null,
-    {
-      headers: getCsrfHeaders(),
-    },
-  );
+export async function restoreSchoolWeeklyMenu(menuId: string): Promise<WeeklyMenu> {
+  const response = await apiClient.post<unknown>(`/menus/weekly/${menuId}/school-restore`, null, {
+    headers: getCsrfHeaders(),
+  });
 
   return weeklyMenuSchema.parse(response.data);
 }
 
-export async function closeWeeklyMenuDay(
-  menuId: string,
-  weekday: Weekday,
-): Promise<WeeklyMenu> {
+export async function closeWeeklyMenuDay(menuId: string, weekday: Weekday): Promise<WeeklyMenu> {
   const response = await apiClient.post<unknown>(
     `/menus/weekly/${menuId}/days/${weekday}/close`,
     null,
     {
       headers: getCsrfHeaders(),
-    },
+    }
   );
 
   return weeklyMenuSchema.parse(response.data);
@@ -119,39 +92,31 @@ export async function closeWeeklyMenuDay(
 
 export async function devReopenWeeklyMenuDay(
   menuId: string,
-  weekday: Weekday,
+  weekday: Weekday
 ): Promise<WeeklyMenu> {
   const response = await apiClient.post<unknown>(
     `/menus/weekly/${menuId}/days/${weekday}/dev-reopen`,
     null,
     {
       headers: getCsrfHeaders(),
-    },
+    }
   );
 
   return weeklyMenuSchema.parse(response.data);
 }
 
 export async function revokeWeeklyMenu(menuId: string): Promise<WeeklyMenu> {
-  const response = await apiClient.post<unknown>(
-    `/menus/weekly/${menuId}/revoke`,
-    null,
-    {
-      headers: getCsrfHeaders(),
-    },
-  );
+  const response = await apiClient.post<unknown>(`/menus/weekly/${menuId}/revoke`, null, {
+    headers: getCsrfHeaders(),
+  });
 
   return weeklyMenuSchema.parse(response.data);
 }
 
 export async function restoreWeeklyMenu(menuId: string): Promise<WeeklyMenu> {
-  const response = await apiClient.post<unknown>(
-    `/menus/weekly/${menuId}/restore`,
-    null,
-    {
-      headers: getCsrfHeaders(),
-    },
-  );
+  const response = await apiClient.post<unknown>(`/menus/weekly/${menuId}/restore`, null, {
+    headers: getCsrfHeaders(),
+  });
 
   return weeklyMenuSchema.parse(response.data);
 }
@@ -164,15 +129,11 @@ export async function deleteWeeklyMenu(menuId: string): Promise<void> {
 
 export async function publishWeeklyMenu(
   menuId: string,
-  payload: PublishWeeklyMenuPayload,
+  payload: PublishWeeklyMenuPayload
 ): Promise<PublishWeeklyMenuResponse> {
-  const response = await apiClient.post<unknown>(
-    `/menus/weekly/${menuId}/publish`,
-    payload,
-    {
-      headers: getCsrfHeaders(),
-    },
-  );
+  const response = await apiClient.post<unknown>(`/menus/weekly/${menuId}/publish`, payload, {
+    headers: getCsrfHeaders(),
+  });
 
   return publishWeeklyMenuResponseSchema.parse(response.data);
 }

@@ -1,6 +1,6 @@
-import type { Weekday, WeeklyMenu } from "@/entities/weekly-menu/model/WeeklyMenu";
-import { WeeklyMenuNutritionTable } from "@/entities/weekly-menu/ui/WeeklyMenuNutritionTable";
-import { parseLocalDate } from "@/shared/lib/LocalDate";
+import type { Weekday, WeeklyMenu } from '@/entities/weekly-menu/model/WeeklyMenu';
+import { WeeklyMenuNutritionTable } from '@/entities/weekly-menu/ui/WeeklyMenuNutritionTable';
+import { parseLocalDate } from '@/shared/lib/LocalDate';
 
 const JS_WEEKDAY_BY_MENU_WEEKDAY: Record<Weekday, number> = {
   sunday: 0,
@@ -12,10 +12,10 @@ const JS_WEEKDAY_BY_MENU_WEEKDAY: Record<Weekday, number> = {
   saturday: 6,
 };
 
-const menuDateFormatter = new Intl.DateTimeFormat("uk-UA", {
-  day: "numeric",
-  month: "long",
-  year: "numeric",
+const menuDateFormatter = new Intl.DateTimeFormat('uk-UA', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
 });
 
 export function WeeklyMenuSchoolTable({ menu }: { menu: WeeklyMenu }) {
@@ -25,9 +25,7 @@ export function WeeklyMenuSchoolTable({ menu }: { menu: WeeklyMenu }) {
     <section className="nf-panel overflow-hidden">
       <div className="nf-panel-header items-start gap-4">
         <div>
-          <p className="nf-eyebrow">
-            {menu.meal_type === "lunch" ? "Обід" : "Сніданок"}
-          </p>
+          <p className="nf-eyebrow">{menu.meal_type === 'lunch' ? 'Обід' : 'Сніданок'}</p>
           <h2 className="nf-panel-title">{menu.title}</h2>
           {dateRangeLabel ? (
             <p className="mt-1 text-xs text-slate-600">Тиждень: {dateRangeLabel}</p>
@@ -46,10 +44,7 @@ export function WeeklyMenuSchoolTable({ menu }: { menu: WeeklyMenu }) {
         </div>
       ) : null}
 
-      <WeeklyMenuNutritionTable
-        days={menu.days}
-        maxHeightClass="max-h-[calc(100vh-220px)]"
-      />
+      <WeeklyMenuNutritionTable days={menu.days} maxHeightClass="max-h-[calc(100vh-220px)]" />
     </section>
   );
 }
@@ -71,10 +66,7 @@ export function getMenuDateRangeLabel(menu: WeeklyMenu): string | null {
     : `${menuDateFormatter.format(first)} – ${menuDateFormatter.format(last)}`;
 }
 
-function alignDateToWeekday(
-  value: string | null | undefined,
-  weekday: Weekday,
-): Date | null {
+function alignDateToWeekday(value: string | null | undefined, weekday: Weekday): Date | null {
   if (!value) {
     return null;
   }
@@ -82,8 +74,7 @@ function alignDateToWeekday(
   if (!date) {
     return null;
   }
-  const daysUntilExpectedWeekday =
-    (JS_WEEKDAY_BY_MENU_WEEKDAY[weekday] - date.getDay() + 7) % 7;
+  const daysUntilExpectedWeekday = (JS_WEEKDAY_BY_MENU_WEEKDAY[weekday] - date.getDay() + 7) % 7;
   date.setDate(date.getDate() + daysUntilExpectedWeekday);
   return date;
 }

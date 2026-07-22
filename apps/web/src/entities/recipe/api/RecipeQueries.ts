@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { queryOptions, useQuery } from "@tanstack/react-query";
+import { queryOptions, useQuery } from '@tanstack/react-query';
 
 import {
   fetchAllergens,
@@ -9,19 +9,16 @@ import {
   fetchDishCardVersions,
   fetchDishCards,
   fetchIngredients,
-} from "./RecipeApi";
+} from './RecipeApi';
 
 export const recipeQueryKeys = {
-  all: ["recipe"] as const,
-  allergens: (query: string) => [...recipeQueryKeys.all, "allergens", query] as const,
-  ingredients: (query: string) =>
-    [...recipeQueryKeys.all, "ingredients", query] as const,
-  dishCards: (query: string) => [...recipeQueryKeys.all, "dishCards", query] as const,
-  dishCard: (id: string) => [...recipeQueryKeys.all, "dishCard", id] as const,
-  versions: (dishCardId: string) =>
-    [...recipeQueryKeys.all, "versions", dishCardId] as const,
-  version: (versionId: string) =>
-    [...recipeQueryKeys.all, "version", versionId] as const,
+  all: ['recipe'] as const,
+  allergens: (query: string) => [...recipeQueryKeys.all, 'allergens', query] as const,
+  ingredients: (query: string) => [...recipeQueryKeys.all, 'ingredients', query] as const,
+  dishCards: (query: string) => [...recipeQueryKeys.all, 'dishCards', query] as const,
+  dishCard: (id: string) => [...recipeQueryKeys.all, 'dishCard', id] as const,
+  versions: (dishCardId: string) => [...recipeQueryKeys.all, 'versions', dishCardId] as const,
+  version: (versionId: string) => [...recipeQueryKeys.all, 'version', versionId] as const,
 };
 
 export function allergensQueryOptions(query: string) {

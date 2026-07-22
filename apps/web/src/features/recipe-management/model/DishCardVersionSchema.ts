@@ -1,25 +1,19 @@
-import { z } from "zod";
+import { z } from 'zod';
 
-import { normativeContributionSchema } from "@/entities/recipe/model/Recipe";
+import { normativeContributionSchema } from '@/entities/recipe/model/Recipe';
 
 const decimalString = z
   .string()
   .trim()
-  .min(1, "Введіть значення")
-  .regex(/^-?\d+(\.\d+)?$/, "Очікуємо десяткове число")
-  .refine((value) => Number(value) >= 0, "Значення має бути ≥ 0");
+  .min(1, 'Введіть значення')
+  .regex(/^-?\d+(\.\d+)?$/, 'Очікуємо десяткове число')
+  .refine((value) => Number(value) >= 0, 'Значення має бути ≥ 0');
 
 const optionalDecimalString = z
   .string()
   .trim()
-  .refine(
-    (value) => value === "" || /^-?\d+(\.\d+)?$/.test(value),
-    "Очікуємо десяткове число",
-  )
-  .refine(
-    (value) => value === "" || Number(value) >= 0,
-    "Значення має бути ≥ 0",
-  );
+  .refine((value) => value === '' || /^-?\d+(\.\d+)?$/.test(value), 'Очікуємо десяткове число')
+  .refine((value) => value === '' || Number(value) >= 0, 'Значення має бути ≥ 0');
 
 const portionFormSchema = z.object({
   tempId: z.string().min(1),
@@ -27,9 +21,9 @@ const portionFormSchema = z.object({
   portion_grams: z
     .string()
     .trim()
-    .min(1, "Введіть масу порції")
-    .regex(/^-?\d+(\.\d+)?$/, "Очікуємо число")
-    .refine((value) => Number(value) > 0, "Маса порції має бути > 0"),
+    .min(1, 'Введіть масу порції')
+    .regex(/^-?\d+(\.\d+)?$/, 'Очікуємо число')
+    .refine((value) => Number(value) > 0, 'Маса порції має бути > 0'),
   kcal: optionalDecimalString,
   proteins: optionalDecimalString,
   fats: optionalDecimalString,
@@ -43,23 +37,18 @@ const ingredientFormSchema = z.object({
   ingredient_name_snapshot: z
     .string()
     .trim()
-    .min(1, "Введіть назву інгредієнта")
-    .max(200, "Назва надто довга"),
-  notes: z.string().trim().max(1000).or(z.literal("")),
-  amounts: z.record(
-    z.string(),
-    z.object({ gross: decimalString, net: decimalString }),
-  ),
+    .min(1, 'Введіть назву інгредієнта')
+    .max(200, 'Назва надто довга'),
+  notes: z.string().trim().max(1000).or(z.literal('')),
+  amounts: z.record(z.string(), z.object({ gross: decimalString, net: decimalString })),
 });
 
 export const dishCardVersionFormSchema = z
   .object({
-    technology_text: z.string().trim().max(5000).or(z.literal("")),
+    technology_text: z.string().trim().max(5000).or(z.literal('')),
     allergen_ids: z.array(z.string()),
-    portions: z.array(portionFormSchema).min(1, "Додайте хоча б одну порцію"),
-    ingredients: z
-      .array(ingredientFormSchema)
-      .min(1, "Додайте хоча б один інгредієнт"),
+    portions: z.array(portionFormSchema).min(1, 'Додайте хоча б одну порцію'),
+    ingredients: z.array(ingredientFormSchema).min(1, 'Додайте хоча б один інгредієнт'),
   })
   .superRefine((data, ctx) => {
     data.ingredients.forEach((ingredient, ingredientIndex) => {
@@ -67,7 +56,7 @@ export const dishCardVersionFormSchema = z
         if (!ingredient.amounts[portion.tempId]) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            path: ["ingredients", ingredientIndex, "amounts", portion.tempId],
+            path: ['ingredients', ingredientIndex, 'amounts', portion.tempId],
             message: `Вкажіть брутто/нетто для порції ${portion.portion_grams} г`,
           });
         }
@@ -84,5 +73,5 @@ export function orNull(value: string): string | null {
 }
 
 export function orZero(value: string): string {
-  return value.trim().length > 0 ? value.trim() : "0";
+  return value.trim().length > 0 ? value.trim() : '0';
 }

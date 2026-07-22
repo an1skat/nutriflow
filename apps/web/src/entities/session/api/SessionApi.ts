@@ -1,22 +1,14 @@
-import {
-  apiClient,
-  getCsrfHeaders,
-  isHttpStatus,
-} from "@/shared/api/HttpClient";
+import { apiClient, getCsrfHeaders, isHttpStatus } from '@/shared/api/HttpClient';
 
-import {
-  authUserSchema,
-  type AuthUser,
-  type LoginInput,
-} from "../model/Session";
+import { type AuthUser, type LoginInput, authUserSchema } from '../model/Session';
 
 export async function loginSession(input: LoginInput): Promise<void> {
-  await apiClient.post("/auth/login", input);
+  await apiClient.post('/auth/login', input);
 }
 
 export async function getCurrentUser(): Promise<AuthUser | null> {
   try {
-    const response = await apiClient.get<unknown>("/auth/me");
+    const response = await apiClient.get<unknown>('/auth/me');
     return authUserSchema.parse(response.data);
   } catch (error) {
     if (isHttpStatus(error, 401)) {
@@ -28,7 +20,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
 }
 
 export async function logoutSession(): Promise<void> {
-  await apiClient.post("/auth/logout", undefined, {
+  await apiClient.post('/auth/logout', undefined, {
     headers: getCsrfHeaders(),
   });
 }

@@ -1,29 +1,26 @@
-"use client";
+'use client';
 
-import { useMemo, useState } from "react";
+import { useMemo, useState } from 'react';
 
-import { useSchoolGroups } from "@/entities/school-group/api/SchoolGroupQueries";
-import {
-  ageGroupLabels,
-  type SchoolGroup,
-} from "@/entities/school-group/model/SchoolGroup";
-import { CreateSchoolGroupForm } from "@/features/school-group-management/ui/CreateSchoolGroupForm";
-import { DeactivateSchoolGroupAction } from "@/features/school-group-management/ui/DeactivateSchoolGroupAction";
-import { EditSchoolGroupForm } from "@/features/school-group-management/ui/EditSchoolGroupForm";
-import { formatDate } from "@/shared/lib/FormatDate";
-import { PaginationControls } from "@/shared/ui/PaginationControls";
-import { RequestError } from "@/shared/ui/RequestError";
-import { StatusBadge } from "@/shared/ui/StatusBadge";
+import { useSchoolGroups } from '@/entities/school-group/api/SchoolGroupQueries';
+import { type SchoolGroup, ageGroupLabels } from '@/entities/school-group/model/SchoolGroup';
+import { CreateSchoolGroupForm } from '@/features/school-group-management/ui/CreateSchoolGroupForm';
+import { DeactivateSchoolGroupAction } from '@/features/school-group-management/ui/DeactivateSchoolGroupAction';
+import { EditSchoolGroupForm } from '@/features/school-group-management/ui/EditSchoolGroupForm';
+import { formatDate } from '@/shared/lib/FormatDate';
+import { PaginationControls } from '@/shared/ui/PaginationControls';
+import { RequestError } from '@/shared/ui/RequestError';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 
 const PAGE_SIZE = 20;
 
 type SchoolGroupsPanelProps =
   | {
-      mode: "admin";
+      mode: 'admin';
       schoolId: string;
     }
   | {
-      mode: "own";
+      mode: 'own';
       schoolId?: never;
     };
 
@@ -34,10 +31,10 @@ export function SchoolGroupsPanel(props: SchoolGroupsPanelProps) {
       offset,
       limit: PAGE_SIZE,
     }),
-    [offset],
+    [offset]
   );
   const groupsQuery = useSchoolGroups(props, request);
-  const isEditable = props.mode === "admin";
+  const isEditable = props.mode === 'admin';
 
   return (
     <section className="nf-panel mt-5">
@@ -45,9 +42,7 @@ export function SchoolGroupsPanel(props: SchoolGroupsPanelProps) {
         <div>
           <h2 className="nf-panel-title">Групи школи</h2>
           {groupsQuery.data ? (
-            <p className="mt-0.5 text-xs text-slate-600">
-              Записів: {groupsQuery.data.total}
-            </p>
+            <p className="mt-0.5 text-xs text-slate-600">Записів: {groupsQuery.data.total}</p>
           ) : null}
         </div>
       </div>
@@ -59,10 +54,7 @@ export function SchoolGroupsPanel(props: SchoolGroupsPanelProps) {
           </p>
         ) : null}
         {groupsQuery.isError ? (
-          <RequestError
-            error={groupsQuery.error}
-            onRetry={() => void groupsQuery.refetch()}
-          />
+          <RequestError error={groupsQuery.error} onRetry={() => void groupsQuery.refetch()} />
         ) : null}
         {groupsQuery.data?.items.length === 0 ? (
           <div className="nf-empty">Груп у цій школі ще немає.</div>
@@ -73,18 +65,11 @@ export function SchoolGroupsPanel(props: SchoolGroupsPanelProps) {
             {isEditable ? (
               <div className="grid gap-4">
                 {groupsQuery.data.items.map((group) => (
-                  <div
-                    key={group.id}
-                    className="border border-[var(--nf-line)] bg-white p-4"
-                  >
+                  <div key={group.id} className="border border-[var(--nf-line)] bg-white p-4">
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <h3 className="text-sm font-bold text-slate-900">
-                          {group.name}
-                        </h3>
-                        <p className="text-xs text-slate-600">
-                          {ageGroupLabels[group.age_group]}
-                        </p>
+                        <h3 className="text-sm font-bold text-slate-900">{group.name}</h3>
+                        <p className="text-xs text-slate-600">{ageGroupLabels[group.age_group]}</p>
                       </div>
                       <StatusBadge
                         isActive={group.is_active}
@@ -92,10 +77,7 @@ export function SchoolGroupsPanel(props: SchoolGroupsPanelProps) {
                         inactiveLabel="Неактивна"
                       />
                     </div>
-                    <EditSchoolGroupForm
-                      schoolId={props.schoolId}
-                      group={group}
-                    />
+                    <EditSchoolGroupForm schoolId={props.schoolId} group={group} />
                     <div className="mt-3">
                       <DeactivateSchoolGroupAction
                         schoolId={props.schoolId}
@@ -108,8 +90,8 @@ export function SchoolGroupsPanel(props: SchoolGroupsPanelProps) {
               </div>
             ) : (
               <p className="text-xs leading-5 text-slate-600">
-                Це довідник активних вікових груп. Кількість дітей школа буде
-                вводити в денному меню окремо біля кожної страви.
+                Це довідник активних вікових груп. Кількість дітей школа буде вводити в денному меню
+                окремо біля кожної страви.
               </p>
             )}
           </div>
@@ -130,15 +112,11 @@ export function SchoolGroupsPanel(props: SchoolGroupsPanelProps) {
         <div className="border-t border-[var(--nf-line)] p-4">
           <h3 className="text-sm font-bold text-slate-900">Додати групу</h3>
           <p className="mt-1 text-xs leading-5 text-slate-600">
-            Для MVP школа має стандартні вікові групи. Якщо групу
-            деактивували, її можна повернути до активних без введення
-            кількості дітей.
+            Для MVP школа має стандартні вікові групи. Якщо групу деактивували, її можна повернути
+            до активних без введення кількості дітей.
           </p>
           <div className="mt-3">
-            <CreateSchoolGroupForm
-              schoolId={props.schoolId}
-              groups={groupsQuery.data.items}
-            />
+            <CreateSchoolGroupForm schoolId={props.schoolId} groups={groupsQuery.data.items} />
           </div>
         </div>
       ) : null}

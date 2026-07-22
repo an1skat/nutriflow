@@ -1,6 +1,6 @@
-const dateFormatter = new Intl.DateTimeFormat("uk-UA", {
-  dateStyle: "medium",
-  timeStyle: "short",
+const dateFormatter = new Intl.DateTimeFormat('uk-UA', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
 });
 
 export function formatDate(value: string): string {

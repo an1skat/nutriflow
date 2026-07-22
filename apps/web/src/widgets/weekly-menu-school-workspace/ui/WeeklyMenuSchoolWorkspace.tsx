@@ -1,41 +1,39 @@
-"use client";
+'use client';
 
-import { Archive, RotateCcw } from "lucide-react";
-import { useState } from "react";
-import { toast } from "sonner";
+import { useState } from 'react';
 
-import {
-  useWeeklyMenu,
-  useWeeklyMenus,
-} from "@/entities/weekly-menu/api/WeeklyMenuQueries";
-import type { WeeklyMenu } from "@/entities/weekly-menu/model/WeeklyMenu";
+import { Archive, RotateCcw } from 'lucide-react';
+import { toast } from 'sonner';
+
+import { useWeeklyMenu, useWeeklyMenus } from '@/entities/weekly-menu/api/WeeklyMenuQueries';
+import type { WeeklyMenu } from '@/entities/weekly-menu/model/WeeklyMenu';
 import {
   useArchiveSchoolWeeklyMenu,
   useRestoreSchoolWeeklyMenu,
-} from "@/features/weekly-menu-editor/model/UseWeeklyMenuMutations";
-import { getApiErrorMessage } from "@/shared/api/HttpClient";
-import { formatDate } from "@/shared/lib/FormatDate";
-import { useConfirm } from "@/shared/ui/ConfirmDialog";
-import { RequestError } from "@/shared/ui/RequestError";
+} from '@/features/weekly-menu-editor/model/UseWeeklyMenuMutations';
+import { getApiErrorMessage } from '@/shared/api/HttpClient';
+import { formatDate } from '@/shared/lib/FormatDate';
+import { useConfirm } from '@/shared/ui/ConfirmDialog';
+import { RequestError } from '@/shared/ui/RequestError';
 
-import { WeeklyMenuSchoolTable } from "./WeeklyMenuSchoolTable";
+import { WeeklyMenuSchoolTable } from './WeeklyMenuSchoolTable';
 
 export function WeeklyMenuSchoolWorkspace() {
   const confirm = useConfirm();
   const menus = useWeeklyMenus({
     offset: 0,
     limit: 100,
-    status: "published",
+    status: 'published',
   });
   const archivedMenus = useWeeklyMenus({
     offset: 0,
     limit: 100,
-    status: "archived",
+    status: 'archived',
   });
   const [selectedMenuId, setSelectedMenuId] = useState<string | null>(null);
   const effectiveSelectedMenuId = selectedMenuId ?? menus.data?.items[0]?.id ?? null;
-  const selectedMenu = useWeeklyMenu(effectiveSelectedMenuId ?? "");
-  const archiveSelectedMenu = useArchiveSchoolWeeklyMenu(selectedMenu.data?.id ?? "");
+  const selectedMenu = useWeeklyMenu(effectiveSelectedMenuId ?? '');
+  const archiveSelectedMenu = useArchiveSchoolWeeklyMenu(selectedMenu.data?.id ?? '');
 
   const handleArchiveSelectedMenu = async () => {
     if (!selectedMenu.data) {
@@ -43,9 +41,9 @@ export function WeeklyMenuSchoolWorkspace() {
     }
 
     const confirmed = await confirm({
-      title: "Архівувати меню у школі?",
+      title: 'Архівувати меню у школі?',
       description: `Меню "${selectedMenu.data.title}" буде приховано в архіві цієї школи.`,
-      confirmLabel: "Архівувати",
+      confirmLabel: 'Архівувати',
     });
 
     if (!confirmed) {
@@ -55,7 +53,7 @@ export function WeeklyMenuSchoolWorkspace() {
     try {
       await archiveSelectedMenu.mutateAsync();
       setSelectedMenuId(null);
-      toast.success("Меню перенесено в архів школи.");
+      toast.success('Меню перенесено в архів школи.');
     } catch (error) {
       toast.error(getApiErrorMessage(error));
     }
@@ -67,8 +65,8 @@ export function WeeklyMenuSchoolWorkspace() {
         <p className="nf-eyebrow">Меню школи</p>
         <h1 className="nf-title">Тижневе меню</h1>
         <p className="nf-description">
-          Після входу школа одразу бачить опубліковане тижневе меню. Редагування
-          на шкільному акаунті вимкнене.
+          Після входу школа одразу бачить опубліковане тижневе меню. Редагування на шкільному
+          акаунті вимкнене.
         </p>
       </header>
 
@@ -86,16 +84,11 @@ export function WeeklyMenuSchoolWorkspace() {
               ) : null}
 
               {menus.isError ? (
-                <RequestError
-                  error={menus.error}
-                  onRetry={() => void menus.refetch()}
-                />
+                <RequestError error={menus.error} onRetry={() => void menus.refetch()} />
               ) : null}
 
               {menus.data?.items.length === 0 ? (
-                <div className="nf-empty">
-                  Для вашої школи ще не опубліковано тижневих меню.
-                </div>
+                <div className="nf-empty">Для вашої школи ще не опубліковано тижневих меню.</div>
               ) : null}
 
               {menus.data?.items.map((menu) => {
@@ -108,20 +101,18 @@ export function WeeklyMenuSchoolWorkspace() {
                     onClick={() => setSelectedMenuId(menu.id)}
                     className={`w-full border p-3 text-left ${
                       isActive
-                        ? "border-[var(--nf-brand-dark)] bg-[var(--nf-panel-head)]"
-                        : "border-[var(--nf-line)] bg-white hover:bg-slate-50"
+                        ? 'border-[var(--nf-brand-dark)] bg-[var(--nf-panel-head)]'
+                        : 'border-[var(--nf-line)] bg-white hover:bg-slate-50'
                     }`}
                   >
                     <p className="font-bold text-slate-900">{menu.title}</p>
                     <p className="mt-1 text-xs text-slate-600">
-                      {menu.meal_type === "lunch" ? "Обід" : "Сніданок"}
-                      {menu.cycle_week ? ` · цикл ${menu.cycle_week}` : ""}
+                      {menu.meal_type === 'lunch' ? 'Обід' : 'Сніданок'}
+                      {menu.cycle_week ? ` · цикл ${menu.cycle_week}` : ''}
                     </p>
                     <p className="mt-1 text-xs text-slate-500">
-                      Опубліковано:{" "}
-                      {menu.published_at
-                        ? formatDate(menu.published_at)
-                        : "дата не вказана"}
+                      Опубліковано:{' '}
+                      {menu.published_at ? formatDate(menu.published_at) : 'дата не вказана'}
                     </p>
                   </button>
                 );
@@ -176,9 +167,7 @@ export function WeeklyMenuSchoolWorkspace() {
                   onClick={() => void handleArchiveSelectedMenu()}
                 >
                   <Archive className="size-4" aria-hidden />
-                  {archiveSelectedMenu.isPending
-                    ? "Архівуємо…"
-                    : "Архівувати у школі"}
+                  {archiveSelectedMenu.isPending ? 'Архівуємо…' : 'Архівувати у школі'}
                 </button>
               </div>
             </section>
@@ -197,10 +186,7 @@ export function WeeklyMenuSchoolWorkspace() {
           ) : null}
 
           {selectedMenu.isError ? (
-            <RequestError
-              error={selectedMenu.error}
-              onRetry={() => void selectedMenu.refetch()}
-            />
+            <RequestError error={selectedMenu.error} onRetry={() => void selectedMenu.refetch()} />
           ) : null}
 
           {selectedMenu.data ? (
@@ -212,8 +198,7 @@ export function WeeklyMenuSchoolWorkspace() {
             <section className="nf-panel">
               <div className="nf-panel-body">
                 <div className="nf-empty">
-                  Немає опублікованого меню. Дочекайтеся розсилки від
-                  адміністратора або власника.
+                  Немає опублікованого меню. Дочекайтеся розсилки від адміністратора або власника.
                 </div>
               </div>
             </section>
@@ -237,7 +222,7 @@ function ArchivedSchoolMenuItem({
     try {
       const restoredMenu = await restoreMenu.mutateAsync();
       onRestored(restoredMenu.id);
-      toast.success("Меню повернуто в роботу.");
+      toast.success('Меню повернуто в роботу.');
     } catch (error) {
       toast.error(getApiErrorMessage(error));
     }
@@ -247,12 +232,10 @@ function ArchivedSchoolMenuItem({
     <div className="border border-[var(--nf-line)] bg-white p-3">
       <p className="font-bold text-slate-900">{menu.title}</p>
       <p className="mt-1 text-xs text-slate-600">
-        {menu.meal_type === "lunch" ? "Обід" : "Сніданок"}
-        {menu.cycle_week ? ` · цикл ${menu.cycle_week}` : ""}
+        {menu.meal_type === 'lunch' ? 'Обід' : 'Сніданок'}
+        {menu.cycle_week ? ` · цикл ${menu.cycle_week}` : ''}
       </p>
-      <p className="mt-1 text-xs text-slate-500">
-        Архівовано: {formatDate(menu.updated_at)}
-      </p>
+      <p className="mt-1 text-xs text-slate-500">Архівовано: {formatDate(menu.updated_at)}</p>
       <button
         type="button"
         className="nf-button nf-button-secondary mt-3 w-full"
@@ -260,7 +243,7 @@ function ArchivedSchoolMenuItem({
         onClick={() => void handleRestore()}
       >
         <RotateCcw className="size-4" aria-hidden />
-        {restoreMenu.isPending ? "Повертаємо…" : "Повернути"}
+        {restoreMenu.isPending ? 'Повертаємо…' : 'Повернути'}
       </button>
     </div>
   );

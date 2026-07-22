@@ -1,16 +1,16 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 export const schoolFormSchema = z.object({
   name: z
     .string()
     .trim()
-    .min(1, "Введіть назву школи")
-    .max(200, "Назва має містити не більше 200 символів"),
+    .min(1, 'Введіть назву школи')
+    .max(200, 'Назва має містити не більше 200 символів'),
   code: z
     .string()
     .trim()
-    .min(2, "Код має містити щонайменше 2 символи")
-    .max(50, "Код має містити не більше 50 символів"),
+    .min(2, 'Код має містити щонайменше 2 символи')
+    .max(50, 'Код має містити не більше 50 символів'),
 });
 
 export const editSchoolFormSchema = schoolFormSchema.extend({
@@ -20,10 +20,10 @@ export const editSchoolFormSchema = schoolFormSchema.extend({
 export const deleteSchoolFormSchema = z.object({
   password: z
     .string()
-    .min(1, "Введіть пароль адміністратора")
-    .max(128, "Пароль має містити не більше 128 символів")
+    .min(1, 'Введіть пароль адміністратора')
+    .max(128, 'Пароль має містити не більше 128 символів')
     .refine((value) => value.trim().length > 0, {
-      message: "Введіть пароль адміністратора",
+      message: 'Введіть пароль адміністратора',
     }),
 });
 

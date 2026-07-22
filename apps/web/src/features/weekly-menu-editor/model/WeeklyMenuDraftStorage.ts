@@ -1,9 +1,6 @@
-import { z } from "zod";
+import { z } from 'zod';
 
-import {
-  weeklyMenuFormSchema,
-  type WeeklyMenuFormValues,
-} from "./WeeklyMenuFormSchema";
+import { type WeeklyMenuFormValues, weeklyMenuFormSchema } from './WeeklyMenuFormSchema';
 
 const WEEKLY_MENU_DRAFT_VERSION = 1;
 
@@ -16,11 +13,8 @@ const weeklyMenuDraftSchema = z.object({
 
 export type WeeklyMenuDraft = z.infer<typeof weeklyMenuDraftSchema>;
 
-export function loadWeeklyMenuDraft(
-  menuId: string,
-  baseUpdatedAt: string,
-): WeeklyMenuDraft | null {
-  if (typeof window === "undefined") {
+export function loadWeeklyMenuDraft(menuId: string, baseUpdatedAt: string): WeeklyMenuDraft | null {
+  if (typeof window === 'undefined') {
     return null;
   }
 
@@ -48,9 +42,9 @@ export function loadWeeklyMenuDraft(
 export function saveWeeklyMenuDraft(
   menuId: string,
   baseUpdatedAt: string,
-  values: WeeklyMenuFormValues,
+  values: WeeklyMenuFormValues
 ) {
-  if (typeof window === "undefined") {
+  if (typeof window === 'undefined') {
     return null;
   }
 
@@ -62,16 +56,13 @@ export function saveWeeklyMenuDraft(
     values,
   };
 
-  window.localStorage.setItem(
-    getWeeklyMenuDraftKey(menuId),
-    JSON.stringify(payload),
-  );
+  window.localStorage.setItem(getWeeklyMenuDraftKey(menuId), JSON.stringify(payload));
 
   return savedAt;
 }
 
 export function clearWeeklyMenuDraft(menuId: string) {
-  if (typeof window === "undefined") {
+  if (typeof window === 'undefined') {
     return;
   }
 

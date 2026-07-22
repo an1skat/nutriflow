@@ -1,39 +1,37 @@
-"use client";
+'use client';
 
-import { X } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect } from 'react';
 
-import type { WeeklyMenu } from "@/entities/weekly-menu/model/WeeklyMenu";
-import { WeeklyMenuImportPreviewTable } from "@/features/weekly-menu-excel/ui/WeeklyMenuImportPreviewTable";
+import { X } from 'lucide-react';
+
+import type { WeeklyMenu } from '@/entities/weekly-menu/model/WeeklyMenu';
+import { WeeklyMenuImportPreviewTable } from '@/features/weekly-menu-excel/ui/WeeklyMenuImportPreviewTable';
 
 type SchoolMenuPreviewDialogProps = {
   menu: WeeklyMenu | null;
   onClose: () => void;
 };
 
-export function SchoolMenuPreviewDialog({
-  menu,
-  onClose,
-}: SchoolMenuPreviewDialogProps) {
+export function SchoolMenuPreviewDialog({ menu, onClose }: SchoolMenuPreviewDialogProps) {
   useEffect(() => {
     if (!menu) {
       return;
     }
 
     const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    document.body.style.overflow = 'hidden';
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === 'Escape') {
         onClose();
       }
     };
 
-    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown);
 
     return () => {
       document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener('keydown', handleKeyDown);
     };
   }, [menu, onClose]);
 
@@ -66,10 +64,10 @@ export function SchoolMenuPreviewDialog({
               {menu.title}
             </h2>
             <p className="mt-1 text-sm text-slate-600">
-              {menu.meal_type === "lunch" ? "Обід" : "Сніданок"}
-              {menu.cycle_week ? ` · тиждень ${menu.cycle_week}` : ""}
-              {menu.starts_on ? ` · від ${menu.starts_on}` : ""}
-              {menu.ends_on ? ` до ${menu.ends_on}` : ""}
+              {menu.meal_type === 'lunch' ? 'Обід' : 'Сніданок'}
+              {menu.cycle_week ? ` · тиждень ${menu.cycle_week}` : ''}
+              {menu.starts_on ? ` · від ${menu.starts_on}` : ''}
+              {menu.ends_on ? ` до ${menu.ends_on}` : ''}
             </p>
           </div>
           <button

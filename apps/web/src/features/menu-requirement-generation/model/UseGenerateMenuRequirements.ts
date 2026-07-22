@@ -1,23 +1,19 @@
-"use client";
+'use client';
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { generateMenuRequirements } from "@/entities/menu-requirement/api/MenuRequirementApi";
-import { menuRequirementQueryKeys } from "@/entities/menu-requirement/api/MenuRequirementQueries";
-import type { GenerateMenuRequirementsPayload } from "@/entities/menu-requirement/model/MenuRequirement";
+import { generateMenuRequirements } from '@/entities/menu-requirement/api/MenuRequirementApi';
+import { menuRequirementQueryKeys } from '@/entities/menu-requirement/api/MenuRequirementQueries';
+import type { GenerateMenuRequirementsPayload } from '@/entities/menu-requirement/model/MenuRequirement';
 
 export function useGenerateMenuRequirements() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (payload: GenerateMenuRequirementsPayload) =>
-      generateMenuRequirements(payload),
+    mutationFn: (payload: GenerateMenuRequirementsPayload) => generateMenuRequirements(payload),
     onSuccess: async (response) => {
       for (const requirement of response.items) {
-        queryClient.setQueryData(
-          menuRequirementQueryKeys.detail(requirement.id),
-          requirement,
-        );
+        queryClient.setQueryData(menuRequirementQueryKeys.detail(requirement.id), requirement);
       }
       await Promise.all([
         queryClient.invalidateQueries({

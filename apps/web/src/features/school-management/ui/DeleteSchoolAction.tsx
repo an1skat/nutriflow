@@ -1,37 +1,29 @@
-"use client";
+'use client';
 
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useState } from 'react';
 
-import {
-  getApiErrorMessage,
-  isHttpStatus,
-} from "@/shared/api/HttpClient";
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
 
-import {
-  deleteSchoolFormSchema,
-  type DeleteSchoolFormValues,
-} from "../model/SchoolFormSchema";
-import { useDeleteSchool } from "../model/UseSchoolMutations";
+import { getApiErrorMessage, isHttpStatus } from '@/shared/api/HttpClient';
+
+import { type DeleteSchoolFormValues, deleteSchoolFormSchema } from '../model/SchoolFormSchema';
+import { useDeleteSchool } from '../model/UseSchoolMutations';
 
 type DeleteSchoolActionProps = {
   schoolId: string;
   onDeleted: () => void;
 };
 
-const DELETE_CONFIRMATION_STORAGE_KEY =
-  "nutriflow:admin-delete-confirmed-until";
+const DELETE_CONFIRMATION_STORAGE_KEY = 'nutriflow:admin-delete-confirmed-until';
 const DELETE_CONFIRMATION_TTL_MS = 5 * 60 * 1000;
 
 function getRecentDeleteConfirmation(): boolean {
-  if (typeof window === "undefined") {
+  if (typeof window === 'undefined') {
     return false;
   }
 
-  const expiresAt = Number(
-    window.localStorage.getItem(DELETE_CONFIRMATION_STORAGE_KEY),
-  );
+  const expiresAt = Number(window.localStorage.getItem(DELETE_CONFIRMATION_STORAGE_KEY));
 
   if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
     window.localStorage.removeItem(DELETE_CONFIRMATION_STORAGE_KEY);
@@ -42,43 +34,40 @@ function getRecentDeleteConfirmation(): boolean {
 }
 
 function rememberDeleteConfirmation(): void {
-  if (typeof window === "undefined") {
+  if (typeof window === 'undefined') {
     return;
   }
 
   window.localStorage.setItem(
     DELETE_CONFIRMATION_STORAGE_KEY,
-    String(Date.now() + DELETE_CONFIRMATION_TTL_MS),
+    String(Date.now() + DELETE_CONFIRMATION_TTL_MS)
   );
 }
 
 function clearDeleteConfirmation(): void {
-  if (typeof window === "undefined") {
+  if (typeof window === 'undefined') {
     return;
   }
 
   window.localStorage.removeItem(DELETE_CONFIRMATION_STORAGE_KEY);
 }
 
-export function DeleteSchoolAction({
-  schoolId,
-  onDeleted,
-}: DeleteSchoolActionProps) {
+export function DeleteSchoolAction({ schoolId, onDeleted }: DeleteSchoolActionProps) {
   const [isConfirming, setIsConfirming] = useState(false);
   const [passwordRequired, setPasswordRequired] = useState(true);
   const deleteSchool = useDeleteSchool(schoolId);
   const form = useForm<DeleteSchoolFormValues>({
     resolver: zodResolver(deleteSchoolFormSchema),
     defaultValues: {
-      password: "",
+      password: '',
     },
   });
 
   const handleDelete = async (
     values: DeleteSchoolFormValues | undefined,
-    usedRecentConfirmation: boolean,
+    usedRecentConfirmation: boolean
   ) => {
-    form.clearErrors("root");
+    form.clearErrors('root');
 
     try {
       await deleteSchool.mutateAsync(values);
@@ -93,15 +82,15 @@ export function DeleteSchoolAction({
       if (usedRecentConfirmation && isHttpStatus(error, 403)) {
         clearDeleteConfirmation();
         setPasswordRequired(true);
-        form.setError("root", {
-          type: "server",
-          message: "Потрібно ще раз підтвердити пароль адміністратора.",
+        form.setError('root', {
+          type: 'server',
+          message: 'Потрібно ще раз підтвердити пароль адміністратора.',
         });
         return;
       }
 
-      form.setError("root", {
-        type: "server",
+      form.setError('root', {
+        type: 'server',
         message: getApiErrorMessage(error),
       });
     }
@@ -110,7 +99,7 @@ export function DeleteSchoolAction({
   const onSubmit = form.handleSubmit((values) => handleDelete(values, false));
 
   const startConfirmation = () => {
-    form.clearErrors("root");
+    form.clearErrors('root');
     setPasswordRequired(!getRecentDeleteConfirmation());
     setIsConfirming(true);
   };
@@ -123,11 +112,7 @@ export function DeleteSchoolAction({
 
   if (!isConfirming) {
     return (
-      <button
-        type="button"
-        onClick={startConfirmation}
-        className="nf-button nf-button-danger"
-      >
+      <button type="button" onClick={startConfirmation} className="nf-button nf-button-danger">
         Видалити школу
       </button>
     );
@@ -137,8 +122,8 @@ export function DeleteSchoolAction({
     return (
       <div className="border border-red-300 bg-red-50 p-3">
         <p className="text-xs leading-5 text-red-900">
-          Школу буде видалено разом з усіма користувачами. Після цього вони не
-          зможуть увійти в систему, а повернути школу з цього екрана не можна.
+          Школу буде видалено разом з усіма користувачами. Після цього вони не зможуть увійти в
+          систему, а повернути школу з цього екрана не можна.
         </p>
 
         <div className="mt-3 flex flex-wrap gap-2">
@@ -148,7 +133,7 @@ export function DeleteSchoolAction({
             disabled={deleteSchool.isPending}
             className="nf-button border-red-800 bg-red-700 text-white hover:bg-red-800"
           >
-            {deleteSchool.isPending ? "Видаляємо…" : "Підтвердити видалення"}
+            {deleteSchool.isPending ? 'Видаляємо…' : 'Підтвердити видалення'}
           </button>
           <button
             type="button"
@@ -172,22 +157,19 @@ export function DeleteSchoolAction({
   return (
     <form onSubmit={onSubmit} className="border border-red-300 bg-red-50 p-3">
       <p className="text-xs leading-5 text-red-900">
-        Школу буде видалено разом з усіма користувачами. Після цього вони не
-        зможуть увійти в систему, а повернути школу з цього екрана не можна.
+        Школу буде видалено разом з усіма користувачами. Після цього вони не зможуть увійти в
+        систему, а повернути школу з цього екрана не можна.
       </p>
 
       <div className="mt-3">
-        <label
-          htmlFor={`delete-school-password-${schoolId}`}
-          className="nf-label"
-        >
+        <label htmlFor={`delete-school-password-${schoolId}`} className="nf-label">
           Пароль адміністратора
         </label>
         <input
           id={`delete-school-password-${schoolId}`}
           type="password"
           autoComplete="current-password"
-          {...form.register("password")}
+          {...form.register('password')}
           className="nf-input"
         />
         {form.formState.errors.password ? (
@@ -203,9 +185,7 @@ export function DeleteSchoolAction({
           disabled={form.formState.isSubmitting}
           className="nf-button border-red-800 bg-red-700 text-white hover:bg-red-800"
         >
-          {form.formState.isSubmitting
-            ? "Видаляємо…"
-            : "Підтвердити видалення"}
+          {form.formState.isSubmitting ? 'Видаляємо…' : 'Підтвердити видалення'}
         </button>
         <button
           type="button"

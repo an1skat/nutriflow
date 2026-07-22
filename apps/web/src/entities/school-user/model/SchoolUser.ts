@@ -1,10 +1,10 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 export const schoolUserSchema = z.object({
   id: z.string().min(1),
   username: z.string().min(1),
   email: z.string().email().nullable(),
-  role: z.literal("SCHOOL_USER"),
+  role: z.literal('SCHOOL_USER'),
   school_id: z.string().min(1),
   is_active: z.boolean(),
   created_at: z.string().min(1),

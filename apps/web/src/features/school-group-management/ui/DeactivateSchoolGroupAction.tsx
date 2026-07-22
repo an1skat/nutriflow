@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import { useState } from "react";
+import { useState } from 'react';
 
-import { getApiErrorMessage } from "@/shared/api/HttpClient";
+import { getApiErrorMessage } from '@/shared/api/HttpClient';
 
-import { useDeactivateSchoolGroup } from "../model/UseSchoolGroupMutations";
+import { useDeactivateSchoolGroup } from '../model/UseSchoolGroupMutations';
 
 type DeactivateSchoolGroupActionProps = {
   schoolId: string;
@@ -45,8 +45,7 @@ export function DeactivateSchoolGroupAction({
   return (
     <div className="border border-red-300 bg-red-50 p-3">
       <p className="text-xs leading-5 text-red-900">
-        Група залишиться в історії школи, але не буде активною для подальших
-        розрахунків.
+        Група залишиться в історії школи, але не буде активною для подальших розрахунків.
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         <button
@@ -55,9 +54,7 @@ export function DeactivateSchoolGroupAction({
           disabled={deactivateGroup.isPending}
           className="nf-button border-red-800 bg-red-700 text-white hover:bg-red-800"
         >
-          {deactivateGroup.isPending
-            ? "Деактивуємо…"
-            : "Підтвердити деактивацію"}
+          {deactivateGroup.isPending ? 'Деактивуємо…' : 'Підтвердити деактивацію'}
         </button>
         <button
           type="button"

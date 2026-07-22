@@ -1,19 +1,11 @@
-"use client";
+'use client';
 
-import {
-  AlertTriangle,
-  CheckCircle2,
-  FileSpreadsheet,
-  LoaderCircle,
-  X,
-} from "lucide-react";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo } from 'react';
 
-import {
-  getImportPreviewSummary,
-  type WeeklyMenuImportPreview,
-} from "../model/WeeklyMenuExcel";
-import { WeeklyMenuImportPreviewTable } from "./WeeklyMenuImportPreviewTable";
+import { AlertTriangle, CheckCircle2, FileSpreadsheet, LoaderCircle, X } from 'lucide-react';
+
+import { type WeeklyMenuImportPreview, getImportPreviewSummary } from '../model/WeeklyMenuExcel';
+import { WeeklyMenuImportPreviewTable } from './WeeklyMenuImportPreviewTable';
 
 type WeeklyMenuImportPreviewDialogProps = {
   open: boolean;
@@ -45,25 +37,25 @@ export function WeeklyMenuImportPreviewDialog({
 
     const previousOverflow = document.body.style.overflow;
 
-    document.body.style.overflow = "hidden";
+    document.body.style.overflow = 'hidden';
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === 'Escape') {
         onClose();
       }
     };
 
-    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown);
 
     return () => {
       document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener('keydown', handleKeyDown);
     };
   }, [onClose, open]);
 
   const previewSummary = useMemo(
     () => (preview ? getImportPreviewSummary(preview) : null),
-    [preview],
+    [preview]
   );
 
   if (!open || !preview) {
@@ -71,12 +63,9 @@ export function WeeklyMenuImportPreviewDialog({
   }
 
   const diagnostics = preview.diagnostics;
-  const errors = diagnostics.filter((diagnostic) => diagnostic.level === "error");
-  const warnings = diagnostics.filter(
-    (diagnostic) => diagnostic.level === "warning",
-  );
-  const safeActiveSheet =
-    activeSheet < preview.menus.length ? activeSheet : 0;
+  const errors = diagnostics.filter((diagnostic) => diagnostic.level === 'error');
+  const warnings = diagnostics.filter((diagnostic) => diagnostic.level === 'warning');
+  const safeActiveSheet = activeSheet < preview.menus.length ? activeSheet : 0;
   const activePreviewMenu = preview.menus[safeActiveSheet];
 
   return (
@@ -110,9 +99,7 @@ export function WeeklyMenuImportPreviewDialog({
                 Попередній перегляд меню
               </h2>
             </div>
-            <p className="mt-1 truncate text-sm text-slate-600">
-              {preview.filename}
-            </p>
+            <p className="mt-1 truncate text-sm text-slate-600">{preview.filename}</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -146,11 +133,7 @@ export function WeeklyMenuImportPreviewDialog({
             <SummaryTile label="Дні" value={previewSummary?.days ?? 0} />
             <SummaryTile label="Позиції" value={previewSummary?.items ?? 0} />
             <SummaryTile label="Помилки" value={errors.length} tone="danger" />
-            <SummaryTile
-              label="Попередження"
-              value={warnings.length}
-              tone="warning"
-            />
+            <SummaryTile label="Попередження" value={warnings.length} tone="warning" />
           </div>
 
           {previewExpired ? (
@@ -162,18 +145,10 @@ export function WeeklyMenuImportPreviewDialog({
           {diagnostics.length ? (
             <div className="grid gap-3 lg:grid-cols-2">
               {errors.length ? (
-                <DiagnosticList
-                  title="Помилки"
-                  diagnostics={errors}
-                  tone="error"
-                />
+                <DiagnosticList title="Помилки" diagnostics={errors} tone="error" />
               ) : null}
               {warnings.length ? (
-                <DiagnosticList
-                  title="Попередження"
-                  diagnostics={warnings}
-                  tone="warning"
-                />
+                <DiagnosticList title="Попередження" diagnostics={warnings} tone="warning" />
               ) : null}
             </div>
           ) : (
@@ -185,9 +160,7 @@ export function WeeklyMenuImportPreviewDialog({
           {preview.menus.length ? (
             <div className="grid min-h-0 gap-4 xl:grid-cols-[230px_minmax(0,1fr)]">
               <div className="space-y-2">
-                <p className="text-xs font-bold uppercase text-slate-500">
-                  Аркуші файлу
-                </p>
+                <p className="text-xs font-bold uppercase text-slate-500">Аркуші файлу</p>
                 <div className="max-h-64 space-y-2 overflow-auto pr-1 xl:max-h-[58vh]">
                   {preview.menus.map((entry, index) => {
                     const isActive = safeActiveSheet === index;
@@ -198,8 +171,8 @@ export function WeeklyMenuImportPreviewDialog({
                         type="button"
                         className={`w-full border px-3 py-2 text-left text-sm transition ${
                           isActive
-                            ? "border-[var(--nf-brand-dark)] bg-[var(--nf-brand)] text-white"
-                            : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                            ? 'border-[var(--nf-brand-dark)] bg-[var(--nf-brand)] text-white'
+                            : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                         }`}
                         onClick={() => onActiveSheetChange(index)}
                       >
@@ -209,12 +182,12 @@ export function WeeklyMenuImportPreviewDialog({
                         </span>
                         <span
                           className={`mt-1 block text-xs ${
-                            isActive ? "text-white/80" : "text-slate-500"
+                            isActive ? 'text-white/80' : 'text-slate-500'
                           }`}
                         >
                           {entry.menu.cycle_week
                             ? `Тиждень ${entry.menu.cycle_week}`
-                            : "Без номера тижня"}
+                            : 'Без номера тижня'}
                         </span>
                       </button>
                     );
@@ -230,17 +203,14 @@ export function WeeklyMenuImportPreviewDialog({
                         {activePreviewMenu.menu.title}
                       </h3>
                       <p className="mt-1 text-xs text-slate-600">
-                        {activePreviewMenu.menu.meal_type === "lunch"
-                          ? "Обід"
-                          : "Сніданок"}
+                        {activePreviewMenu.menu.meal_type === 'lunch' ? 'Обід' : 'Сніданок'}
                         {activePreviewMenu.menu.cycle_week
                           ? ` · тиждень ${activePreviewMenu.menu.cycle_week}`
-                          : ""}
+                          : ''}
                       </p>
                     </div>
                     <p className="text-xs text-slate-500">
-                      Чинний до{" "}
-                      {new Date(preview.expires_at).toLocaleString("uk-UA")}
+                      Чинний до {new Date(preview.expires_at).toLocaleString('uk-UA')}
                     </p>
                   </div>
 
@@ -262,18 +232,18 @@ export function WeeklyMenuImportPreviewDialog({
 function SummaryTile({
   label,
   value,
-  tone = "neutral",
+  tone = 'neutral',
 }: {
   label: string;
   value: number;
-  tone?: "neutral" | "danger" | "warning";
+  tone?: 'neutral' | 'danger' | 'warning';
 }) {
   const toneClass =
-    tone === "danger"
-      ? "border-red-200 bg-red-50 text-red-800"
-      : tone === "warning"
-        ? "border-amber-200 bg-amber-50 text-amber-800"
-        : "border-slate-200 bg-white text-slate-800";
+    tone === 'danger'
+      ? 'border-red-200 bg-red-50 text-red-800'
+      : tone === 'warning'
+        ? 'border-amber-200 bg-amber-50 text-amber-800'
+        : 'border-slate-200 bg-white text-slate-800';
 
   return (
     <div className={`border px-3 py-2 ${toneClass}`}>
@@ -289,15 +259,15 @@ function DiagnosticList({
   tone,
 }: {
   title: string;
-  diagnostics: WeeklyMenuImportPreview["diagnostics"];
-  tone: "error" | "warning";
+  diagnostics: WeeklyMenuImportPreview['diagnostics'];
+  tone: 'error' | 'warning';
 }) {
   return (
     <div
       className={
-        tone === "error"
-          ? "border border-red-300 bg-red-50 p-3"
-          : "border border-amber-300 bg-amber-50 p-3"
+        tone === 'error'
+          ? 'border border-red-300 bg-red-50 p-3'
+          : 'border border-amber-300 bg-amber-50 p-3'
       }
     >
       <p className="font-bold text-slate-900">
@@ -307,19 +277,14 @@ function DiagnosticList({
         {diagnostics.map((diagnostic, index) => {
           const location = [
             diagnostic.sheet_name,
-            diagnostic.cell ??
-              (diagnostic.row_number
-                ? `рядок ${diagnostic.row_number}`
-                : null),
+            diagnostic.cell ?? (diagnostic.row_number ? `рядок ${diagnostic.row_number}` : null),
           ]
             .filter(Boolean)
-            .join(" · ");
+            .join(' · ');
 
           return (
             <li key={`${diagnostic.code}-${diagnostic.cell}-${index}`}>
-              {location ? (
-                <span className="font-bold">{location}: </span>
-              ) : null}
+              {location ? <span className="font-bold">{location}: </span> : null}
               {diagnostic.message}
             </li>
           );

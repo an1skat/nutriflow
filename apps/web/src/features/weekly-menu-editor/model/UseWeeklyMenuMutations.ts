@@ -1,28 +1,28 @@
-"use client";
+'use client';
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
+import { menuRequirementQueryKeys } from '@/entities/menu-requirement/api/MenuRequirementQueries';
 import {
   archiveSchoolWeeklyMenu,
   archiveWeeklyMenu,
   closeWeeklyMenuDay,
   createWeeklyMenu,
-  devReopenWeeklyMenuDay,
   deleteWeeklyMenu,
+  devReopenWeeklyMenuDay,
   publishWeeklyMenu,
   restoreSchoolWeeklyMenu,
-  revokeWeeklyMenu,
   restoreWeeklyMenu,
+  revokeWeeklyMenu,
   updateWeeklyMenu,
-} from "@/entities/weekly-menu/api/WeeklyMenuApi";
-import { weeklyMenuQueryKeys } from "@/entities/weekly-menu/api/WeeklyMenuQueries";
-import { menuRequirementQueryKeys } from "@/entities/menu-requirement/api/MenuRequirementQueries";
+} from '@/entities/weekly-menu/api/WeeklyMenuApi';
+import { weeklyMenuQueryKeys } from '@/entities/weekly-menu/api/WeeklyMenuQueries';
 import type {
   PublishWeeklyMenuPayload,
   Weekday,
   WeeklyMenuPayload,
   WeeklyMenuUpdatePayload,
-} from "@/entities/weekly-menu/model/WeeklyMenu";
+} from '@/entities/weekly-menu/model/WeeklyMenu';
 
 export function useCreateWeeklyMenu() {
   const queryClient = useQueryClient();
@@ -42,8 +42,7 @@ export function useUpdateWeeklyMenu(menuId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (payload: WeeklyMenuUpdatePayload) =>
-      updateWeeklyMenu(menuId, payload),
+    mutationFn: (payload: WeeklyMenuUpdatePayload) => updateWeeklyMenu(menuId, payload),
     onSuccess: async (menu) => {
       queryClient.setQueryData(weeklyMenuQueryKeys.detail(menuId), menu);
       await queryClient.invalidateQueries({
@@ -246,8 +245,7 @@ export function usePublishWeeklyMenu(menuId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (payload: PublishWeeklyMenuPayload) =>
-      publishWeeklyMenu(menuId, payload),
+    mutationFn: (payload: PublishWeeklyMenuPayload) => publishWeeklyMenu(menuId, payload),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: weeklyMenuQueryKeys.all,

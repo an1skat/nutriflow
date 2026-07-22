@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from 'vitest';
 
-import { createObjectId } from "./ObjectId";
+import { createObjectId } from './ObjectId';
 
-describe("createObjectId", () => {
-  it("creates distinct PydanticObjectId-compatible values", () => {
+describe('createObjectId', () => {
+  it('creates distinct PydanticObjectId-compatible values', () => {
     const ids = [createObjectId(), createObjectId()];
 
     expect(ids[0]).toMatch(/^[0-9a-f]{24}$/);

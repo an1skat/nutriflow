@@ -1,56 +1,53 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from 'vitest';
 
-import type { SchoolGroup } from "@/entities/school-group/model/SchoolGroup";
-import type {
-  DailyMenu,
-  DailyMenuItem,
-} from "@/entities/weekly-menu/model/WeeklyMenu";
+import type { SchoolGroup } from '@/entities/school-group/model/SchoolGroup';
+import type { DailyMenu, DailyMenuItem } from '@/entities/weekly-menu/model/WeeklyMenu';
 
 import {
   loadDailyMenuDraft,
   prepareDailyMenuDays,
   replaceDailyMenuDish,
   saveDailyMenuDraft,
-} from "./DailyMenuDraftStorage";
+} from './DailyMenuDraftStorage';
 
 const groups: SchoolGroup[] = [
   {
-    id: "group-younger",
-    school_id: "school-1",
-    name: "1-А",
-    age_group: "6-11",
+    id: 'group-younger',
+    school_id: 'school-1',
+    name: '1-А',
+    age_group: '6-11',
     is_active: true,
-    created_at: "2026-07-01T10:00:00Z",
-    updated_at: "2026-07-01T10:00:00Z",
+    created_at: '2026-07-01T10:00:00Z',
+    updated_at: '2026-07-01T10:00:00Z',
   },
   {
-    id: "group-older",
-    school_id: "school-1",
-    name: "8-Б",
-    age_group: "11-14",
+    id: 'group-older',
+    school_id: 'school-1',
+    name: '8-Б',
+    age_group: '11-14',
     is_active: true,
-    created_at: "2026-07-01T10:00:00Z",
-    updated_at: "2026-07-01T10:00:00Z",
+    created_at: '2026-07-01T10:00:00Z',
+    updated_at: '2026-07-01T10:00:00Z',
   },
   {
-    id: "group-inactive",
-    school_id: "school-1",
-    name: "Архівна",
-    age_group: "14-18",
+    id: 'group-inactive',
+    school_id: 'school-1',
+    name: 'Архівна',
+    age_group: '14-18',
     is_active: false,
-    created_at: "2026-07-01T10:00:00Z",
-    updated_at: "2026-07-01T10:00:00Z",
+    created_at: '2026-07-01T10:00:00Z',
+    updated_at: '2026-07-01T10:00:00Z',
   },
 ];
 
 const originalItem = createItem({
-  id: "slot-1",
-  name: "Каша",
-  cardNumber: "1.1",
+  id: 'slot-1',
+  name: 'Каша',
+  cardNumber: '1.1',
   servings: [
     {
-      school_group_id: "group-younger",
-      age_group: "6-11",
+      school_group_id: 'group-younger',
+      age_group: '6-11',
       children_count: 12,
     },
   ],
@@ -58,8 +55,8 @@ const originalItem = createItem({
 
 const days: DailyMenu[] = [
   {
-    weekday: "monday",
-    date: "2026-07-06",
+    weekday: 'monday',
+    date: '2026-07-06',
     notes: null,
     closed_at: null,
     closed_by: null,
@@ -68,52 +65,50 @@ const days: DailyMenu[] = [
   },
 ];
 
-describe("daily menu local draft", () => {
+describe('daily menu local draft', () => {
   beforeEach(() => {
     window.localStorage.clear();
   });
 
-  it("adds every active group and defaults missing counts to zero", () => {
+  it('adds every active group and defaults missing counts to zero', () => {
     const prepared = prepareDailyMenuDays(days, groups);
 
     expect(prepared[0].items[0].servings).toEqual([
       {
-        school_group_id: "group-younger",
-        age_group: "6-11",
+        school_group_id: 'group-younger',
+        age_group: '6-11',
         children_count: 12,
       },
       {
-        school_group_id: "group-older",
-        age_group: "11-14",
+        school_group_id: 'group-older',
+        age_group: '11-14',
         children_count: 0,
       },
     ]);
   });
 
-  it("keeps the daily slot but resets group counts after replacing a dish", () => {
+  it('keeps the daily slot but resets group counts after replacing a dish', () => {
     const replacement = createItem({
-      id: "catalog-item",
-      name: "Суп",
-      cardNumber: "2.4",
+      id: 'catalog-item',
+      name: 'Суп',
+      cardNumber: '2.4',
     });
 
     const result = replaceDailyMenuDish(originalItem, replacement, groups);
 
-    expect(result.id).toBe("slot-1");
+    expect(result.id).toBe('slot-1');
     expect(result.position).toBe(originalItem.position);
-    expect(result.name).toBe("Суп");
-    expect(result.recipe_card_number).toBe("2.4");
-    expect(result.servings.map((serving) => serving.children_count)).toEqual([
-      0, 0,
-    ]);
+    expect(result.name).toBe('Суп');
+    expect(result.recipe_card_number).toBe('2.4');
+    expect(result.servings.map((serving) => serving.children_count)).toEqual([0, 0]);
   });
 
-  it("loads a saved draft only while its weekly menu version is current", () => {
-    const savedAt = saveDailyMenuDraft("menu-1", "version-1", days);
+  it('loads a saved draft only while its weekly menu version is current', () => {
+    const savedAt = saveDailyMenuDraft('menu-1', 'version-1', days);
 
     expect(savedAt).not.toBeNull();
-    expect(loadDailyMenuDraft("menu-1", "version-1")?.days).toEqual(days);
-    expect(loadDailyMenuDraft("menu-1", "version-2")).toBeNull();
+    expect(loadDailyMenuDraft('menu-1', 'version-1')?.days).toEqual(days);
+    expect(loadDailyMenuDraft('menu-1', 'version-2')).toBeNull();
   });
 });
 
@@ -126,12 +121,12 @@ function createItem({
   id: string;
   name: string;
   cardNumber: string;
-  servings?: DailyMenuItem["servings"];
+  servings?: DailyMenuItem['servings'];
 }): DailyMenuItem {
   return {
     id,
     position: 1,
-    kind: "dish_card",
+    kind: 'dish_card',
     source_text: `ТК ${cardNumber}`,
     recipe_card_number: cardNumber,
     dish_card_id: `card-${id}`,
@@ -142,15 +137,15 @@ function createItem({
     allergen_codes: [],
     portions: [
       {
-        age_group: "6-11",
-        yield_amount: "100",
+        age_group: '6-11',
+        yield_amount: '100',
         dish_card_portion_variant_id: `portion-${id}`,
         calculated_from: null,
         nutrition: {
-          kcal: "120",
-          proteins: "4",
-          fats: "3",
-          carbs: "20",
+          kcal: '120',
+          proteins: '4',
+          fats: '3',
+          carbs: '20',
         },
       },
     ],

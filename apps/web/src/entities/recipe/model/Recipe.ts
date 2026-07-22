@@ -1,39 +1,39 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 // Decimal values travel on the wire as strings (Pydantic serializes Decimal to
 // string to preserve precision), so every numeric amount field is a string here.
 const decimalString = z
   .string()
   .trim()
-  .min(1, "Введіть значення")
-  .regex(/^-?\d+(\.\d+)?$/, "Очікуємо десяткове число");
+  .min(1, 'Введіть значення')
+  .regex(/^-?\d+(\.\d+)?$/, 'Очікуємо десяткове число');
 
 export const normativeGroupCodeSchema = z.enum([
-  "vegetables",
-  "fruits_berries",
-  "juices",
-  "dried_fruits_nuts_seeds",
-  "cereals_grains_legumes",
-  "potatoes",
-  "bread",
-  "fish",
-  "poultry",
-  "red_meat",
-  "eggs",
-  "dairy",
-  "animal_fats",
-  "vegetable_fats",
-  "salt",
-  "sugar",
-  "cocoa",
-  "tea",
+  'vegetables',
+  'fruits_berries',
+  'juices',
+  'dried_fruits_nuts_seeds',
+  'cereals_grains_legumes',
+  'potatoes',
+  'bread',
+  'fish',
+  'poultry',
+  'red_meat',
+  'eggs',
+  'dairy',
+  'animal_fats',
+  'vegetable_fats',
+  'salt',
+  'sugar',
+  'cocoa',
+  'tea',
 ]);
 
 export const normativeContributionSchema = z.object({
   group_code: normativeGroupCodeSchema,
   amount: decimalString,
-  unit: z.enum(["g", "ml", "item", "portion"]),
-  basis: z.enum(["per_portion", "per_source_unit"]),
+  unit: z.enum(['g', 'ml', 'item', 'portion']),
+  basis: z.enum(['per_portion', 'per_source_unit']),
   portion_equivalent: decimalString.nullable(),
   product_variant: z.string().min(1).max(80).nullable(),
 });
@@ -47,7 +47,7 @@ export const nutritionSchema = z.object({
 
 export const portionVariantSchema = z.object({
   id: z.string().min(1),
-  age_group: z.enum(["6-11", "11-14", "14-18"]).nullable(),
+  age_group: z.enum(['6-11', '11-14', '14-18']).nullable(),
   portion_grams: decimalString.nullable(),
   output_grams: decimalString,
   nutrition: nutritionSchema,
@@ -60,7 +60,7 @@ export const ingredientAmountSchema = z.object({
   gross_amount: decimalString,
   net_amount: decimalString,
   unit: z.string().trim().min(1).max(20),
-  amount_basis: z.literal("per_portion"),
+  amount_basis: z.literal('per_portion'),
   portion_variant_id: z.string().min(1),
   notes: z.string().trim().max(1000).nullable(),
 });
@@ -103,7 +103,7 @@ export const dishCardVersionSchema = z.object({
   id: z.string().min(1),
   dish_card_id: z.string().min(1),
   version: z.number().int().nonnegative(),
-  status: z.enum(["draft", "import_preview", "confirmed", "archived"]),
+  status: z.enum(['draft', 'import_preview', 'confirmed', 'archived']),
   source_import_id: z.string().min(1).nullable(),
   source_file_name: z.string().nullable(),
   source_page: z.number().int().nullable(),

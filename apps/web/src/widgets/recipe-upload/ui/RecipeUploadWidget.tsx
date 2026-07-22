@@ -1,4 +1,4 @@
-import { DishCardUploadForm } from "@/features/recipe-upload/ui/DishCardUploadForm";
+import { DishCardUploadForm } from '@/features/recipe-upload/ui/DishCardUploadForm';
 
 export function RecipeUploadWidget() {
   return (
@@ -6,8 +6,8 @@ export function RecipeUploadWidget() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-900">Завантаження техкарти</h1>
         <p className="mt-1 text-sm text-slate-600">
-          Внесіть техкарту вручну: основне, порції та інгредієнти з брутто/нетто на
-          порцію. Після збереження техкарта проходить перевірку та підтверджується.
+          Внесіть техкарту вручну: основне, порції та інгредієнти з брутто/нетто на порцію. Після
+          збереження техкарта проходить перевірку та підтверджується.
         </p>
       </div>
       <DishCardUploadForm />

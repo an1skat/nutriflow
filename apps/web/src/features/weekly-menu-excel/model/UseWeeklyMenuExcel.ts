@@ -1,15 +1,15 @@
-"use client";
+'use client';
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { weeklyMenuQueryKeys } from "@/entities/weekly-menu/api/WeeklyMenuQueries";
+import { weeklyMenuQueryKeys } from '@/entities/weekly-menu/api/WeeklyMenuQueries';
 
 import {
   commitWeeklyMenuWorkbook,
   downloadWeeklyMenuTemplate,
   exportWeeklyMenuWorkbook,
   previewWeeklyMenuWorkbook,
-} from "../api/WeeklyMenuExcelApi";
+} from '../api/WeeklyMenuExcelApi';
 
 export function useWeeklyMenuImportPreview() {
   return useMutation({ mutationFn: previewWeeklyMenuWorkbook });

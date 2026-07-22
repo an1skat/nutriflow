@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import { queryOptions, useQuery } from "@tanstack/react-query";
+import { queryOptions, useQuery } from '@tanstack/react-query';
 
-import { getCurrentUser } from "./SessionApi";
+import { getCurrentUser } from './SessionApi';
 
 export const sessionQueryKeys = {
-  all: ["auth"] as const,
-  currentUser: () => [...sessionQueryKeys.all, "me"] as const,
+  all: ['auth'] as const,
+  currentUser: () => [...sessionQueryKeys.all, 'me'] as const,
 };
 
 export function currentUserQueryOptions() {
@@ -15,8 +15,8 @@ export function currentUserQueryOptions() {
     queryFn: getCurrentUser,
     staleTime: 30_000,
     retry: false,
-    refetchOnWindowFocus: "always",
-    refetchOnReconnect: "always",
+    refetchOnWindowFocus: 'always',
+    refetchOnReconnect: 'always',
   });
 }
 

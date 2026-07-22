@@ -1,32 +1,27 @@
-import { apiClient, getCsrfHeaders } from "@/shared/api/HttpClient";
-import type { PageRequest } from "@/shared/api/Pagination";
-import { toApiPaginationParams } from "@/shared/api/Pagination";
+import { apiClient, getCsrfHeaders } from '@/shared/api/HttpClient';
+import type { PageRequest } from '@/shared/api/Pagination';
+import { toApiPaginationParams } from '@/shared/api/Pagination';
 
 import {
-  schoolGroupListSchema,
-  schoolGroupSchema,
   type SchoolGroup,
   type SchoolGroupList,
   type UpdateSchoolGroupPayload,
-} from "../model/SchoolGroup";
+  schoolGroupListSchema,
+  schoolGroupSchema,
+} from '../model/SchoolGroup';
 
 export async function fetchAdminSchoolGroups(
   schoolId: string,
-  request: PageRequest,
+  request: PageRequest
 ): Promise<SchoolGroupList> {
-  const response = await apiClient.get<unknown>(
-    `/admin/schools/${schoolId}/groups`,
-    {
-      params: toApiPaginationParams(request),
-    },
-  );
+  const response = await apiClient.get<unknown>(`/admin/schools/${schoolId}/groups`, {
+    params: toApiPaginationParams(request),
+  });
   return schoolGroupListSchema.parse(response.data);
 }
 
-export async function fetchOwnSchoolGroups(
-  request: PageRequest,
-): Promise<SchoolGroupList> {
-  const response = await apiClient.get<unknown>("/school/groups", {
+export async function fetchOwnSchoolGroups(request: PageRequest): Promise<SchoolGroupList> {
+  const response = await apiClient.get<unknown>('/school/groups', {
     params: toApiPaginationParams(request),
   });
   return schoolGroupListSchema.parse(response.data);
@@ -35,14 +30,14 @@ export async function fetchOwnSchoolGroups(
 export async function updateAdminSchoolGroup(
   schoolId: string,
   groupId: string,
-  payload: UpdateSchoolGroupPayload,
+  payload: UpdateSchoolGroupPayload
 ): Promise<SchoolGroup> {
   const response = await apiClient.patch<unknown>(
     `/admin/schools/${schoolId}/groups/${groupId}`,
     payload,
     {
       headers: getCsrfHeaders(),
-    },
+    }
   );
   return schoolGroupSchema.parse(response.data);
 }

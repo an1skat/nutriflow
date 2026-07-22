@@ -1,15 +1,15 @@
-"use client";
+'use client';
 
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
 
-import { getApiErrorMessage } from "@/shared/api/HttpClient";
+import { getApiErrorMessage } from '@/shared/api/HttpClient';
 
 import {
-  resetSchoolUserPasswordFormSchema,
   type ResetSchoolUserPasswordFormValues,
-} from "../model/SchoolUserFormSchemas";
-import { useResetSchoolUserPassword } from "../model/UseSchoolUserMutations";
+  resetSchoolUserPasswordFormSchema,
+} from '../model/SchoolUserFormSchemas';
+import { useResetSchoolUserPassword } from '../model/UseSchoolUserMutations';
 
 type ResetSchoolUserPasswordFormProps = {
   schoolId: string;
@@ -24,20 +24,20 @@ export function ResetSchoolUserPasswordForm({
   const form = useForm<ResetSchoolUserPasswordFormValues>({
     resolver: zodResolver(resetSchoolUserPasswordFormSchema),
     defaultValues: {
-      password: "",
-      passwordConfirmation: "",
+      password: '',
+      passwordConfirmation: '',
     },
   });
 
   const onSubmit = form.handleSubmit(async (values) => {
-    form.clearErrors("root");
+    form.clearErrors('root');
 
     try {
       await resetPassword.mutateAsync(values.password);
       form.reset();
     } catch (error) {
-      form.setError("root", {
-        type: "server",
+      form.setError('root', {
+        type: 'server',
         message: getApiErrorMessage(error),
       });
     }
@@ -50,17 +50,14 @@ export function ResetSchoolUserPasswordForm({
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label
-            htmlFor={`password-${userId}`}
-            className="nf-label"
-          >
+          <label htmlFor={`password-${userId}`} className="nf-label">
             Новий пароль
           </label>
           <input
             id={`password-${userId}`}
             type="password"
             autoComplete="new-password"
-            {...form.register("password")}
+            {...form.register('password')}
             className="nf-input"
           />
           {form.formState.errors.password ? (
@@ -71,17 +68,14 @@ export function ResetSchoolUserPasswordForm({
         </div>
 
         <div>
-          <label
-            htmlFor={`password-confirmation-${userId}`}
-            className="nf-label"
-          >
+          <label htmlFor={`password-confirmation-${userId}`} className="nf-label">
             Повторіть пароль
           </label>
           <input
             id={`password-confirmation-${userId}`}
             type="password"
             autoComplete="new-password"
-            {...form.register("passwordConfirmation")}
+            {...form.register('passwordConfirmation')}
             className="nf-input"
           />
           {form.formState.errors.passwordConfirmation ? (
@@ -103,12 +97,8 @@ export function ResetSchoolUserPasswordForm({
         </p>
       ) : null}
 
-      <button
-        type="submit"
-        disabled={form.formState.isSubmitting}
-        className="nf-button"
-      >
-        {form.formState.isSubmitting ? "Змінюємо…" : "Змінити пароль"}
+      <button type="submit" disabled={form.formState.isSubmitting} className="nf-button">
+        {form.formState.isSubmitting ? 'Змінюємо…' : 'Змінити пароль'}
       </button>
     </form>
   );

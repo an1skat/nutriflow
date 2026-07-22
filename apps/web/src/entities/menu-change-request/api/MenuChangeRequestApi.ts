@@ -1,15 +1,15 @@
-import { apiClient, getCsrfHeaders } from "@/shared/api/HttpClient";
-import { toApiPaginationParams } from "@/shared/api/Pagination";
+import { apiClient, getCsrfHeaders } from '@/shared/api/HttpClient';
+import { toApiPaginationParams } from '@/shared/api/Pagination';
 
 import {
-  menuChangeRequestListSchema,
-  menuChangeRequestSchoolOptionsSchema,
-  menuChangeRequestSchema,
   type MenuChangeRequest,
   type MenuChangeRequestList,
   type MenuChangeRequestSchoolOption,
   type MenuChangeRequestStatus,
-} from "../model/MenuChangeRequest";
+  menuChangeRequestListSchema,
+  menuChangeRequestSchema,
+  menuChangeRequestSchoolOptionsSchema,
+} from '../model/MenuChangeRequest';
 
 export type MenuChangeRequestListRequest = {
   offset: number;
@@ -19,9 +19,9 @@ export type MenuChangeRequestListRequest = {
 };
 
 export async function fetchMenuChangeRequests(
-  request: MenuChangeRequestListRequest,
+  request: MenuChangeRequestListRequest
 ): Promise<MenuChangeRequestList> {
-  const response = await apiClient.get<unknown>("/menus/change-requests", {
+  const response = await apiClient.get<unknown>('/menus/change-requests', {
     params: {
       ...toApiPaginationParams(request),
       status: request.status,
@@ -32,33 +32,23 @@ export async function fetchMenuChangeRequests(
   return menuChangeRequestListSchema.parse(response.data);
 }
 
-export async function fetchMenuChangeRequest(
-  requestId: string,
-): Promise<MenuChangeRequest> {
-  const response = await apiClient.get<unknown>(
-    `/menus/change-requests/${requestId}`,
-  );
+export async function fetchMenuChangeRequest(requestId: string): Promise<MenuChangeRequest> {
+  const response = await apiClient.get<unknown>(`/menus/change-requests/${requestId}`);
 
   return menuChangeRequestSchema.parse(response.data);
 }
 
-export async function fetchMenuChangeRequestSchools(): Promise<
-  MenuChangeRequestSchoolOption[]
-> {
-  const response = await apiClient.get<unknown>(
-    "/menus/change-requests/schools",
-  );
+export async function fetchMenuChangeRequestSchools(): Promise<MenuChangeRequestSchoolOption[]> {
+  const response = await apiClient.get<unknown>('/menus/change-requests/schools');
 
   return menuChangeRequestSchoolOptionsSchema.parse(response.data);
 }
 
-export async function markMenuChangeRequestReviewed(
-  requestId: string,
-): Promise<MenuChangeRequest> {
+export async function markMenuChangeRequestReviewed(requestId: string): Promise<MenuChangeRequest> {
   const response = await apiClient.post<unknown>(
     `/menus/change-requests/${requestId}/reviewed`,
     null,
-    { headers: getCsrfHeaders() },
+    { headers: getCsrfHeaders() }
   );
 
   return menuChangeRequestSchema.parse(response.data);

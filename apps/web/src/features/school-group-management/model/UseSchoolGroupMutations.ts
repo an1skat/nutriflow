@@ -1,15 +1,12 @@
-"use client";
+'use client';
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { updateAdminSchoolGroup } from "@/entities/school-group/api/SchoolGroupApi";
-import { schoolGroupQueryKeys } from "@/entities/school-group/api/SchoolGroupQueries";
-import type { AgeGroup } from "@/entities/school-group/model/SchoolGroup";
+import { updateAdminSchoolGroup } from '@/entities/school-group/api/SchoolGroupApi';
+import { schoolGroupQueryKeys } from '@/entities/school-group/api/SchoolGroupQueries';
+import type { AgeGroup } from '@/entities/school-group/model/SchoolGroup';
 
-import type {
-  EditSchoolGroupFormValues,
-  SchoolGroupFormValues,
-} from "./SchoolGroupFormSchemas";
+import type { EditSchoolGroupFormValues, SchoolGroupFormValues } from './SchoolGroupFormSchemas';
 
 export function useUpdateSchoolGroup(schoolId: string, groupId: string) {
   const queryClient = useQueryClient();
@@ -30,7 +27,7 @@ export function useUpdateSchoolGroup(schoolId: string, groupId: string) {
 
 export function useRestoreSchoolGroup(
   schoolId: string,
-  groupsByAge: Partial<Record<AgeGroup, string>>,
+  groupsByAge: Partial<Record<AgeGroup, string>>
 ) {
   const queryClient = useQueryClient();
 
@@ -39,7 +36,7 @@ export function useRestoreSchoolGroup(
       const groupId = groupsByAge[values.age_group];
 
       if (!groupId) {
-        throw new Error("Ця вікова група ще не створена на сервері.");
+        throw new Error('Ця вікова група ще не створена на сервері.');
       }
 
       return updateAdminSchoolGroup(schoolId, groupId, {

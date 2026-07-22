@@ -1,25 +1,14 @@
-"use client";
+'use client';
 
-import {
-  useMutation,
-  useQueryClient,
-  type QueryClient,
-} from "@tanstack/react-query";
+import { type QueryClient, useMutation, useQueryClient } from '@tanstack/react-query';
 
-import {
-  getCurrentUser,
-  loginSession,
-  logoutSession,
-} from "@/entities/session/api/SessionApi";
-import { sessionQueryKeys } from "@/entities/session/api/SessionQueries";
-import type { AuthUser } from "@/entities/session/model/Session";
+import { getCurrentUser, loginSession, logoutSession } from '@/entities/session/api/SessionApi';
+import { sessionQueryKeys } from '@/entities/session/api/SessionQueries';
+import type { AuthUser } from '@/entities/session/model/Session';
 
-export function replaceAuthenticatedUser(
-  queryClient: QueryClient,
-  user: AuthUser | null,
-): void {
+export function replaceAuthenticatedUser(queryClient: QueryClient, user: AuthUser | null): void {
   queryClient.removeQueries({
-    predicate: (query) => query.queryKey[0] === "protected",
+    predicate: (query) => query.queryKey[0] === 'protected',
   });
   queryClient.setQueryData(sessionQueryKeys.currentUser(), user);
 }
@@ -34,7 +23,7 @@ export function useLogin() {
       const user = await getCurrentUser();
 
       if (!user) {
-        throw new Error("Сервер не підтвердив створену сесію.");
+        throw new Error('Сервер не підтвердив створену сесію.');
       }
 
       return user;

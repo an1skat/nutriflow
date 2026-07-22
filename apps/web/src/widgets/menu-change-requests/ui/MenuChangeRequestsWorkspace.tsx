@@ -1,49 +1,45 @@
-"use client";
+'use client';
 
-import { BellRing, CheckCheck, ChevronRight } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import { useEffect, useRef, useState } from 'react';
+
+import { useRouter } from 'next/navigation';
+
+import { BellRing, CheckCheck, ChevronRight } from 'lucide-react';
+import { toast } from 'sonner';
 
 import {
   useMarkMenuChangeRequestReviewed,
   useMenuChangeRequest,
-  useMenuChangeRequests,
   useMenuChangeRequestSchools,
-} from "@/entities/menu-change-request/api/MenuChangeRequestQueries";
+  useMenuChangeRequests,
+} from '@/entities/menu-change-request/api/MenuChangeRequestQueries';
 import type {
   MenuChangeRequest,
   MenuChangeRequestStatus,
-} from "@/entities/menu-change-request/model/MenuChangeRequest";
-import { getApiErrorMessage } from "@/shared/api/HttpClient";
-import { formatDate } from "@/shared/lib/FormatDate";
-import { RequestError } from "@/shared/ui/RequestError";
+} from '@/entities/menu-change-request/model/MenuChangeRequest';
+import { getApiErrorMessage } from '@/shared/api/HttpClient';
+import { formatDate } from '@/shared/lib/FormatDate';
+import { RequestError } from '@/shared/ui/RequestError';
 
-import { MenuChangeRequestDialog } from "./MenuChangeRequestDialog";
+import { MenuChangeRequestDialog } from './MenuChangeRequestDialog';
 
-export function MenuChangeRequestsWorkspace({
-  initialRequestId,
-}: {
-  initialRequestId?: string;
-}) {
+export function MenuChangeRequestsWorkspace({ initialRequestId }: { initialRequestId?: string }) {
   const router = useRouter();
-  const [status, setStatus] = useState<MenuChangeRequestStatus>("pending");
-  const [selectedSchoolId, setSelectedSchoolId] = useState("");
-  const [activeRequestId, setActiveRequestId] = useState<string | null>(
-    initialRequestId ?? null,
-  );
+  const [status, setStatus] = useState<MenuChangeRequestStatus>('pending');
+  const [selectedSchoolId, setSelectedSchoolId] = useState('');
+  const [activeRequestId, setActiveRequestId] = useState<string | null>(initialRequestId ?? null);
   const [hasDeepLink, setHasDeepLink] = useState(Boolean(initialRequestId));
   const attemptedReviewId = useRef<string | null>(null);
 
-  const shouldLoadList = status === "pending" || selectedSchoolId !== "";
+  const shouldLoadList = status === 'pending' || selectedSchoolId !== '';
   const requests = useMenuChangeRequests(
     {
       offset: 0,
       limit: 100,
       status,
-      schoolId: status === "reviewed" ? selectedSchoolId || undefined : undefined,
+      schoolId: status === 'reviewed' ? selectedSchoolId || undefined : undefined,
     },
-    shouldLoadList,
+    shouldLoadList
   );
   const schools = useMenuChangeRequestSchools();
   const requestDetails = useMenuChangeRequest(activeRequestId);
@@ -54,7 +50,7 @@ export function MenuChangeRequestsWorkspace({
     const request = requestDetails.data;
     if (
       !activeRequestId ||
-      request?.status !== "pending" ||
+      request?.status !== 'pending' ||
       attemptedReviewId.current === activeRequestId
     ) {
       return;
@@ -75,7 +71,7 @@ export function MenuChangeRequestsWorkspace({
     setActiveRequestId(null);
     if (hasDeepLink) {
       setHasDeepLink(false);
-      router.replace("/admin/menu-changes", { scroll: false });
+      router.replace('/admin/menu-changes', { scroll: false });
     }
   };
 
@@ -85,8 +81,8 @@ export function MenuChangeRequestsWorkspace({
         <p className="nf-eyebrow">Технолог</p>
         <h1 className="nf-title">Зміни меню від шкіл</h1>
         <p className="nf-description">
-          Відкрийте повідомлення, щоб переглянути повне порівняння. Зміни
-          кількості дітей сюди не потрапляють.
+          Відкрийте повідомлення, щоб переглянути повне порівняння. Зміни кількості дітей сюди не
+          потрапляють.
         </p>
       </header>
 
@@ -95,24 +91,21 @@ export function MenuChangeRequestsWorkspace({
         role="tablist"
         aria-label="Статус змін"
       >
-        <TabButton
-          active={status === "pending"}
-          onClick={() => setStatus("pending")}
-        >
+        <TabButton active={status === 'pending'} onClick={() => setStatus('pending')}>
           Вхідні
         </TabButton>
         <TabButton
-          active={status === "reviewed"}
+          active={status === 'reviewed'}
           onClick={() => {
-            setStatus("reviewed");
-            setSelectedSchoolId("");
+            setStatus('reviewed');
+            setSelectedSchoolId('');
           }}
         >
           Переглянуті
         </TabButton>
       </div>
 
-      {status === "reviewed" ? (
+      {status === 'reviewed' ? (
         <section className="nf-panel mb-5">
           <div className="nf-panel-body">
             <label className="nf-label" htmlFor="reviewed-school">
@@ -134,17 +127,14 @@ export function MenuChangeRequestsWorkspace({
             </select>
             {schools.isError ? (
               <div className="mt-3">
-                <RequestError
-                  error={schools.error}
-                  onRetry={() => void schools.refetch()}
-                />
+                <RequestError error={schools.error} onRetry={() => void schools.refetch()} />
               </div>
             ) : null}
           </div>
         </section>
       ) : null}
 
-      {status === "reviewed" && !selectedSchoolId ? (
+      {status === 'reviewed' && !selectedSchoolId ? (
         <EmptyState text="Оберіть школу, щоб переглянути історію змін." />
       ) : null}
 
@@ -159,18 +149,15 @@ export function MenuChangeRequestsWorkspace({
       ) : null}
 
       {shouldLoadList && requests.isError ? (
-        <RequestError
-          error={requests.error}
-          onRetry={() => void requests.refetch()}
-        />
+        <RequestError error={requests.error} onRetry={() => void requests.refetch()} />
       ) : null}
 
       {shouldLoadList && requests.data?.items.length === 0 ? (
         <EmptyState
           text={
-            status === "pending"
-              ? "Нових змін страв від шкіл немає."
-              : "Для цієї школи переглянутих змін поки немає."
+            status === 'pending'
+              ? 'Нових змін страв від шкіл немає.'
+              : 'Для цієї школи переглянутих змін поки немає.'
           }
         />
       ) : null}
@@ -215,8 +202,8 @@ function TabButton({
       aria-selected={active}
       className={`min-h-9 px-4 text-sm font-bold transition-colors ${
         active
-          ? "bg-white text-emerald-800 shadow-sm"
-          : "text-slate-600 hover:bg-white/60 hover:text-slate-900"
+          ? 'bg-white text-emerald-800 shadow-sm'
+          : 'text-slate-600 hover:bg-white/60 hover:text-slate-900'
       }`}
       onClick={onClick}
     >
@@ -232,9 +219,9 @@ function ChangeRequestSummary({
   request: MenuChangeRequest;
   onOpen: () => void;
 }) {
-  const pending = request.status === "pending";
+  const pending = request.status === 'pending';
   const changedDishCount = new Set(
-    request.changes.map((change) => `${change.weekday}:${change.position}`),
+    request.changes.map((change) => `${change.weekday}:${change.position}`)
   ).size;
   const dateLabel = getChangedDateLabel(request);
 
@@ -242,7 +229,7 @@ function ChangeRequestSummary({
     <button
       type="button"
       className={`group flex w-full items-center gap-4 border bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 ${
-        pending ? "border-amber-200" : "border-slate-200"
+        pending ? 'border-amber-200' : 'border-slate-200'
       }`}
       aria-label={`Переглянути зміни від школи ${request.school_name}`}
       onClick={onOpen}
@@ -250,8 +237,8 @@ function ChangeRequestSummary({
       <span
         className={`flex size-11 shrink-0 items-center justify-center border ${
           pending
-            ? "border-amber-200 bg-amber-50 text-amber-800"
-            : "border-emerald-200 bg-emerald-50 text-emerald-800"
+            ? 'border-amber-200 bg-amber-50 text-amber-800'
+            : 'border-emerald-200 bg-emerald-50 text-emerald-800'
         }`}
       >
         {pending ? (
@@ -274,7 +261,8 @@ function ChangeRequestSummary({
           Внесла зміни до денного меню за {dateLabel}
         </span>
         <span className="mt-1 block text-xs text-slate-500">
-          {request.menu_title} · змінено страв: {changedDishCount} · {formatDate(request.created_at)}
+          {request.menu_title} · змінено страв: {changedDishCount} ·{' '}
+          {formatDate(request.created_at)}
         </span>
       </span>
 
@@ -297,18 +285,14 @@ function EmptyState({ text }: { text: string }) {
 }
 
 function getChangedDateLabel(request: MenuChangeRequest): string {
-  const changedWeekdays = new Set(
-    request.changes.map((change) => change.weekday),
-  );
+  const changedWeekdays = new Set(request.changes.map((change) => change.weekday));
   const dates = request.days_snapshot
-    .flatMap((day) =>
-      changedWeekdays.has(day.weekday) && day.date ? [day.date] : [],
-    )
+    .flatMap((day) => (changedWeekdays.has(day.weekday) && day.date ? [day.date] : []))
     .sort();
   if (dates.length > 0) {
-    return dates.map(formatDayDate).join(", ");
+    return dates.map(formatDayDate).join(', ');
   }
-  return request.starts_on ? formatDayDate(request.starts_on) : "дату меню";
+  return request.starts_on ? formatDayDate(request.starts_on) : 'дату меню';
 }
 
 function formatDayDate(value: string): string {
@@ -316,9 +300,9 @@ function formatDayDate(value: string): string {
   if (Number.isNaN(date.getTime())) {
     return value;
   }
-  return new Intl.DateTimeFormat("uk-UA", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
+  return new Intl.DateTimeFormat('uk-UA', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
   }).format(date);
 }

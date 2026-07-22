@@ -1,10 +1,11 @@
-"use client";
+'use client';
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect } from 'react';
 
-import { useCurrentUser } from "@/entities/session/api/SessionQueries";
-import { hasPermission } from "@/features/access/model/AccessPolicy";
+import { useRouter } from 'next/navigation';
+
+import { useCurrentUser } from '@/entities/session/api/SessionQueries';
+import { hasPermission } from '@/features/access/model/AccessPolicy';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -16,22 +17,22 @@ export default function AdminPage() {
       return;
     }
 
-    if (hasPermission(user, "schools.manage")) {
-      router.replace("/admin/schools");
+    if (hasPermission(user, 'schools.manage')) {
+      router.replace('/admin/schools');
       return;
     }
 
-    if (hasPermission(user, "recipes.view")) {
-      router.replace("/admin/recipe");
+    if (hasPermission(user, 'recipes.view')) {
+      router.replace('/admin/recipe');
       return;
     }
 
-    if (user.role === "OWNER") {
-      router.replace("/admin/access");
+    if (user.role === 'OWNER') {
+      router.replace('/admin/access');
       return;
     }
 
-    router.replace("/");
+    router.replace('/');
   }, [router, user]);
 
   return (

@@ -1,37 +1,29 @@
-"use client";
+'use client';
 
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useQuery } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
-import {
-  useFieldArray,
-  useForm,
-  useWatch,
-} from "react-hook-form";
+import { type ReactNode, useState } from 'react';
 
-import { allergensQueryOptions } from "@/entities/recipe/api/RecipeQueries";
-import {
-  WEEKDAY_LABELS,
-  WEEKDAY_ORDER,
-} from "@/entities/weekly-menu/model/WeeklyMenu";
-import { getApiErrorMessage } from "@/shared/api/HttpClient";
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useQuery } from '@tanstack/react-query';
+import { useFieldArray, useForm, useWatch } from 'react-hook-form';
+
+import { allergensQueryOptions } from '@/entities/recipe/api/RecipeQueries';
+import { WEEKDAY_LABELS, WEEKDAY_ORDER } from '@/entities/weekly-menu/model/WeeklyMenu';
+import { getApiErrorMessage } from '@/shared/api/HttpClient';
 
 import {
+  type WeeklyMenuFormValues,
   createBlankDay,
   getRemainingWeekdays,
   resolveEffectiveDayDate,
   resolveEffectiveStartDate,
   weeklyMenuFormSchema,
-  type WeeklyMenuFormValues,
-} from "../model/WeeklyMenuFormSchema";
-import {
-  DailyMenuDayEditor,
-} from "./editor/WeeklyMenuDayEditor";
-import { ReadonlyFieldValue } from "./editor/WeeklyMenuItemFields";
+} from '../model/WeeklyMenuFormSchema';
+import { DailyMenuDayEditor } from './editor/WeeklyMenuDayEditor';
+import { ReadonlyFieldValue } from './editor/WeeklyMenuItemFields';
 
 type WeeklyMenuEditorFormProps = {
   initialValues: WeeklyMenuFormValues;
-  mode: "backoffice" | "school-readonly";
+  mode: 'backoffice' | 'school-readonly';
   submitLabel: string;
   saving: boolean;
   onSubmit: (values: WeeklyMenuFormValues) => Promise<void>;
@@ -48,8 +40,8 @@ export function WeeklyMenuEditorForm({
   headerNote,
   recipeCatalogEnabled = false,
 }: WeeklyMenuEditorFormProps) {
-  const allowStructureEdits = mode === "backoffice";
-  const allowValueEdits = mode !== "school-readonly";
+  const allowStructureEdits = mode === 'backoffice';
+  const allowValueEdits = mode !== 'school-readonly';
   const resolveReadonlyReferences = !allowValueEdits;
   const form = useForm<WeeklyMenuFormValues>({
     resolver: zodResolver(weeklyMenuFormSchema),
@@ -57,49 +49,49 @@ export function WeeklyMenuEditorForm({
   });
   const daysFieldArray = useFieldArray({
     control: form.control,
-    name: "days",
+    name: 'days',
   });
   const watchedDays = useWatch({
     control: form.control,
-    name: "days",
+    name: 'days',
   });
   const watchedStartDate = useWatch({
     control: form.control,
-    name: "starts_on",
+    name: 'starts_on',
   });
   const allergens = useQuery({
-    ...allergensQueryOptions(""),
+    ...allergensQueryOptions(''),
     enabled: recipeCatalogEnabled || resolveReadonlyReferences,
   });
   const remainingWeekdays = getRemainingWeekdays(watchedDays);
   const [activeDayIndex, setActiveDayIndex] = useState(0);
   const safeActiveDayIndex = Math.min(
     activeDayIndex,
-    Math.max(0, daysFieldArray.fields.length - 1),
+    Math.max(0, daysFieldArray.fields.length - 1)
   );
   const effectiveStartDate = resolveEffectiveStartDate(watchedStartDate);
 
   const submit = form.handleSubmit(
     async (values) => {
-      form.clearErrors("root");
+      form.clearErrors('root');
 
       try {
         await onSubmit(values);
         form.reset(values);
       } catch (error) {
-        form.setError("root", {
-          type: "server",
+        form.setError('root', {
+          type: 'server',
           message: getApiErrorMessage(error),
         });
       }
     },
     () => {
-      form.setError("root", {
-        type: "manual",
+      form.setError('root', {
+        type: 'manual',
         message:
-          "Форма не збереглась. Перевірте обов’язкові поля в назві меню, позиціях та виходах.",
+          'Форма не збереглась. Перевірте обов’язкові поля в назві меню, позиціях та виходах.',
       });
-    },
+    }
   );
 
   const activeDay = watchedDays[safeActiveDayIndex];
@@ -124,13 +116,13 @@ export function WeeklyMenuEditorForm({
             {allowValueEdits ? (
               <input
                 id="weekly-menu-title"
-                {...form.register("title")}
+                {...form.register('title')}
                 readOnly={!allowValueEdits}
-                aria-invalid={form.formState.errors.title ? "true" : "false"}
+                aria-invalid={form.formState.errors.title ? 'true' : 'false'}
                 className="nf-input"
               />
             ) : (
-              <ReadonlyFieldValue value={form.getValues("title")} />
+              <ReadonlyFieldValue value={form.getValues('title')} />
             )}
             {form.formState.errors.title ? (
               <p role="alert" className="nf-field-error">
@@ -146,7 +138,7 @@ export function WeeklyMenuEditorForm({
             {allowValueEdits ? (
               <select
                 id="weekly-menu-meal-type"
-                {...form.register("meal_type")}
+                {...form.register('meal_type')}
                 disabled={!allowValueEdits}
                 className="nf-input"
               >
@@ -155,9 +147,7 @@ export function WeeklyMenuEditorForm({
               </select>
             ) : (
               <ReadonlyFieldValue
-                value={
-                  form.getValues("meal_type") === "lunch" ? "Обід" : "Сніданок"
-                }
+                value={form.getValues('meal_type') === 'lunch' ? 'Обід' : 'Сніданок'}
               />
             )}
           </div>
@@ -171,15 +161,13 @@ export function WeeklyMenuEditorForm({
                 id="weekly-menu-cycle-week"
                 inputMode="numeric"
                 placeholder="1-4"
-                {...form.register("cycle_week")}
+                {...form.register('cycle_week')}
                 readOnly={!allowValueEdits}
-                aria-invalid={
-                  form.formState.errors.cycle_week ? "true" : "false"
-                }
+                aria-invalid={form.formState.errors.cycle_week ? 'true' : 'false'}
                 className="nf-input"
               />
             ) : (
-              <ReadonlyFieldValue value={form.getValues("cycle_week")} />
+              <ReadonlyFieldValue value={form.getValues('cycle_week')} />
             )}
             {form.formState.errors.cycle_week ? (
               <p role="alert" className="nf-field-error">
@@ -200,15 +188,13 @@ export function WeeklyMenuEditorForm({
               <input
                 id="weekly-menu-starts-on"
                 type="date"
-                {...form.register("starts_on")}
+                {...form.register('starts_on')}
                 readOnly={!allowValueEdits}
-                aria-invalid={
-                  form.formState.errors.starts_on ? "true" : "false"
-                }
+                aria-invalid={form.formState.errors.starts_on ? 'true' : 'false'}
                 className="nf-input"
               />
             ) : (
-              <ReadonlyFieldValue value={form.getValues("starts_on")} />
+              <ReadonlyFieldValue value={form.getValues('starts_on')} />
             )}
             {form.formState.errors.starts_on ? (
               <p role="alert" className="nf-field-error">
@@ -216,8 +202,8 @@ export function WeeklyMenuEditorForm({
               </p>
             ) : (
               <p className="mt-1 text-xs text-slate-500">
-                Для нового меню автоматично обирається найближчий наступний
-                понеділок: {effectiveStartDate}.
+                Для нового меню автоматично обирається найближчий наступний понеділок:{' '}
+                {effectiveStartDate}.
               </p>
             )}
           </div>
@@ -229,12 +215,12 @@ export function WeeklyMenuEditorForm({
             {allowValueEdits ? (
               <textarea
                 id="weekly-menu-notes"
-                {...form.register("notes")}
+                {...form.register('notes')}
                 readOnly={!allowValueEdits}
                 className="nf-input min-h-24"
               />
             ) : (
-              <ReadonlyFieldValue value={form.getValues("notes")} multiline />
+              <ReadonlyFieldValue value={form.getValues('notes')} multiline />
             )}
             {form.formState.errors.notes ? (
               <p role="alert" className="nf-field-error">
@@ -251,8 +237,8 @@ export function WeeklyMenuEditorForm({
             <h2 className="nf-panel-title">Дні тижня</h2>
             <p className="mt-1 text-xs text-slate-600">
               {allowStructureEdits
-                ? "Додавайте або прибирайте дні та керуйте кількістю страв."
-                : "Кількість рядків фіксована. Для шкільного акаунта всі поля доступні лише для перегляду."}
+                ? 'Додавайте або прибирайте дні та керуйте кількістю страв.'
+                : 'Кількість рядків фіксована. Для шкільного акаунта всі поля доступні лише для перегляду.'}
             </p>
           </div>
         </div>
@@ -262,8 +248,8 @@ export function WeeklyMenuEditorForm({
               const day = watchedDays[index];
               const resolvedDayDate = resolveEffectiveDayDate(
                 watchedStartDate,
-                WEEKDAY_ORDER.indexOf(day?.weekday ?? "monday"),
-                day?.date,
+                WEEKDAY_ORDER.indexOf(day?.weekday ?? 'monday'),
+                day?.date
               );
 
               return (
@@ -273,18 +259,16 @@ export function WeeklyMenuEditorForm({
                   onClick={() => setActiveDayIndex(index)}
                   className={`border px-3 py-2 text-left ${
                     index === safeActiveDayIndex
-                      ? "border-(--nf-brand-dark) bg-(--nf-brand) text-white"
-                      : "border-(--nf-line) bg-white hover:bg-slate-50"
+                      ? 'border-(--nf-brand-dark) bg-(--nf-brand) text-white'
+                      : 'border-(--nf-line) bg-white hover:bg-slate-50'
                   }`}
                 >
                   <div className="text-sm font-bold">
-                    {WEEKDAY_LABELS[day?.weekday ?? "monday"]}
+                    {WEEKDAY_LABELS[day?.weekday ?? 'monday']}
                   </div>
                   <div
                     className={`text-xs ${
-                      index === safeActiveDayIndex
-                        ? "text-white/80"
-                        : "text-slate-500"
+                      index === safeActiveDayIndex ? 'text-white/80' : 'text-slate-500'
                     }`}
                   >
                     {resolvedDayDate}
@@ -312,8 +296,7 @@ export function WeeklyMenuEditorForm({
             </div>
           ) : null}
 
-          {form.formState.errors.days &&
-          !Array.isArray(form.formState.errors.days) ? (
+          {form.formState.errors.days && !Array.isArray(form.formState.errors.days) ? (
             <p role="alert" className="nf-error">
               {form.formState.errors.days.message}
             </p>
@@ -350,27 +333,18 @@ export function WeeklyMenuEditorForm({
 
       {allowValueEdits ? (
         <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="submit"
-            disabled={saving}
-            className="nf-button nf-button-primary"
-          >
-            {saving ? "Зберігаємо…" : submitLabel}
+          <button type="submit" disabled={saving} className="nf-button nf-button-primary">
+            {saving ? 'Зберігаємо…' : submitLabel}
           </button>
           {form.formState.isDirty ? (
-            <p className="text-xs text-slate-600">
-              Є незбережені зміни у поточній формі.
-            </p>
+            <p className="text-xs text-slate-600">Є незбережені зміни у поточній формі.</p>
           ) : (
-            <p className="text-xs text-slate-600">
-              Зміни синхронізовані з останнім збереженням.
-            </p>
+            <p className="text-xs text-slate-600">Зміни синхронізовані з останнім збереженням.</p>
           )}
         </div>
       ) : (
         <p className="text-xs text-slate-600">
-          Шкільний акаунт бачить лише опубліковане меню без можливості
-          редагування.
+          Шкільний акаунт бачить лише опубліковане меню без можливості редагування.
         </p>
       )}
     </form>

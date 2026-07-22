@@ -1,37 +1,39 @@
-"use client";
+'use client';
 
-import { useQuery } from "@tanstack/react-query";
-import Link from "next/link";
-import { startTransition, useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
+import { startTransition, useEffect, useMemo, useState } from 'react';
 
-import { adminUsersQueryOptions } from "@/entities/admin-user/api/AdminUserQueries";
-import { schoolsQueryOptions } from "@/entities/school/api/SchoolQueries";
-import { useCurrentUser } from "@/entities/session/api/SessionQueries";
-import { hasPermission } from "@/features/access/model/AccessPolicy";
+import Link from 'next/link';
+
+import { useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
+
+import { adminUsersQueryOptions } from '@/entities/admin-user/api/AdminUserQueries';
+import { schoolsQueryOptions } from '@/entities/school/api/SchoolQueries';
+import { useCurrentUser } from '@/entities/session/api/SessionQueries';
+import { useWeeklyMenus } from '@/entities/weekly-menu/api/WeeklyMenuQueries';
+import type { WeeklyMenu } from '@/entities/weekly-menu/model/WeeklyMenu';
+import { hasPermission } from '@/features/access/model/AccessPolicy';
 import {
   useArchiveWeeklyMenu,
   useCreateWeeklyMenu,
   usePublishWeeklyMenu,
   useRevokeWeeklyMenus,
   useUpdateWeeklyMenu,
-} from "@/features/weekly-menu-editor/model/UseWeeklyMenuMutations";
+} from '@/features/weekly-menu-editor/model/UseWeeklyMenuMutations';
 import {
+  type WeeklyMenuFormValues,
   createBlankWeeklyMenuFormValues,
   formValuesToWeeklyMenuPayload,
   weeklyMenuToFormValues,
-  type WeeklyMenuFormValues,
-} from "@/features/weekly-menu-editor/model/WeeklyMenuFormSchema";
-import { WeeklyMenuEditorForm } from "@/features/weekly-menu-editor/ui/WeeklyMenuEditorForm";
-import { WeeklyMenuExcelTools } from "@/features/weekly-menu-excel/ui/WeeklyMenuExcelTools";
-import { getApiErrorMessage } from "@/shared/api/HttpClient";
-import { formatDate } from "@/shared/lib/FormatDate";
-import { useConfirm } from "@/shared/ui/ConfirmDialog";
-import { RequestError } from "@/shared/ui/RequestError";
-import { useWeeklyMenus } from "@/entities/weekly-menu/api/WeeklyMenuQueries";
-import type { WeeklyMenu } from "@/entities/weekly-menu/model/WeeklyMenu";
+} from '@/features/weekly-menu-editor/model/WeeklyMenuFormSchema';
+import { WeeklyMenuEditorForm } from '@/features/weekly-menu-editor/ui/WeeklyMenuEditorForm';
+import { WeeklyMenuExcelTools } from '@/features/weekly-menu-excel/ui/WeeklyMenuExcelTools';
+import { getApiErrorMessage } from '@/shared/api/HttpClient';
+import { formatDate } from '@/shared/lib/FormatDate';
+import { useConfirm } from '@/shared/ui/ConfirmDialog';
+import { RequestError } from '@/shared/ui/RequestError';
 
-import { WeeklyMenuPicker } from "./WeeklyMenuPicker";
+import { WeeklyMenuPicker } from './WeeklyMenuPicker';
 
 export function WeeklyMenuAdminWorkspace() {
   const confirm = useConfirm();
@@ -49,9 +51,7 @@ export function WeeklyMenuAdminWorkspace() {
   const [menuOverride, setMenuOverride] = useState<WeeklyMenu | null>(null);
   const [replaceExisting, setReplaceExisting] = useState(true);
   const [selectedSchoolIds, setSelectedSchoolIds] = useState<string[]>([]);
-  const [selectedRevokeCopyIds, setSelectedRevokeCopyIds] = useState<string[]>(
-    [],
-  );
+  const [selectedRevokeCopyIds, setSelectedRevokeCopyIds] = useState<string[]>([]);
 
   const availableMenus = useMemo(() => {
     const items = menus.data?.items ?? [];
@@ -66,9 +66,7 @@ export function WeeklyMenuAdminWorkspace() {
       return [menuOverride, ...items];
     }
 
-    return items.map((menu) =>
-      menu.id === menuOverride.id ? menuOverride : menu,
-    );
+    return items.map((menu) => (menu.id === menuOverride.id ? menuOverride : menu));
   }, [menuOverride, menus.data?.items]);
 
   useEffect(() => {
@@ -89,38 +87,36 @@ export function WeeklyMenuAdminWorkspace() {
     return availableMenus.find((menu) => menu.id === selectedMenuId) ?? null;
   }, [availableMenus, isCreatingNewMenu, selectedMenuId]);
 
-  const updateWeeklyMenu = useUpdateWeeklyMenu(selectedMenu?.id ?? "");
-  const archiveWeeklyMenu = useArchiveWeeklyMenu(selectedMenu?.id ?? "");
-  const publishWeeklyMenu = usePublishWeeklyMenu(selectedMenu?.id ?? "");
+  const updateWeeklyMenu = useUpdateWeeklyMenu(selectedMenu?.id ?? '');
+  const archiveWeeklyMenu = useArchiveWeeklyMenu(selectedMenu?.id ?? '');
+  const publishWeeklyMenu = usePublishWeeklyMenu(selectedMenu?.id ?? '');
   const revokeWeeklyMenus = useRevokeWeeklyMenus();
   const publishedMenuCopies = useWeeklyMenus({
     offset: 0,
     limit: 100,
     source_menu_id: selectedMenu?.id,
-    status: "published",
+    status: 'published',
     enabled: Boolean(selectedMenu),
   });
   const archivedMenuCopies = useWeeklyMenus({
     offset: 0,
     limit: 100,
     source_menu_id: selectedMenu?.id,
-    status: "archived",
+    status: 'archived',
     enabled: Boolean(selectedMenu),
   });
 
   const canInspectSchools = Boolean(
-    user &&
-    (hasPermission(user, "schools.manage") ||
-      hasPermission(user, "menus.manage")),
+    user && (hasPermission(user, 'schools.manage') || hasPermission(user, 'menus.manage'))
   );
   const canSelectTargetSchools = Boolean(
-    user && (user.role === "OWNER" || user.role === "TECHNOLOGIST"),
+    user && (user.role === 'OWNER' || user.role === 'TECHNOLOGIST')
   );
   const canUseRecipeCatalog = Boolean(
     user &&
-    (user.role === "OWNER" ||
-      hasPermission(user, "recipes.manage") ||
-      hasPermission(user, "menus.manage")),
+    (user.role === 'OWNER' ||
+      hasPermission(user, 'recipes.manage') ||
+      hasPermission(user, 'menus.manage'))
   );
 
   const schools = useQuery({
@@ -136,34 +132,33 @@ export function WeeklyMenuAdminWorkspace() {
       offset: 0,
       limit: 100,
     }),
-    enabled: user?.role === "OWNER",
+    enabled: user?.role === 'OWNER',
   });
 
   const activeSchools = useMemo(
     () => schools.data?.items.filter((school) => school.is_active) ?? [],
-    [schools.data?.items],
+    [schools.data?.items]
   );
   const schoolById = useMemo(
-    () =>
-      new Map((schools.data?.items ?? []).map((school) => [school.id, school])),
-    [schools.data?.items],
+    () => new Map((schools.data?.items ?? []).map((school) => [school.id, school])),
+    [schools.data?.items]
   );
   const activeSchoolIds = useMemo(
     () => new Set(activeSchools.map((school) => school.id)),
-    [activeSchools],
+    [activeSchools]
   );
   const effectiveSelectedSchoolIds = useMemo(
     () => selectedSchoolIds.filter((schoolId) => activeSchoolIds.has(schoolId)),
-    [activeSchoolIds, selectedSchoolIds],
+    [activeSchoolIds, selectedSchoolIds]
   );
 
   const ownerSchoolGroups = useMemo(() => {
-    if (user?.role !== "OWNER") {
+    if (user?.role !== 'OWNER') {
       return [];
     }
 
     const adminLabelById = new Map(
-      (adminUsers.data?.items ?? []).map((admin) => [admin.id, admin.username]),
+      (adminUsers.data?.items ?? []).map((admin) => [admin.id, admin.username])
     );
     const groups = new Map<
       string,
@@ -175,12 +170,11 @@ export function WeeklyMenuAdminWorkspace() {
     >();
 
     for (const school of activeSchools) {
-      const key = school.admin_owner_id ?? "unassigned";
+      const key = school.admin_owner_id ?? 'unassigned';
       const label =
         school.admin_owner_id === null
-          ? "Без закріпленого адміністратора"
-          : (adminLabelById.get(school.admin_owner_id) ??
-            `Адміністратор ${school.admin_owner_id}`);
+          ? 'Без закріпленого адміністратора'
+          : (adminLabelById.get(school.admin_owner_id) ?? `Адміністратор ${school.admin_owner_id}`);
       const existing = groups.get(key);
 
       if (existing) {
@@ -195,9 +189,7 @@ export function WeeklyMenuAdminWorkspace() {
       });
     }
 
-    return [...groups.values()].sort((left, right) =>
-      left.label.localeCompare(right.label, "uk"),
-    );
+    return [...groups.values()].sort((left, right) => left.label.localeCompare(right.label, 'uk'));
   }, [activeSchools, adminUsers.data?.items, user?.role]);
 
   const revokableMenuCopies = useMemo(() => {
@@ -207,13 +199,13 @@ export function WeeklyMenuAdminWorkspace() {
     ];
     const uniqueCopies = new Map(copies.map((menu) => [menu.id, menu]));
     return [...uniqueCopies.values()].sort((left, right) =>
-      left.title.localeCompare(right.title, "uk"),
+      left.title.localeCompare(right.title, 'uk')
     );
   }, [archivedMenuCopies.data?.items, publishedMenuCopies.data?.items]);
 
   const revokeSchoolGroups = useMemo(() => {
     const adminLabelById = new Map(
-      (adminUsers.data?.items ?? []).map((admin) => [admin.id, admin.username]),
+      (adminUsers.data?.items ?? []).map((admin) => [admin.id, admin.username])
     );
     const groups = new Map<
       string,
@@ -225,21 +217,15 @@ export function WeeklyMenuAdminWorkspace() {
     >();
 
     for (const copy of revokableMenuCopies) {
-      const school = copy.school_id
-        ? schoolById.get(copy.school_id)
-        : undefined;
-      const key =
-        user?.role === "OWNER"
-          ? (school?.admin_owner_id ?? "unassigned")
-          : "schools";
+      const school = copy.school_id ? schoolById.get(copy.school_id) : undefined;
+      const key = user?.role === 'OWNER' ? (school?.admin_owner_id ?? 'unassigned') : 'schools';
       const label =
-        user?.role === "OWNER"
-          ? school?.admin_owner_id === null ||
-            school?.admin_owner_id === undefined
-            ? "Без закріпленого адміністратора"
+        user?.role === 'OWNER'
+          ? school?.admin_owner_id === null || school?.admin_owner_id === undefined
+            ? 'Без закріпленого адміністратора'
             : (adminLabelById.get(school.admin_owner_id) ??
               `Адміністратор ${school.admin_owner_id}`)
-          : "Школи з цим меню";
+          : 'Школи з цим меню';
       const existing = groups.get(key);
 
       if (existing) {
@@ -254,9 +240,7 @@ export function WeeklyMenuAdminWorkspace() {
       });
     }
 
-    return [...groups.values()].sort((left, right) =>
-      left.label.localeCompare(right.label, "uk"),
-    );
+    return [...groups.values()].sort((left, right) => left.label.localeCompare(right.label, 'uk'));
   }, [adminUsers.data?.items, revokableMenuCopies, schoolById, user?.role]);
 
   const effectiveSelectedRevokeCopyIds = useMemo(() => {
@@ -278,8 +262,7 @@ export function WeeklyMenuAdminWorkspace() {
     publishWeeklyMenu.isPending ||
     (canSelectTargetSchools && effectiveSelectedSchoolIds.length === 0) ||
     (canSelectTargetSchools && schools.isError);
-  const revokeCopiesLoading =
-    publishedMenuCopies.isPending || archivedMenuCopies.isPending;
+  const revokeCopiesLoading = publishedMenuCopies.isPending || archivedMenuCopies.isPending;
   const revokeCopiesError =
     (publishedMenuCopies.isError ? publishedMenuCopies.error : null) ??
     (archivedMenuCopies.isError ? archivedMenuCopies.error : null);
@@ -294,7 +277,7 @@ export function WeeklyMenuAdminWorkspace() {
     if (selectedMenu) {
       const updatedMenu = await updateWeeklyMenu.mutateAsync(payload);
       setMenuOverride(updatedMenu);
-      toast.success("Тижневе меню збережено.");
+      toast.success('Тижневе меню збережено.');
       return;
     }
 
@@ -302,7 +285,19 @@ export function WeeklyMenuAdminWorkspace() {
     setMenuOverride(createdMenu);
     setIsCreatingNewMenu(false);
     setSelectedMenuId(createdMenu.id);
-    toast.success("Тижневе меню створено.");
+    toast.success('Тижневе меню створено.');
+  };
+
+  const confirmSave = async (values: WeeklyMenuFormValues) => {
+    const confirmed = await confirm({
+      title: selectedMenu ? 'Зберегти зміни в меню?' : 'Створити меню?',
+      description: 'Ви впевнені, що хочете зберегти меню?',
+      confirmLabel: selectedMenu ? 'Зберегти' : 'Створити',
+    });
+
+    if (confirmed) {
+      await handleSave(values);
+    }
   };
 
   const handleImportedMenus = (importedMenus: WeeklyMenu[]) => {
@@ -329,11 +324,11 @@ export function WeeklyMenuAdminWorkspace() {
           }
         : {
             replace_existing: replaceExisting,
-          },
+          }
     );
 
     toast.success(
-      `Розсилку завершено. Створено: ${result.created_menu_ids.length}, оновлено: ${result.replaced_menu_ids.length}, пропущено: ${result.skipped_existing_school_ids.length}.`,
+      `Розсилку завершено. Створено: ${result.created_menu_ids.length}, оновлено: ${result.replaced_menu_ids.length}, пропущено: ${result.skipped_existing_school_ids.length}.`
     );
   };
 
@@ -343,10 +338,10 @@ export function WeeklyMenuAdminWorkspace() {
     }
 
     const confirmed = await confirm({
-      title: "Архівувати тижневе меню?",
+      title: 'Архівувати тижневе меню?',
       description: `Меню "${selectedMenu.title}" буде перенесено в архів і відкликано в усіх школах.`,
-      confirmLabel: "Архівувати",
-      variant: "danger",
+      confirmLabel: 'Архівувати',
+      variant: 'danger',
     });
 
     if (!confirmed) {
@@ -354,17 +349,14 @@ export function WeeklyMenuAdminWorkspace() {
     }
 
     const archivedMenuId = selectedMenu.id;
-    const nextMenu =
-      availableMenus.find((menu) => menu.id !== archivedMenuId) ?? null;
+    const nextMenu = availableMenus.find((menu) => menu.id !== archivedMenuId) ?? null;
 
     try {
       await archiveWeeklyMenu.mutateAsync();
-      setMenuOverride((currentMenu) =>
-        currentMenu?.id === archivedMenuId ? null : currentMenu,
-      );
+      setMenuOverride((currentMenu) => (currentMenu?.id === archivedMenuId ? null : currentMenu));
       setSelectedMenuId(nextMenu?.id ?? null);
       setIsCreatingNewMenu(false);
-      toast.success("Тижневе меню перенесено в архів і відкликано у школах.");
+      toast.success('Тижневе меню перенесено в архів і відкликано у школах.');
     } catch (error) {
       toast.error(getApiErrorMessage(error));
     }
@@ -376,10 +368,10 @@ export function WeeklyMenuAdminWorkspace() {
     }
 
     const confirmed = await confirm({
-      title: "Відкликати меню у вибраних школах?",
+      title: 'Відкликати меню у вибраних школах?',
       description: `Меню "${selectedMenu.title}" буде відкликано у школах: ${effectiveSelectedRevokeCopyIds.length}.`,
-      confirmLabel: "Відкликати",
-      variant: "danger",
+      confirmLabel: 'Відкликати',
+      variant: 'danger',
     });
 
     if (!confirmed) {
@@ -387,9 +379,7 @@ export function WeeklyMenuAdminWorkspace() {
     }
 
     try {
-      const revokedMenus = await revokeWeeklyMenus.mutateAsync(
-        effectiveSelectedRevokeCopyIds,
-      );
+      const revokedMenus = await revokeWeeklyMenus.mutateAsync(effectiveSelectedRevokeCopyIds);
       setSelectedRevokeCopyIds([]);
       toast.success(`Меню відкликано у школах: ${revokedMenus.length}.`);
     } catch (error) {
@@ -403,15 +393,12 @@ export function WeeklyMenuAdminWorkspace() {
         <p className="nf-eyebrow">Меню</p>
         <h1 className="nf-title">Тижневе меню</h1>
         <p className="nf-description">
-          Створюйте й редагуйте тижневі меню, а потім розсилайте їх школам. Для
-          адміністратора розсилка піде лише у його школи, а власник і технолог
-          можуть вручну обрати будь-які цільові школи.
+          Створюйте й редагуйте тижневі меню, а потім розсилайте їх школам. Для адміністратора
+          розсилка піде лише у його школи, а власник і технолог можуть вручну обрати будь-які
+          цільові школи.
         </p>
         <div className="mt-4">
-          <Link
-            href="/admin/menus/archive"
-            className="nf-button nf-button-secondary"
-          >
+          <Link href="/admin/menus/archive" className="nf-button nf-button-secondary">
             Архів меню
           </Link>
         </div>
@@ -448,9 +435,9 @@ export function WeeklyMenuAdminWorkspace() {
           key={editorKey}
           initialValues={editorInitialValues}
           mode="backoffice"
-          submitLabel={selectedMenu ? "Зберегти меню" : "Створити меню"}
+          submitLabel={selectedMenu ? 'Зберегти меню' : 'Створити меню'}
           saving={savePending}
-          onSubmit={handleSave}
+          onSubmit={confirmSave}
           recipeCatalogEnabled={canUseRecipeCatalog}
           headerNote={
             selectedMenu ? (
@@ -459,15 +446,12 @@ export function WeeklyMenuAdminWorkspace() {
                   Редагується меню: {selectedMenu.title}
                 </p>
                 <p className="text-xs text-slate-600">
-                  Статус: {selectedMenu.status} · Оновлено{" "}
-                  {formatDate(selectedMenu.updated_at)}
+                  Статус: {selectedMenu.status} · Оновлено {formatDate(selectedMenu.updated_at)}
                 </p>
               </div>
             ) : (
               <div className="space-y-1">
-                <p className="text-sm font-medium text-slate-900">
-                  Нове тижневе меню
-                </p>
+                <p className="text-sm font-medium text-slate-900">Нове тижневе меню</p>
                 <p className="text-xs text-slate-600">
                   Спочатку збережіть меню, а вже потім розсилайте його у школи.
                 </p>
@@ -487,9 +471,7 @@ export function WeeklyMenuAdminWorkspace() {
                   <input
                     type="checkbox"
                     checked={replaceExisting}
-                    onChange={(event) =>
-                      setReplaceExisting(event.target.checked)
-                    }
+                    onChange={(event) => setReplaceExisting(event.target.checked)}
                   />
                   <span className="text-sm text-slate-700">
                     Оновлювати вже розіслані копії меню
@@ -503,9 +485,7 @@ export function WeeklyMenuAdminWorkspace() {
                         type="button"
                         className="nf-button"
                         onClick={() =>
-                          setSelectedSchoolIds(
-                            activeSchools.map((school) => school.id),
-                          )
+                          setSelectedSchoolIds(activeSchools.map((school) => school.id))
                         }
                       >
                         Обрати всі
@@ -519,33 +499,29 @@ export function WeeklyMenuAdminWorkspace() {
                       </button>
                     </div>
 
-                    {schools.isPending ||
-                    (user.role === "OWNER" && adminUsers.isPending) ? (
+                    {schools.isPending || (user.role === 'OWNER' && adminUsers.isPending) ? (
                       <p role="status" className="text-sm text-slate-600">
                         Завантажуємо школи для розсилки…
                       </p>
                     ) : null}
 
                     {schools.isError ? (
-                      <RequestError
-                        error={schools.error}
-                        onRetry={() => void schools.refetch()}
-                      />
+                      <RequestError error={schools.error} onRetry={() => void schools.refetch()} />
                     ) : null}
 
-                    {user.role === "OWNER" && adminUsers.isError ? (
+                    {user.role === 'OWNER' && adminUsers.isError ? (
                       <RequestError
                         error={adminUsers.error}
                         onRetry={() => void adminUsers.refetch()}
                       />
                     ) : null}
 
-                    {(user.role === "OWNER"
+                    {(user.role === 'OWNER'
                       ? ownerSchoolGroups
                       : [
                           {
-                            key: "all-schools",
-                            label: "Усі активні школи",
+                            key: 'all-schools',
+                            label: 'Усі активні школи',
                             schools: activeSchools,
                           },
                         ]
@@ -561,22 +537,16 @@ export function WeeklyMenuAdminWorkspace() {
                             <label key={school.id} className="nf-checkbox-row">
                               <input
                                 type="checkbox"
-                                checked={effectiveSelectedSchoolIds.includes(
-                                  school.id,
-                                )}
+                                checked={effectiveSelectedSchoolIds.includes(school.id)}
                                 onChange={(event) =>
                                   setSelectedSchoolIds((previous) =>
                                     event.target.checked
                                       ? [...previous, school.id]
-                                      : previous.filter(
-                                          (id) => id !== school.id,
-                                        ),
+                                      : previous.filter((id) => id !== school.id)
                                   )
                                 }
                               />
-                              <span className="text-sm text-slate-700">
-                                {school.name}
-                              </span>
+                              <span className="text-sm text-slate-700">{school.name}</span>
                             </label>
                           ))}
                         </div>
@@ -586,8 +556,7 @@ export function WeeklyMenuAdminWorkspace() {
                 ) : schools.data?.items.length ? (
                   <div className="space-y-2">
                     <p className="text-sm text-slate-700">
-                      Меню буде розіслано у всі активні школи, які закріплені за
-                      вашим акаунтом.
+                      Меню буде розіслано у всі активні школи, які закріплені за вашим акаунтом.
                     </p>
                     <ul className="grid gap-1 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-3">
                       {schools.data.items
@@ -599,9 +568,8 @@ export function WeeklyMenuAdminWorkspace() {
                   </div>
                 ) : (
                   <p className="text-sm text-slate-700">
-                    Розсилка піде у всі активні школи, закріплені за вашим
-                    адміністратором. Список шкіл недоступний без додаткового
-                    права перегляду шкіл.
+                    Розсилка піде у всі активні школи, закріплені за вашим адміністратором. Список
+                    шкіл недоступний без додаткового права перегляду шкіл.
                   </p>
                 )}
 
@@ -611,9 +579,7 @@ export function WeeklyMenuAdminWorkspace() {
                   className="nf-button nf-button-primary w-full sm:w-auto"
                   onClick={() => void handlePublish()}
                 >
-                  {publishWeeklyMenu.isPending
-                    ? "Розсилаємо…"
-                    : "Розіслати школам"}
+                  {publishWeeklyMenu.isPending ? 'Розсилаємо…' : 'Розіслати школам'}
                 </button>
               </div>
             </section>
@@ -629,9 +595,7 @@ export function WeeklyMenuAdminWorkspace() {
                     className="nf-button"
                     disabled={!revokableMenuCopies.length}
                     onClick={() =>
-                      setSelectedRevokeCopyIds(
-                        revokableMenuCopies.map((copy) => copy.id),
-                      )
+                      setSelectedRevokeCopyIds(revokableMenuCopies.map((copy) => copy.id))
                     }
                   >
                     Обрати всі
@@ -662,12 +626,8 @@ export function WeeklyMenuAdminWorkspace() {
                   />
                 ) : null}
 
-                {!revokeCopiesLoading &&
-                !revokeCopiesError &&
-                revokableMenuCopies.length === 0 ? (
-                  <div className="nf-empty">
-                    Це меню поки не розіслано жодній школі.
-                  </div>
+                {!revokeCopiesLoading && !revokeCopiesError && revokableMenuCopies.length === 0 ? (
+                  <div className="nf-empty">Це меню поки не розіслано жодній школі.</div>
                 ) : null}
 
                 {revokeSchoolGroups.map((group) => (
@@ -677,31 +637,24 @@ export function WeeklyMenuAdminWorkspace() {
                     </p>
                     <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
                       {group.copies.map((copy) => {
-                        const school = copy.school_id
-                          ? schoolById.get(copy.school_id)
-                          : undefined;
+                        const school = copy.school_id ? schoolById.get(copy.school_id) : undefined;
 
                         return (
                           <label key={copy.id} className="nf-checkbox-row">
                             <input
                               type="checkbox"
-                              checked={effectiveSelectedRevokeCopyIds.includes(
-                                copy.id,
-                              )}
+                              checked={effectiveSelectedRevokeCopyIds.includes(copy.id)}
                               onChange={(event) =>
                                 setSelectedRevokeCopyIds((previous) =>
                                   event.target.checked
                                     ? [...previous, copy.id]
-                                    : previous.filter((id) => id !== copy.id),
+                                    : previous.filter((id) => id !== copy.id)
                                 )
                               }
                             />
                             <span className="text-sm text-slate-700">
-                              {school?.name ??
-                                `Школа ${copy.school_id ?? copy.id}`}
-                              {copy.status === "archived"
-                                ? " · архів школи"
-                                : ""}
+                              {school?.name ?? `Школа ${copy.school_id ?? copy.id}`}
+                              {copy.status === 'archived' ? ' · архів школи' : ''}
                             </span>
                           </label>
                         );
@@ -713,15 +666,12 @@ export function WeeklyMenuAdminWorkspace() {
                 <button
                   type="button"
                   disabled={
-                    revokeWeeklyMenus.isPending ||
-                    effectiveSelectedRevokeCopyIds.length === 0
+                    revokeWeeklyMenus.isPending || effectiveSelectedRevokeCopyIds.length === 0
                   }
                   className="nf-button nf-button-danger w-full sm:w-auto"
                   onClick={() => void handleRevokeSelectedCopies()}
                 >
-                  {revokeWeeklyMenus.isPending
-                    ? "Відкликаємо…"
-                    : "Відкликати у вибраних школах"}
+                  {revokeWeeklyMenus.isPending ? 'Відкликаємо…' : 'Відкликати у вибраних школах'}
                 </button>
               </div>
             </section>

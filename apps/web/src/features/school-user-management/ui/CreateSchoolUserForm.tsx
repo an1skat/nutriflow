@@ -1,40 +1,36 @@
-"use client";
+'use client';
 
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
 
-import { getApiErrorMessage } from "@/shared/api/HttpClient";
+import { getApiErrorMessage } from '@/shared/api/HttpClient';
 
 import {
-  createSchoolUserFormSchema,
   type CreateSchoolUserFormValues,
-} from "../model/SchoolUserFormSchemas";
-import { useCreateSchoolUser } from "../model/UseSchoolUserMutations";
+  createSchoolUserFormSchema,
+} from '../model/SchoolUserFormSchemas';
+import { useCreateSchoolUser } from '../model/UseSchoolUserMutations';
 
-export function CreateSchoolUserForm({
-  schoolId,
-}: {
-  schoolId: string;
-}) {
+export function CreateSchoolUserForm({ schoolId }: { schoolId: string }) {
   const createUser = useCreateSchoolUser(schoolId);
   const form = useForm<CreateSchoolUserFormValues>({
     resolver: zodResolver(createSchoolUserFormSchema),
     defaultValues: {
-      username: "",
-      email: "",
-      password: "",
+      username: '',
+      email: '',
+      password: '',
     },
   });
 
   const onSubmit = form.handleSubmit(async (values) => {
-    form.clearErrors("root");
+    form.clearErrors('root');
 
     try {
       await createUser.mutateAsync(values);
       form.reset();
     } catch (error) {
-      form.setError("root", {
-        type: "server",
+      form.setError('root', {
+        type: 'server',
         message: getApiErrorMessage(error),
       });
     }
@@ -44,16 +40,13 @@ export function CreateSchoolUserForm({
     <form onSubmit={onSubmit} className="space-y-3">
       <div className="grid gap-3 md:grid-cols-3">
         <div>
-          <label
-            htmlFor="new-user-username"
-            className="nf-label"
-          >
+          <label htmlFor="new-user-username" className="nf-label">
             Логін
           </label>
           <input
             id="new-user-username"
             autoComplete="off"
-            {...form.register("username")}
+            {...form.register('username')}
             className="nf-input"
           />
           {form.formState.errors.username ? (
@@ -64,17 +57,14 @@ export function CreateSchoolUserForm({
         </div>
 
         <div>
-          <label
-            htmlFor="new-user-email"
-            className="nf-label"
-          >
+          <label htmlFor="new-user-email" className="nf-label">
             Email, необов’язково
           </label>
           <input
             id="new-user-email"
             type="email"
             autoComplete="off"
-            {...form.register("email")}
+            {...form.register('email')}
             className="nf-input"
           />
           {form.formState.errors.email ? (
@@ -85,17 +75,14 @@ export function CreateSchoolUserForm({
         </div>
 
         <div>
-          <label
-            htmlFor="new-user-password"
-            className="nf-label"
-          >
+          <label htmlFor="new-user-password" className="nf-label">
             Початковий пароль
           </label>
           <input
             id="new-user-password"
             type="password"
             autoComplete="new-password"
-            {...form.register("password")}
+            {...form.register('password')}
             className="nf-input"
           />
           {form.formState.errors.password ? (
@@ -122,9 +109,7 @@ export function CreateSchoolUserForm({
         disabled={form.formState.isSubmitting}
         className="nf-button nf-button-primary"
       >
-        {form.formState.isSubmitting
-          ? "Створюємо…"
-          : "Створити користувача"}
+        {form.formState.isSubmitting ? 'Створюємо…' : 'Створити користувача'}
       </button>
     </form>
   );

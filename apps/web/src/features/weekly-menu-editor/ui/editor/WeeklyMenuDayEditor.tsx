@@ -1,26 +1,20 @@
-"use client";
+'use client';
 
-import { ChevronDown } from "lucide-react";
-import { Fragment, useState } from "react";
-import {
-  useFieldArray,
-  useWatch,
-  type UseFormReturn,
-} from "react-hook-form";
+import { Fragment, useState } from 'react';
 
-import type { Allergen } from "@/entities/recipe/model/Recipe";
-import {
-  AGE_GROUP_LABELS,
-  WEEKDAY_ORDER,
-} from "@/entities/weekly-menu/model/WeeklyMenu";
-import { normalizeGramAmount } from "@/shared/lib/Portion";
+import { ChevronDown } from 'lucide-react';
+import { type UseFormReturn, useFieldArray, useWatch } from 'react-hook-form';
+
+import type { Allergen } from '@/entities/recipe/model/Recipe';
+import { AGE_GROUP_LABELS, WEEKDAY_ORDER } from '@/entities/weekly-menu/model/WeeklyMenu';
+import { normalizeGramAmount } from '@/shared/lib/Portion';
 
 import {
+  type WeeklyMenuFormValues,
   createBlankItem,
   resolveEffectiveDayDate,
   updateDayDate,
-  type WeeklyMenuFormValues,
-} from "../../model/WeeklyMenuFormSchema";
+} from '../../model/WeeklyMenuFormSchema';
 import {
   AllergenCheckboxList,
   DishCardLookupField,
@@ -29,7 +23,7 @@ import {
   NutritionCell,
   ReadonlyFieldValue,
   ReadonlyReferenceField,
-} from "./WeeklyMenuItemFields";
+} from './WeeklyMenuItemFields';
 
 export function DailyMenuDayEditor({
   form,
@@ -62,8 +56,8 @@ export function DailyMenuDayEditor({
   });
   const resolvedDayDate = resolveEffectiveDayDate(
     effectiveStartDate,
-    WEEKDAY_ORDER.indexOf(day?.weekday ?? "monday"),
-    day?.date,
+    WEEKDAY_ORDER.indexOf(day?.weekday ?? 'monday'),
+    day?.date
   );
   const dateRegistration = form.register(`days.${dayIndex}.date` as const);
   const [openItemId, setOpenItemId] = useState<string | null>(null);
@@ -87,16 +81,16 @@ export function DailyMenuDayEditor({
                 {...dateRegistration}
                 onChange={(event) => {
                   form.setValue(
-                    "days",
+                    'days',
                     updateDayDate(
-                      form.getValues("days"),
-                      day?.weekday ?? "monday",
-                      event.target.value,
+                      form.getValues('days'),
+                      day?.weekday ?? 'monday',
+                      event.target.value
                     ),
                     {
                       shouldDirty: true,
                       shouldValidate: true,
-                    },
+                    }
                   );
                 }}
                 readOnly={!allowValueEdits}
@@ -128,11 +122,7 @@ export function DailyMenuDayEditor({
 
           {allowStructureEdits ? (
             <div className="flex items-end">
-              <button
-                type="button"
-                onClick={onRemoveDay}
-                className="nf-button nf-button-danger"
-              >
+              <button type="button" onClick={onRemoveDay} className="nf-button nf-button-danger">
                 Видалити день
               </button>
             </div>
@@ -160,8 +150,7 @@ export function DailyMenuDayEditor({
 
       <div className="space-y-4">
         {itemsFieldArray.fields.map((field, itemIndex) => {
-          const itemErrors =
-            form.formState.errors.days?.[dayIndex]?.items?.[itemIndex];
+          const itemErrors = form.formState.errors.days?.[dayIndex]?.items?.[itemIndex];
           const item = day?.items[itemIndex];
           const isItemOpen = openItemId === field.id;
           const itemPanelId = `day-${dayIndex}-item-${itemIndex}-panel`;
@@ -171,9 +160,7 @@ export function DailyMenuDayEditor({
             <section
               key={field.id}
               className={`border bg-white ${
-                hasItemErrors
-                  ? "border-red-300"
-                  : "border-(--nf-line-strong)"
+                hasItemErrors ? 'border-red-300' : 'border-(--nf-line-strong)'
               }`}
             >
               <header className="flex flex-wrap items-center justify-between gap-3 bg-(--nf-panel-head)">
@@ -183,9 +170,7 @@ export function DailyMenuDayEditor({
                   aria-expanded={isItemOpen}
                   aria-controls={itemPanelId}
                   onClick={() =>
-                    setOpenItemId((currentId) =>
-                      currentId === field.id ? null : field.id,
-                    )
+                    setOpenItemId((currentId) => (currentId === field.id ? null : field.id))
                   }
                 >
                   <span className="min-w-0">
@@ -193,7 +178,7 @@ export function DailyMenuDayEditor({
                       Позиція {itemIndex + 1}
                     </span>
                     <span className="mt-1 block text-xs text-slate-600">
-                      {item?.name?.trim() || "Нова позиція"}
+                      {item?.name?.trim() || 'Нова позиція'}
                     </span>
                     {hasItemErrors ? (
                       <span className="mt-1 block text-xs font-medium text-red-700">
@@ -204,7 +189,7 @@ export function DailyMenuDayEditor({
                   <ChevronDown
                     aria-hidden
                     className={`size-4 shrink-0 text-slate-600 transition-transform ${
-                      isItemOpen ? "rotate-180" : ""
+                      isItemOpen ? 'rotate-180' : ''
                     }`}
                   />
                 </button>
@@ -224,17 +209,12 @@ export function DailyMenuDayEditor({
                 form={form}
                 dayIndex={dayIndex}
                 itemIndex={itemIndex}
-                resolveReferences={
-                  recipeCatalogEnabled || resolveReadonlyReferences
-                }
+                resolveReferences={recipeCatalogEnabled || resolveReadonlyReferences}
                 allergenOptions={allergenOptions}
               />
 
               {isItemOpen ? (
-                <div
-                  id={itemPanelId}
-                  className="border-t border-(--nf-line)"
-                >
+                <div id={itemPanelId} className="border-t border-(--nf-line)">
                   <div className="grid gap-4 p-4 lg:grid-cols-3">
                     <div className="lg:col-span-3">
                       <label className="nf-label">Джерело позиції</label>
@@ -244,9 +224,7 @@ export function DailyMenuDayEditor({
                             type="button"
                             disabled={!allowValueEdits}
                             className={`nf-button ${
-                              item?.kind === "dish_card"
-                                ? "nf-button-primary"
-                                : ""
+                              item?.kind === 'dish_card' ? 'nf-button-primary' : ''
                             }`}
                             onClick={() => {
                               if (!allowValueEdits) {
@@ -254,18 +232,18 @@ export function DailyMenuDayEditor({
                               }
                               form.setValue(
                                 `days.${dayIndex}.items.${itemIndex}.kind`,
-                                "dish_card",
-                                { shouldDirty: true },
+                                'dish_card',
+                                { shouldDirty: true }
                               );
                               form.setValue(
                                 `days.${dayIndex}.items.${itemIndex}.product_ingredient_id`,
                                 null,
-                                { shouldDirty: true },
+                                { shouldDirty: true }
                               );
                               form.setValue(
                                 `days.${dayIndex}.items.${itemIndex}.product_name_snapshot`,
-                                "",
-                                { shouldDirty: true },
+                                '',
+                                { shouldDirty: true }
                               );
                             }}
                           >
@@ -275,38 +253,34 @@ export function DailyMenuDayEditor({
                             type="button"
                             disabled={!allowValueEdits}
                             className={`nf-button ${
-                              item?.kind === "product"
-                                ? "nf-button-primary"
-                                : ""
+                              item?.kind === 'product' ? 'nf-button-primary' : ''
                             }`}
                             onClick={() => {
                               if (!allowValueEdits) {
                                 return;
                               }
-                              form.setValue(
-                                `days.${dayIndex}.items.${itemIndex}.kind`,
-                                "product",
-                                { shouldDirty: true },
-                              );
+                              form.setValue(`days.${dayIndex}.items.${itemIndex}.kind`, 'product', {
+                                shouldDirty: true,
+                              });
                               form.setValue(
                                 `days.${dayIndex}.items.${itemIndex}.dish_card_id`,
                                 null,
-                                { shouldDirty: true },
+                                { shouldDirty: true }
                               );
                               form.setValue(
                                 `days.${dayIndex}.items.${itemIndex}.dish_card_version_id`,
                                 null,
-                                { shouldDirty: true },
+                                { shouldDirty: true }
                               );
                               form.setValue(
                                 `days.${dayIndex}.items.${itemIndex}.recipe_card_number`,
-                                "",
-                                { shouldDirty: true },
+                                '',
+                                { shouldDirty: true }
                               );
                               form.setValue(
                                 `days.${dayIndex}.items.${itemIndex}.source_text`,
-                                "пром. вироб.",
-                                { shouldDirty: true },
+                                'пром. вироб.',
+                                { shouldDirty: true }
                               );
                             }}
                           >
@@ -315,20 +289,16 @@ export function DailyMenuDayEditor({
                         </div>
                       ) : (
                         <ReadonlyFieldValue
-                          value={
-                            item?.kind === "dish_card"
-                              ? "Техкарта"
-                              : "Пром. вироб."
-                          }
+                          value={item?.kind === 'dish_card' ? 'Техкарта' : 'Пром. вироб.'}
                         />
                       )}
                       <p className="mt-1 text-xs text-slate-500">
-                        Для техкарти використовуємо каталог ТК, для промислового
-                        виробу обираємо інгредієнт без власної ТК.
+                        Для техкарти використовуємо каталог ТК, для промислового виробу обираємо
+                        інгредієнт без власної ТК.
                       </p>
                     </div>
 
-                    {item?.kind === "dish_card" ? (
+                    {item?.kind === 'dish_card' ? (
                       <div className="lg:col-span-3">
                         {allowValueEdits ? (
                           <DishCardLookupField
@@ -343,7 +313,7 @@ export function DailyMenuDayEditor({
                             label="Техкарта"
                             value={
                               item?.recipe_card_number
-                                ? `${item.recipe_card_number} · ${item.name || "Без назви"}`
+                                ? `${item.recipe_card_number} · ${item.name || 'Без назви'}`
                                 : item?.name
                             }
                           />
@@ -378,11 +348,9 @@ export function DailyMenuDayEditor({
                       {allowValueEdits ? (
                         <input
                           id={`day-${dayIndex}-item-${itemIndex}-name`}
-                          {...form.register(
-                            `days.${dayIndex}.items.${itemIndex}.name` as const,
-                          )}
+                          {...form.register(`days.${dayIndex}.items.${itemIndex}.name` as const)}
                           readOnly={!allowValueEdits}
-                          aria-invalid={itemErrors?.name ? "true" : "false"}
+                          aria-invalid={itemErrors?.name ? 'true' : 'false'}
                           className="nf-input"
                         />
                       ) : (
@@ -411,14 +379,14 @@ export function DailyMenuDayEditor({
                           form.setValue(
                             `days.${dayIndex}.items.${itemIndex}.allergen_codes`,
                             nextCodes,
-                            { shouldDirty: true },
+                            { shouldDirty: true }
                           );
                         }}
                       />
                       <p className="mt-1 text-xs text-slate-500">
                         {allowValueEdits
-                          ? "Для техкарти алергени підтягуються автоматично. За потреби їх можна скоригувати вручну чекбоксами."
-                          : "Алергени показані списком і, якщо позиція прив’язана до ТК, заповнюються з неї автоматично."}
+                          ? 'Для техкарти алергени підтягуються автоматично. За потреби їх можна скоригувати вручну чекбоксами.'
+                          : 'Алергени показані списком і, якщо позиція прив’язана до ТК, заповнюються з неї автоматично.'}
                       </p>
                     </div>
                   </div>
@@ -437,77 +405,107 @@ export function DailyMenuDayEditor({
                           </tr>
                         </thead>
                         <tbody>
-                          {(item?.portions ?? []).map(
-                            (portion, portionIndex) => {
-                              const portionErrors =
-                                itemErrors?.portions?.[portionIndex];
+                          {(item?.portions ?? []).map((portion, portionIndex) => {
+                            const portionErrors = itemErrors?.portions?.[portionIndex];
+                            const canEditNutrition = allowValueEdits && item?.kind === 'product';
+                            const ageGroupLabel = AGE_GROUP_LABELS[portion.age_group];
 
-                              return (
-                                <Fragment key={portion.age_group}>
+                            return (
+                              <Fragment key={portion.age_group}>
+                                <tr>
+                                  <td className="font-medium text-slate-700">
+                                    {ageGroupLabel}
+                                  </td>
+                                  <td>
+                                    {allowValueEdits ? (
+                                      <input
+                                        {...form.register(
+                                          `days.${dayIndex}.items.${itemIndex}.portions.${portionIndex}.yield_amount` as const
+                                        )}
+                                        readOnly={!allowValueEdits}
+                                        aria-invalid={
+                                          portionErrors?.yield_amount ? 'true' : 'false'
+                                        }
+                                        className="nf-input"
+                                      />
+                                    ) : (
+                                      <div className="text-sm text-slate-700">
+                                        {portion.yield_amount}
+                                      </div>
+                                    )}
+                                    {portionErrors?.yield_amount ? (
+                                      <p role="alert" className="nf-field-error">
+                                        {portionErrors.yield_amount.message}
+                                      </p>
+                                    ) : null}
+                                  </td>
+                                  <NutritionCell
+                                    value={portion.nutrition.kcal}
+                                    label={`Ккал, ${ageGroupLabel}`}
+                                    registration={
+                                      canEditNutrition
+                                        ? form.register(
+                                            `days.${dayIndex}.items.${itemIndex}.portions.${portionIndex}.nutrition.kcal` as const
+                                          )
+                                        : undefined
+                                    }
+                                    error={portionErrors?.nutrition?.kcal?.message}
+                                  />
+                                  <NutritionCell
+                                    value={portion.nutrition.proteins}
+                                    label={`Білки, ${ageGroupLabel}`}
+                                    registration={
+                                      canEditNutrition
+                                        ? form.register(
+                                            `days.${dayIndex}.items.${itemIndex}.portions.${portionIndex}.nutrition.proteins` as const
+                                          )
+                                        : undefined
+                                    }
+                                    error={portionErrors?.nutrition?.proteins?.message}
+                                  />
+                                  <NutritionCell
+                                    value={portion.nutrition.fats}
+                                    label={`Жири, ${ageGroupLabel}`}
+                                    registration={
+                                      canEditNutrition
+                                        ? form.register(
+                                            `days.${dayIndex}.items.${itemIndex}.portions.${portionIndex}.nutrition.fats` as const
+                                          )
+                                        : undefined
+                                    }
+                                    error={portionErrors?.nutrition?.fats?.message}
+                                  />
+                                  <NutritionCell
+                                    value={portion.nutrition.carbs}
+                                    label={`Вуглеводи, ${ageGroupLabel}`}
+                                    registration={
+                                      canEditNutrition
+                                        ? form.register(
+                                            `days.${dayIndex}.items.${itemIndex}.portions.${portionIndex}.nutrition.carbs` as const
+                                          )
+                                        : undefined
+                                    }
+                                    error={portionErrors?.nutrition?.carbs?.message}
+                                  />
+                                </tr>
+                                {portion.calculated_from ? (
                                   <tr>
-                                    <td className="font-medium text-slate-700">
-                                      {AGE_GROUP_LABELS[portion.age_group]}
+                                    <td colSpan={6} className="bg-amber-50">
+                                      <p
+                                        role="status"
+                                        className="text-xs font-medium text-amber-800"
+                                      >
+                                        {getCalculationWarning(
+                                          portion.yield_amount,
+                                          portion.calculated_from.yield_amount
+                                        )}
+                                      </p>
                                     </td>
-                                    <td>
-                                      {allowValueEdits ? (
-                                        <input
-                                          {...form.register(
-                                            `days.${dayIndex}.items.${itemIndex}.portions.${portionIndex}.yield_amount` as const,
-                                          )}
-                                          readOnly={!allowValueEdits}
-                                          aria-invalid={
-                                            portionErrors?.yield_amount
-                                              ? "true"
-                                              : "false"
-                                          }
-                                          className="nf-input"
-                                        />
-                                      ) : (
-                                        <div className="text-sm text-slate-700">
-                                          {portion.yield_amount}
-                                        </div>
-                                      )}
-                                      {portionErrors?.yield_amount ? (
-                                        <p
-                                          role="alert"
-                                          className="nf-field-error"
-                                        >
-                                          {portionErrors.yield_amount.message}
-                                        </p>
-                                      ) : null}
-                                    </td>
-                                    <NutritionCell
-                                      value={portion.nutrition.kcal}
-                                    />
-                                    <NutritionCell
-                                      value={portion.nutrition.proteins}
-                                    />
-                                    <NutritionCell
-                                      value={portion.nutrition.fats}
-                                    />
-                                    <NutritionCell
-                                      value={portion.nutrition.carbs}
-                                    />
                                   </tr>
-                                  {portion.calculated_from ? (
-                                    <tr>
-                                      <td colSpan={6} className="bg-amber-50">
-                                        <p
-                                          role="status"
-                                          className="text-xs font-medium text-amber-800"
-                                        >
-                                          {getCalculationWarning(
-                                            portion.yield_amount,
-                                            portion.calculated_from.yield_amount,
-                                          )}
-                                        </p>
-                                      </td>
-                                    </tr>
-                                  ) : null}
-                                </Fragment>
-                              );
-                            },
-                          )}
+                                ) : null}
+                              </Fragment>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -529,15 +527,13 @@ export function DailyMenuDayEditor({
                           <input
                             id={`day-${dayIndex}-item-${itemIndex}-recipe`}
                             {...form.register(
-                              `days.${dayIndex}.items.${itemIndex}.recipe_card_number` as const,
+                              `days.${dayIndex}.items.${itemIndex}.recipe_card_number` as const
                             )}
                             readOnly={!allowValueEdits}
                             className="nf-input"
                           />
                         ) : (
-                          <ReadonlyFieldValue
-                            value={item?.recipe_card_number}
-                          />
+                          <ReadonlyFieldValue value={item?.recipe_card_number} />
                         )}
                       </div>
 
@@ -552,7 +548,7 @@ export function DailyMenuDayEditor({
                           <input
                             id={`day-${dayIndex}-item-${itemIndex}-source`}
                             {...form.register(
-                              `days.${dayIndex}.items.${itemIndex}.source_text` as const,
+                              `days.${dayIndex}.items.${itemIndex}.source_text` as const
                             )}
                             readOnly={!allowValueEdits}
                             className="nf-input"
@@ -572,9 +568,7 @@ export function DailyMenuDayEditor({
                         {allowValueEdits ? (
                           <textarea
                             id={`day-${dayIndex}-item-${itemIndex}-notes`}
-                            {...form.register(
-                              `days.${dayIndex}.items.${itemIndex}.notes` as const,
-                            )}
+                            {...form.register(`days.${dayIndex}.items.${itemIndex}.notes` as const)}
                             readOnly={!allowValueEdits}
                             className="nf-input min-h-20"
                           />
@@ -603,10 +597,10 @@ function formatScaleFactor(targetValue: string, sourceValue: string) {
   const target = normalizeGramAmount(targetValue);
   const source = normalizeGramAmount(sourceValue);
   if (target === null || source === null || source <= 0) {
-    return "—";
+    return '—';
   }
 
-  return (target / source).toLocaleString("uk-UA", {
+  return (target / source).toLocaleString('uk-UA', {
     maximumFractionDigits: 4,
   });
 }
@@ -615,7 +609,7 @@ function getCalculationWarning(targetValue: string, sourceValue: string) {
   const factor = formatScaleFactor(targetValue, sourceValue);
   return [
     `У ТК немає порції ${targetValue}.`,
-    "Порцію задано вручну; КБЖВ автоматично розраховано",
+    'Порцію задано вручну; КБЖВ автоматично розраховано',
     `на основі порції ${sourceValue}, коефіцієнт ${factor}.`,
-  ].join(" ");
+  ].join(' ');
 }

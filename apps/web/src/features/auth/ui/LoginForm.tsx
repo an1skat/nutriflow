@@ -1,24 +1,18 @@
-"use client";
+'use client';
 
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect } from "react";
-import { useForm } from "react-hook-form";
-import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { useEffect } from 'react';
 
-import {
-  loginSchema,
-  type LoginInput,
-} from "@/entities/session/model/Session";
-import { useCurrentUser } from "@/entities/session/api/SessionQueries";
-import {
-  useLogin,
-} from "@/features/auth/model/UseSession";
-import { getPostLoginPath } from "@/features/access/model/AccessPolicy";
-import {
-  getApiErrorMessage,
-  isHttpStatus,
-} from "@/shared/api/HttpClient";
+import { useRouter } from 'next/navigation';
+
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
+import { toast } from 'sonner';
+
+import { useCurrentUser } from '@/entities/session/api/SessionQueries';
+import { type LoginInput, loginSchema } from '@/entities/session/model/Session';
+import { getPostLoginPath } from '@/features/access/model/AccessPolicy';
+import { useLogin } from '@/features/auth/model/UseSession';
+import { getApiErrorMessage, isHttpStatus } from '@/shared/api/HttpClient';
 
 export function LoginForm({ returnTo }: { returnTo: string }) {
   const router = useRouter();
@@ -28,8 +22,8 @@ export function LoginForm({ returnTo }: { returnTo: string }) {
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      identifier: "",
-      password: "",
+      identifier: '',
+      password: '',
     },
   });
 
@@ -38,8 +32,8 @@ export function LoginForm({ returnTo }: { returnTo: string }) {
       const destination = getPostLoginPath(currentUser.data, returnTo);
 
       if (destination.denied) {
-        toast.error("Цей розділ недоступний для вашої ролі.", {
-          id: "login-access-denied",
+        toast.error('Цей розділ недоступний для вашої ролі.', {
+          id: 'login-access-denied',
         });
       }
 
@@ -76,16 +70,16 @@ export function LoginForm({ returnTo }: { returnTo: string }) {
   const submitting = form.formState.isSubmitting || login.isPending;
 
   const onSubmit = form.handleSubmit(async (values) => {
-    form.clearErrors("root");
+    form.clearErrors('root');
 
     try {
       await login.mutateAsync(values);
       router.refresh();
     } catch (error) {
-      form.setError("root", {
-        type: "server",
+      form.setError('root', {
+        type: 'server',
         message: isHttpStatus(error, 401)
-          ? "Неправильний логін або пароль."
+          ? 'Неправильний логін або пароль.'
           : getApiErrorMessage(error),
       });
     }
@@ -94,20 +88,15 @@ export function LoginForm({ returnTo }: { returnTo: string }) {
   return (
     <form onSubmit={onSubmit} noValidate className="space-y-4">
       <div>
-        <label
-          htmlFor="identifier"
-          className="nf-label"
-        >
+        <label htmlFor="identifier" className="nf-label">
           Логін або email
         </label>
         <input
           id="identifier"
           type="text"
           autoComplete="username"
-          aria-invalid={
-            form.formState.errors.identifier ? "true" : "false"
-          }
-          {...form.register("identifier")}
+          aria-invalid={form.formState.errors.identifier ? 'true' : 'false'}
+          {...form.register('identifier')}
           className="nf-input"
         />
         {form.formState.errors.identifier ? (
@@ -118,18 +107,15 @@ export function LoginForm({ returnTo }: { returnTo: string }) {
       </div>
 
       <div>
-        <label
-          htmlFor="password"
-          className="nf-label"
-        >
+        <label htmlFor="password" className="nf-label">
           Пароль
         </label>
         <input
           id="password"
           type="password"
           autoComplete="current-password"
-          aria-invalid={form.formState.errors.password ? "true" : "false"}
-          {...form.register("password")}
+          aria-invalid={form.formState.errors.password ? 'true' : 'false'}
+          {...form.register('password')}
           className="nf-input"
         />
         {form.formState.errors.password ? (
@@ -145,12 +131,8 @@ export function LoginForm({ returnTo }: { returnTo: string }) {
         </p>
       ) : null}
 
-      <button
-        type="submit"
-        disabled={submitting}
-        className="nf-button nf-button-primary w-full"
-      >
-        {submitting ? "Входимо…" : "Увійти"}
+      <button type="submit" disabled={submitting} className="nf-button nf-button-primary w-full">
+        {submitting ? 'Входимо…' : 'Увійти'}
       </button>
     </form>
   );

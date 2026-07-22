@@ -1,23 +1,18 @@
-"use client";
+'use client';
 
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
-import { useFieldArray, useForm, useWatch } from "react-hook-form";
-import { toast } from "sonner";
+import { useState } from 'react';
 
-import { useAllergens, useDishCards } from "@/entities/recipe/api/RecipeQueries";
-import { getApiErrorMessage } from "@/shared/api/HttpClient";
-import { FormField as Field, FormSection as Section } from "@/shared/ui/FormLayout";
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Plus, Trash2 } from 'lucide-react';
+import { useFieldArray, useForm, useWatch } from 'react-hook-form';
+import { toast } from 'sonner';
 
-import {
-  recipeUploadSchema,
-  type RecipeUploadFormValues,
-} from "../model/RecipeUploadSchema";
-import {
-  useUploadDishCard,
-  type UploadProgress,
-} from "../model/UseRecipeUpload";
+import { useAllergens, useDishCards } from '@/entities/recipe/api/RecipeQueries';
+import { getApiErrorMessage } from '@/shared/api/HttpClient';
+import { FormField as Field, FormSection as Section } from '@/shared/ui/FormLayout';
+
+import { type RecipeUploadFormValues, recipeUploadSchema } from '../model/RecipeUploadSchema';
+import { type UploadProgress, useUploadDishCard } from '../model/UseRecipeUpload';
 
 function newPortionTempId(): string {
   return `portion-${Math.random().toString(36).slice(2, 9)}`;
@@ -28,60 +23,63 @@ function newIngredientTempId(): string {
 }
 
 const defaultValues: RecipeUploadFormValues = {
-  card_number: "",
-  name: "",
-  category: "",
-  source: "",
-  technology_text: "",
+  card_number: '',
+  name: '',
+  category: '',
+  source: '',
+  technology_text: '',
   selected_allergen_ids: [],
   allergens: [],
   portions: [
     {
       tempId: newPortionTempId(),
-      portion_grams: "120",
-      kcal: "0",
-      proteins: "0",
-      fats: "0",
-      carbs: "0",
+      portion_grams: '120',
+      kcal: '0',
+      proteins: '0',
+      fats: '0',
+      carbs: '0',
     },
   ],
   ingredients: [
     {
       tempId: newIngredientTempId(),
-      ingredient_name_snapshot: "",
-      group_key: "",
-      alternative_label: "",
-      notes: "",
+      ingredient_name_snapshot: '',
+      group_key: '',
+      alternative_label: '',
+      notes: '',
       amounts: {},
     },
   ],
 };
 
-const PROGRESS_LABELS: Record<UploadProgress["step"], string> = {
-  "resolving-catalog": "Оновлюємо довідники…",
-  "creating-card": "Створюємо картку страви…",
-  "creating-version": "Зберігаємо версію техкарти…",
-  validating: "Перевіряємо техкарту…",
-  confirming: "Підтверджуємо техкарту…",
+const PROGRESS_LABELS: Record<UploadProgress['step'], string> = {
+  'resolving-catalog': 'Оновлюємо довідники…',
+  'creating-card': 'Створюємо картку страви…',
+  'creating-version': 'Зберігаємо версію техкарти…',
+  validating: 'Перевіряємо техкарту…',
+  confirming: 'Підтверджуємо техкарту…',
 };
 
 export function DishCardUploadForm() {
   const [progress, setProgress] = useState<UploadProgress | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const upload = useUploadDishCard();
-  const allergenQuery = useAllergens("");
-  const dishCardsQuery = useDishCards("");
+  const allergenQuery = useAllergens('');
+  const dishCardsQuery = useDishCards('');
 
   const form = useForm<RecipeUploadFormValues>({
     resolver: zodResolver(recipeUploadSchema),
     defaultValues,
   });
 
-  const portions = useFieldArray({ control: form.control, name: "portions" });
-  const allergenEntries = useFieldArray({ control: form.control, name: "allergens" });
+  const portions = useFieldArray({ control: form.control, name: 'portions' });
+  const allergenEntries = useFieldArray({
+    control: form.control,
+    name: 'allergens',
+  });
   const ingredients = useFieldArray({
     control: form.control,
-    name: "ingredients",
+    name: 'ingredients',
   });
 
   const allergens = allergenQuery.data?.items ?? [];
@@ -89,50 +87,48 @@ export function DishCardUploadForm() {
     new Set(
       (dishCardsQuery.data?.items ?? [])
         .map((card) => card.category)
-        .filter((category): category is string => category !== null),
-    ),
-  ).sort((left, right) => left.localeCompare(right, "uk"));
+        .filter((category): category is string => category !== null)
+    )
+  ).sort((left, right) => left.localeCompare(right, 'uk'));
   const selectedAllergenIds = useWatch({
     control: form.control,
-    name: "selected_allergen_ids",
+    name: 'selected_allergen_ids',
   });
 
   const toggleAllergen = (id: string) => {
-    const current = form.getValues("selected_allergen_ids");
-    const next = current.includes(id)
-      ? current.filter((value) => value !== id)
-      : [...current, id];
-    form.setValue("selected_allergen_ids", next, { shouldDirty: true });
+    const current = form.getValues('selected_allergen_ids');
+    const next = current.includes(id) ? current.filter((value) => value !== id) : [...current, id];
+    form.setValue('selected_allergen_ids', next, { shouldDirty: true });
   };
 
   const addAllergen = () => {
-    allergenEntries.append({ code: "", name: "" });
+    allergenEntries.append({ code: '', name: '' });
   };
 
   const addPortion = () => {
     portions.append({
       tempId: newPortionTempId(),
-      portion_grams: "",
-      kcal: "0",
-      proteins: "0",
-      fats: "0",
-      carbs: "0",
+      portion_grams: '',
+      kcal: '0',
+      proteins: '0',
+      fats: '0',
+      carbs: '0',
     });
   };
 
   const addIngredient = () => {
     ingredients.append({
       tempId: newIngredientTempId(),
-      ingredient_name_snapshot: "",
-      group_key: "",
-      alternative_label: "",
-      notes: "",
+      ingredient_name_snapshot: '',
+      group_key: '',
+      alternative_label: '',
+      notes: '',
       amounts: {},
     });
   };
 
   const onSubmit = form.handleSubmit(async (values) => {
-    form.clearErrors("root");
+    form.clearErrors('root');
     setSuccess(null);
 
     try {
@@ -141,13 +137,13 @@ export function DishCardUploadForm() {
         onProgress: setProgress,
       });
       setSuccess(
-        `Техкарту збережено та підтверджено. Картка ${result.dishCardId}, версія ${result.versionId}.`,
+        `Техкарту збережено та підтверджено. Картка ${result.dishCardId}, версія ${result.versionId}.`
       );
       form.reset(defaultValues);
-      toast.success("Техкарту завантажено");
+      toast.success('Техкарту завантажено');
     } catch (error) {
-      form.setError("root", {
-        type: "server",
+      form.setError('root', {
+        type: 'server',
         message: getApiErrorMessage(error),
       });
     } finally {
@@ -165,7 +161,7 @@ export function DishCardUploadForm() {
             id="card-number"
             className="nf-input"
             placeholder="1.17"
-            {...form.register("card_number")}
+            {...form.register('card_number')}
           />
         </Field>
         <Field label="Назва страви" error={form.formState.errors.name?.message}>
@@ -173,17 +169,23 @@ export function DishCardUploadForm() {
             id="dish-name"
             className="nf-input"
             placeholder="Салат з моркви та яблук…"
-            {...form.register("name")}
+            {...form.register('name')}
           />
         </Field>
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Категорія" error={form.formState.errors.category?.message as string | undefined}>
+          <Field
+            label="Категорія"
+            error={form.formState.errors.category?.message as string | undefined}
+          >
             <input
               id="dish-category"
               list="dish-categories"
               className="nf-input"
               placeholder="Оберіть або введіть нову категорію"
-              {...form.register("category")}
+              {...form.register('category')}
+              onFocus={(event) => {
+                event.currentTarget.showPicker?.();
+              }}
             />
             <datalist id="dish-categories">
               {categories.map((category) => (
@@ -191,12 +193,15 @@ export function DishCardUploadForm() {
               ))}
             </datalist>
           </Field>
-          <Field label="Джерело" error={form.formState.errors.source?.message as string | undefined}>
+          <Field
+            label="Джерело"
+            error={form.formState.errors.source?.message as string | undefined}
+          >
             <input
               id="dish-source"
               className="nf-input"
               placeholder="ТК до весняного меню…"
-              {...form.register("source")}
+              {...form.register('source')}
             />
           </Field>
         </div>
@@ -208,7 +213,7 @@ export function DishCardUploadForm() {
             id="dish-technology"
             className="nf-input min-h-24"
             rows={4}
-            {...form.register("technology_text")}
+            {...form.register('technology_text')}
           />
         </Field>
         <Field
@@ -229,7 +234,7 @@ export function DishCardUploadForm() {
                     type="button"
                     onClick={() => toggleAllergen(allergen.id)}
                     className={`nf-button ${
-                      selected ? "nf-button-primary" : "nf-button-secondary"
+                      selected ? 'nf-button-primary' : 'nf-button-secondary'
                     }`}
                     aria-pressed={selected}
                   >
@@ -243,11 +248,7 @@ export function DishCardUploadForm() {
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3">
             <span className="nf-label">Нові алергени для цієї техкарти</span>
-            <button
-              type="button"
-              onClick={addAllergen}
-              className="nf-button nf-button-secondary"
-            >
+            <button type="button" onClick={addAllergen} className="nf-button nf-button-secondary">
               <Plus className="size-4" aria-hidden /> Додати алерген
             </button>
           </div>
@@ -323,7 +324,9 @@ export function DishCardUploadForm() {
                 </Field>
                 <Field
                   label="Білки"
-                  error={form.formState.errors.portions?.[index]?.proteins?.message as string | undefined}
+                  error={
+                    form.formState.errors.portions?.[index]?.proteins?.message as string | undefined
+                  }
                 >
                   <input
                     className="nf-input"
@@ -333,7 +336,9 @@ export function DishCardUploadForm() {
                 </Field>
                 <Field
                   label="Жири"
-                  error={form.formState.errors.portions?.[index]?.fats?.message as string | undefined}
+                  error={
+                    form.formState.errors.portions?.[index]?.fats?.message as string | undefined
+                  }
                 >
                   <input
                     className="nf-input"
@@ -343,7 +348,9 @@ export function DishCardUploadForm() {
                 </Field>
                 <Field
                   label="Вуглеводи"
-                  error={form.formState.errors.portions?.[index]?.carbs?.message as string | undefined}
+                  error={
+                    form.formState.errors.portions?.[index]?.carbs?.message as string | undefined
+                  }
                 >
                   <input
                     className="nf-input"
@@ -353,7 +360,9 @@ export function DishCardUploadForm() {
                 </Field>
                 <Field
                   label="ккал"
-                  error={form.formState.errors.portions?.[index]?.kcal?.message as string | undefined}
+                  error={
+                    form.formState.errors.portions?.[index]?.kcal?.message as string | undefined
+                  }
                 >
                   <input
                     className="nf-input"
@@ -382,11 +391,7 @@ export function DishCardUploadForm() {
       <Section
         title="Інгредієнти"
         action={
-          <button
-            type="button"
-            onClick={addIngredient}
-            className="nf-button nf-button-secondary"
-          >
+          <button type="button" onClick={addIngredient} className="nf-button nf-button-secondary">
             <Plus className="size-4" aria-hidden /> Додати інгредієнт
           </button>
         }
@@ -423,7 +428,7 @@ export function DishCardUploadForm() {
 
       <div className="flex items-center gap-3">
         <button type="submit" disabled={isBusy} className="nf-button nf-button-primary">
-          {isBusy ? "Зберігаємо…" : "Зберегти та підтвердити техкарту"}
+          {isBusy ? 'Зберігаємо…' : 'Зберегти та підтвердити техкарту'}
         </button>
         {progress ? (
           <span role="status" className="text-sm text-slate-600">
@@ -438,25 +443,22 @@ export function DishCardUploadForm() {
 type IngredientRowProps = {
   index: number;
   portions: { id: string; tempId: string; portion_grams: string }[];
-  register: ReturnType<typeof useForm<RecipeUploadFormValues>>["register"];
+  register: ReturnType<typeof useForm<RecipeUploadFormValues>>['register'];
   errors: Record<string, unknown> | undefined;
   onRemove: (() => void) | undefined;
 };
 
-function IngredientRow({
-  index,
-  portions,
-  register,
-  errors,
-  onRemove,
-}: IngredientRowProps) {
+function IngredientRow({ index, portions, register, errors, onRemove }: IngredientRowProps) {
   return (
     <div className="nf-panel">
       <div className="nf-panel-body flex flex-col gap-3">
         <div className="grid gap-3 sm:grid-cols-[1fr_160px_160px_auto]">
           <Field
             label="Назва інгредієнта"
-            error={(errors as { ingredient_name_snapshot?: { message?: string } })?.ingredient_name_snapshot?.message}
+            error={
+              (errors as { ingredient_name_snapshot?: { message?: string } })
+                ?.ingredient_name_snapshot?.message
+            }
           >
             <input
               className="nf-input"
@@ -466,7 +468,10 @@ function IngredientRow({
           </Field>
           <Field
             label="Група альтернатив"
-            error={(errors as { group_key?: { message?: string } })?.group_key?.message as string | undefined}
+            error={
+              (errors as { group_key?: { message?: string } })?.group_key?.message as
+                string | undefined
+            }
           >
             <input
               className="nf-input"
@@ -476,7 +481,10 @@ function IngredientRow({
           </Field>
           <Field
             label="Варіант"
-            error={(errors as { alternative_label?: { message?: string } })?.alternative_label?.message as string | undefined}
+            error={
+              (errors as { alternative_label?: { message?: string } })?.alternative_label
+                ?.message as string | undefined
+            }
           >
             <input
               className="nf-input"
@@ -517,9 +525,13 @@ function IngredientRow({
                 key={portion.id}
                 index={index}
                 portionTempId={portion.tempId}
-                portionGrams={portion.portion_grams || "?"}
+                portionGrams={portion.portion_grams || '?'}
                 register={register}
-                error={(errors as { amounts?: Record<string, { message?: string }> })?.amounts?.[portion.tempId]?.message}
+                error={
+                  (errors as { amounts?: Record<string, { message?: string }> })?.amounts?.[
+                    portion.tempId
+                  ]?.message
+                }
               />
             ))}
           </div>
@@ -533,7 +545,7 @@ type AmountCellProps = {
   index: number;
   portionTempId: string;
   portionGrams: string;
-  register: ReturnType<typeof useForm<RecipeUploadFormValues>>["register"];
+  register: ReturnType<typeof useForm<RecipeUploadFormValues>>['register'];
   error: string | undefined;
 };
 
@@ -555,7 +567,11 @@ function AmountCell({ index, portionTempId, portionGrams, register, error }: Amo
           {...register(`ingredients.${index}.amounts.${portionTempId}.net`)}
         />
       </div>
-      {error ? <p role="alert" className="nf-field-error">{error}</p> : null}
+      {error ? (
+        <p role="alert" className="nf-field-error">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

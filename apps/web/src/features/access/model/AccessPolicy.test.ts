@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from 'vitest';
+
+import type { AuthUser } from '@/entities/session/model/Session';
 
 import {
   canAccessPath,
@@ -7,131 +9,130 @@ import {
   getPostLoginPath,
   getRouteAccess,
   hasPermission,
-} from "./AccessPolicy";
-import type { AuthUser } from "@/entities/session/model/Session";
+} from './AccessPolicy';
 
 const owner: AuthUser = {
-  id: "owner-id",
-  username: "owner",
-  email: "owner@example.com",
-  role: "OWNER",
+  id: 'owner-id',
+  username: 'owner',
+  email: 'owner@example.com',
+  role: 'OWNER',
   school_id: null,
   permissions: [
-    "schools.manage",
-    "school_users.manage",
-    "school_groups.manage",
-    "menus.manage",
-    "recipes.manage",
+    'schools.manage',
+    'school_users.manage',
+    'school_groups.manage',
+    'menus.manage',
+    'recipes.manage',
   ],
   is_active: true,
 };
 
 const admin: AuthUser = {
-  id: "admin-id",
-  username: "admin",
-  email: "admin@example.com",
-  role: "ADMIN",
+  id: 'admin-id',
+  username: 'admin',
+  email: 'admin@example.com',
+  role: 'ADMIN',
   school_id: null,
-  permissions: ["schools.manage"],
+  permissions: ['schools.manage'],
   is_active: true,
 };
 
 const technologist: AuthUser = {
-  id: "technologist-id",
-  username: "technologist",
-  email: "technologist@example.com",
-  role: "TECHNOLOGIST",
+  id: 'technologist-id',
+  username: 'technologist',
+  email: 'technologist@example.com',
+  role: 'TECHNOLOGIST',
   school_id: null,
-  permissions: ["menus.manage", "recipes.view", "recipes.manage"],
+  permissions: ['menus.manage', 'recipes.view', 'recipes.manage'],
   is_active: true,
 };
 
 const schoolUser: AuthUser = {
-  id: "school-user-id",
-  username: "school.user",
+  id: 'school-user-id',
+  username: 'school.user',
   email: null,
-  role: "SCHOOL_USER",
-  school_id: "school-a",
+  role: 'SCHOOL_USER',
+  school_id: 'school-a',
   permissions: [],
   is_active: true,
 };
 
-describe("authorization", () => {
-  it("requires authentication", () => {
-    expect(getRouteAccess(null)).toBe("unauthenticated");
+describe('authorization', () => {
+  it('requires authentication', () => {
+    expect(getRouteAccess(null)).toBe('unauthenticated');
   });
 
-  it("enforces roles", () => {
-    expect(getRouteAccess(owner, { allowedRoles: ["OWNER"] })).toBe("allow");
-    expect(getRouteAccess(admin, { allowedRoles: ["ADMIN"] })).toBe("allow");
+  it('enforces roles', () => {
+    expect(getRouteAccess(owner, { allowedRoles: ['OWNER'] })).toBe('allow');
+    expect(getRouteAccess(admin, { allowedRoles: ['ADMIN'] })).toBe('allow');
     expect(
       getRouteAccess(schoolUser, {
-        allowedRoles: ["ADMIN"],
-      }),
-    ).toBe("forbidden-role");
+        allowedRoles: ['ADMIN'],
+      })
+    ).toBe('forbidden-role');
   });
 
-  it("allows backoffice users to access schools", () => {
-    expect(canAccessSchool(owner, "school-b")).toBe(true);
-    expect(canAccessSchool(admin, "school-b")).toBe(true);
+  it('allows backoffice users to access schools', () => {
+    expect(canAccessSchool(owner, 'school-b')).toBe(true);
+    expect(canAccessSchool(admin, 'school-b')).toBe(true);
   });
 
-  it("enforces permissions", () => {
-    expect(hasPermission(owner, "recipes.manage")).toBe(true);
-    expect(hasPermission(admin, "schools.manage")).toBe(true);
-    expect(hasPermission(admin, "recipes.manage")).toBe(false);
+  it('enforces permissions', () => {
+    expect(hasPermission(owner, 'recipes.manage')).toBe(true);
+    expect(hasPermission(admin, 'schools.manage')).toBe(true);
+    expect(hasPermission(admin, 'recipes.manage')).toBe(false);
     expect(
       getRouteAccess(admin, {
-        requiredPermissions: ["recipes.manage"],
-      }),
-    ).toBe("forbidden-role");
+        requiredPermissions: ['recipes.manage'],
+      })
+    ).toBe('forbidden-role');
   });
 
-  it("limits a school user to their own school", () => {
-    expect(canAccessSchool(schoolUser, "school-a")).toBe(true);
-    expect(canAccessSchool(schoolUser, "school-b")).toBe(false);
+  it('limits a school user to their own school', () => {
+    expect(canAccessSchool(schoolUser, 'school-a')).toBe(true);
+    expect(canAccessSchool(schoolUser, 'school-b')).toBe(false);
     expect(
       getRouteAccess(schoolUser, {
-        schoolId: "school-b",
-      }),
-    ).toBe("forbidden-tenant");
+        schoolId: 'school-b',
+      })
+    ).toBe('forbidden-tenant');
   });
 
-  it("provides a safe home route for every role", () => {
-    expect(getHomePath(owner)).toBe("/");
-    expect(getHomePath(admin)).toBe("/");
-    expect(getHomePath(technologist)).toBe("/admin/menu-changes");
-    expect(getHomePath(schoolUser)).toBe("/menu");
+  it('provides a safe home route for every role', () => {
+    expect(getHomePath(owner)).toBe('/');
+    expect(getHomePath(admin)).toBe('/');
+    expect(getHomePath(technologist)).toBe('/admin/menu-changes');
+    expect(getHomePath(schoolUser)).toBe('/menu');
   });
 
-  it("keeps admin routes hidden from school users", () => {
-    expect(canAccessPath(owner, "/admin/access")).toBe(true);
-    expect(canAccessPath(admin, "/admin/schools")).toBe(true);
-    expect(canAccessPath(technologist, "/admin/menu-changes")).toBe(true);
-    expect(canAccessPath(schoolUser, "/admin/schools")).toBe(false);
-    expect(canAccessPath(schoolUser, "/?tab=account")).toBe(true);
+  it('keeps admin routes hidden from school users', () => {
+    expect(canAccessPath(owner, '/admin/access')).toBe(true);
+    expect(canAccessPath(admin, '/admin/schools')).toBe(true);
+    expect(canAccessPath(technologist, '/admin/menu-changes')).toBe(true);
+    expect(canAccessPath(schoolUser, '/admin/schools')).toBe(false);
+    expect(canAccessPath(schoolUser, '/?tab=account')).toBe(true);
   });
 
-  it("falls back after login when the requested route is forbidden", () => {
-    expect(getPostLoginPath(admin, "/admin/schools")).toEqual({
-      path: "/admin/schools",
+  it('falls back after login when the requested route is forbidden', () => {
+    expect(getPostLoginPath(admin, '/admin/schools')).toEqual({
+      path: '/admin/schools',
       denied: false,
     });
-    expect(getPostLoginPath(schoolUser, "/admin/schools")).toEqual({
-      path: "/menu",
+    expect(getPostLoginPath(schoolUser, '/admin/schools')).toEqual({
+      path: '/menu',
       denied: true,
     });
   });
-  it("gives the technologist menu and recipe access without school management", () => {
-    expect(hasPermission(technologist, "menus.manage")).toBe(true);
-    expect(hasPermission(technologist, "recipes.view")).toBe(true);
-    expect(hasPermission(technologist, "recipes.manage")).toBe(true);
-    expect(hasPermission(technologist, "schools.manage")).toBe(false);
+  it('gives the technologist menu and recipe access without school management', () => {
+    expect(hasPermission(technologist, 'menus.manage')).toBe(true);
+    expect(hasPermission(technologist, 'recipes.view')).toBe(true);
+    expect(hasPermission(technologist, 'recipes.manage')).toBe(true);
+    expect(hasPermission(technologist, 'schools.manage')).toBe(false);
     expect(
       getRouteAccess(technologist, {
-        allowedRoles: ["OWNER", "TECHNOLOGIST"],
-        requiredPermissions: ["menus.manage"],
-      }),
-    ).toBe("allow");
+        allowedRoles: ['OWNER', 'TECHNOLOGIST'],
+        requiredPermissions: ['menus.manage'],
+      })
+    ).toBe('allow');
   });
 });

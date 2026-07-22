@@ -1,5 +1,5 @@
-import { AccessGuard } from "@/features/access/ui/AccessGuard";
-import { RecipeCatalogWidget } from "@/widgets/recipe-catalog/ui/RecipeCatalogWidget";
+import { AccessGuard } from '@/features/access/ui/AccessGuard';
+import { RecipeCatalogWidget } from '@/widgets/recipe-catalog/ui/RecipeCatalogWidget';
 
 type RecipeCatalogPageProps = {
   searchParams?: Promise<{
@@ -16,16 +16,11 @@ export default async function RecipeCatalogPage({ searchParams }: RecipeCatalogP
   const params = searchParams ? await searchParams : {};
   const tab = firstParam(params.tab);
   const initialTab =
-    tab === "ingredients" || tab === "allergens" || tab === "dish-cards"
-      ? tab
-      : "dish-cards";
+    tab === 'ingredients' || tab === 'allergens' || tab === 'dish-cards' ? tab : 'dish-cards';
 
   return (
-    <AccessGuard requiredPermissions={["recipes.view"]}>
-      <RecipeCatalogWidget
-        initialTab={initialTab}
-        initialQuery={firstParam(params.query) ?? ""}
-      />
+    <AccessGuard requiredPermissions={['recipes.view']}>
+      <RecipeCatalogWidget initialTab={initialTab} initialQuery={firstParam(params.query) ?? ''} />
     </AccessGuard>
   );
 }

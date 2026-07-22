@@ -1,10 +1,7 @@
-const SAFE_INTERNAL_ORIGIN = "https://nutriflow.invalid";
+const SAFE_INTERNAL_ORIGIN = 'https://nutriflow.invalid';
 
-export function getSafeReturnPath(
-  candidate: string | null | undefined,
-  fallback = "/",
-): string {
-  if (!candidate || !candidate.startsWith("/")) {
+export function getSafeReturnPath(candidate: string | null | undefined, fallback = '/'): string {
+  if (!candidate || !candidate.startsWith('/')) {
     return fallback;
   }
 
@@ -15,7 +12,7 @@ export function getSafeReturnPath(
       return fallback;
     }
 
-    if (url.pathname === "/login" || url.pathname.startsWith("/login/")) {
+    if (url.pathname === '/login' || url.pathname.startsWith('/login/')) {
       return fallback;
     }
 

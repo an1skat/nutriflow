@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import { AccessGuard } from "@/features/access/ui/AccessGuard";
-import { SchoolGroupsPanel } from "@/widgets/school-groups/ui/SchoolGroupsPanel";
+import { AccessGuard } from '@/features/access/ui/AccessGuard';
+import { SchoolGroupsPanel } from '@/widgets/school-groups/ui/SchoolGroupsPanel';
 
 export default function SchoolGroupsPage() {
   return (
-    <AccessGuard allowedRoles={["SCHOOL_USER"]}>
+    <AccessGuard allowedRoles={['SCHOOL_USER']}>
       <main className="nf-page">
         <header className="nf-page-header">
           <p className="nf-eyebrow">Школа</p>

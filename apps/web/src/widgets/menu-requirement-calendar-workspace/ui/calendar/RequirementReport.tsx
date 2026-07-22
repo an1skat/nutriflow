@@ -1,27 +1,22 @@
-"use client";
+'use client';
 
-import { ExternalLink, FileSpreadsheet, X } from "lucide-react";
-import Link from "next/link";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo } from 'react';
+
+import Link from 'next/link';
+
+import { ExternalLink, FileSpreadsheet, X } from 'lucide-react';
 
 import type {
   MenuRequirementReport,
   MenuRequirementReportBreakdownItem,
   MenuRequirementReportGroup,
-} from "@/entities/menu-requirement/model/MenuRequirement";
-import { MenuRequirementExportButton } from "@/features/menu-requirement-export/ui/MenuRequirementExportButton";
-import { RequestError } from "@/shared/ui/RequestError";
+} from '@/entities/menu-requirement/model/MenuRequirement';
+import { MenuRequirementExportButton } from '@/features/menu-requirement-export/ui/MenuRequirementExportButton';
+import { RequestError } from '@/shared/ui/RequestError';
 
-import {
-  formatDay,
-  formatGrams,
-  formatInteger,
-} from "./CalendarFormatting";
-import type {
-  SelectedRange,
-  SelectedReportCell,
-} from "./RequirementCalendarTypes";
-import { StatusBadge } from "./RequirementStatus";
+import { formatDay, formatGrams, formatInteger } from './CalendarFormatting';
+import type { SelectedRange, SelectedReportCell } from './RequirementCalendarTypes';
+import { StatusBadge } from './RequirementStatus';
 
 export function RequirementReportDialog({
   range,
@@ -50,17 +45,17 @@ export function RequirementReportDialog({
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === 'Escape') {
         onClose();
       }
     };
     const previousOverflow = document.body.style.overflow;
 
-    document.addEventListener("keydown", handleKeyDown);
-    document.body.style.overflow = "hidden";
+    document.addEventListener('keydown', handleKeyDown);
+    document.body.style.overflow = 'hidden';
 
     return () => {
-      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = previousOverflow;
     };
   }, [onClose, range]);
@@ -99,7 +94,7 @@ export function RequirementReportDialog({
             {report ? (
               <MenuRequirementExportButton
                 target={{
-                  kind: "report",
+                  kind: 'report',
                   request: {
                     school_id: report.school_id,
                     date_from: report.date_from,
@@ -165,10 +160,7 @@ export function RequirementReportTable({
       <section className="nf-panel">
         <div className="nf-panel-body">
           <div className="nf-empty">
-            <FileSpreadsheet
-              className="mx-auto mb-3 size-8 text-slate-400"
-              aria-hidden
-            />
+            <FileSpreadsheet className="mx-auto mb-3 size-8 text-slate-400" aria-hidden />
             <p>Немає даних меню-вимог за обраний період.</p>
           </div>
         </div>
@@ -202,11 +194,11 @@ export function RequirementReportTable({
         <div className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-700">
           {report.missing_dates.length > 0 ? (
             <span className="mr-4">
-              Пропущено: {report.missing_dates.map(formatDay).join(", ")}
+              Пропущено: {report.missing_dates.map(formatDay).join(', ')}
             </span>
           ) : null}
           {report.stale_dates.length > 0 ? (
-            <span>Застаріло: {report.stale_dates.map(formatDay).join(", ")}</span>
+            <span>Застаріло: {report.stale_dates.map(formatDay).join(', ')}</span>
           ) : null}
         </div>
       ) : null}
@@ -238,15 +230,13 @@ function ReportGroupTable({
 }) {
   const dishesByKey = useMemo(
     () => new Map(group.dishes.map((dish) => [dish.aggregate_key, dish])),
-    [group.dishes],
+    [group.dishes]
   );
 
   return (
     <div className="min-w-0">
       <div className="mb-2 flex items-center justify-between gap-3">
-        <h3 className="text-sm font-bold text-slate-950">
-          {group.school_group_name}
-        </h3>
+        <h3 className="text-sm font-bold text-slate-950">{group.school_group_name}</h3>
         <span className="text-xs text-slate-500">{group.age_group}</span>
       </div>
       <div className="max-h-[62vh] overflow-auto border border-slate-200 pb-3 pr-3 [scrollbar-gutter:stable]">
@@ -268,7 +258,7 @@ function ReportGroupTable({
                   <span className="block text-[10px] font-normal text-slate-600">
                     Дітей: {dish.children_count_total}
                   </span>
-                  {dish.key_reliability === "name_fallback" ? (
+                  {dish.key_reliability === 'name_fallback' ? (
                     <span className="mt-1 block text-[11px] font-semibold text-amber-700">
                       Назва
                     </span>
@@ -285,9 +275,7 @@ function ReportGroupTable({
           </thead>
           <tbody>
             {group.ingredient_rows.map((row) => {
-              const cellsByDish = new Map(
-                row.cells.map((cell) => [cell.dish_key, cell]),
-              );
+              const cellsByDish = new Map(row.cells.map((cell) => [cell.dish_key, cell]));
 
               return (
                 <tr
@@ -300,8 +288,7 @@ function ReportGroupTable({
                   {group.dishes.map((dish) => {
                     const cell = cellsByDish.get(dish.aggregate_key);
                     const selected =
-                      selectedCell?.group.school_group_id ===
-                        group.school_group_id &&
+                      selectedCell?.group.school_group_id === group.school_group_id &&
                       selectedCell.cell.dish_key === dish.aggregate_key &&
                       selectedCell.ingredientName === row.ingredient_name;
 
@@ -315,8 +302,8 @@ function ReportGroupTable({
                             type="button"
                             className={`min-h-11 w-full px-1.5 py-1 text-right transition-colors ${
                               selected
-                                ? "bg-emerald-700 text-white"
-                                : "text-slate-800 hover:bg-emerald-50"
+                                ? 'bg-emerald-700 text-white'
+                                : 'text-slate-800 hover:bg-emerald-50'
                             }`}
                             onClick={() =>
                               onSelectCell({
@@ -332,7 +319,7 @@ function ReportGroupTable({
                             </span>
                             <span
                               className={`block text-[10px] ${
-                                selected ? "text-emerald-50" : "text-slate-500"
+                                selected ? 'text-emerald-50' : 'text-slate-500'
                               }`}
                             >
                               нетто {formatGrams(cell.net_per_person_g)}
@@ -360,11 +347,7 @@ function ReportGroupTable({
   );
 }
 
-function CellBreakdownPanel({
-  selectedCell,
-}: {
-  selectedCell: SelectedReportCell;
-}) {
+function CellBreakdownPanel({ selectedCell }: { selectedCell: SelectedReportCell }) {
   return (
     <section className="border border-slate-200 bg-white">
       <div className="border-b border-slate-200 px-4 py-3">
@@ -382,28 +365,18 @@ function CellBreakdownPanel({
             <tr className="bg-slate-100 text-left text-slate-800">
               <th className="border-b border-slate-300 px-2 py-1.5">Дата</th>
               <th className="border-b border-slate-300 px-2 py-1.5">Меню</th>
-              <th className="border-b border-slate-300 px-2 py-1.5 text-right">
-                Нетто, г
-              </th>
-              <th className="border-b border-slate-300 px-2 py-1.5 text-right">
-                Дітей
-              </th>
-              <th className="border-b border-slate-300 px-2 py-1.5 text-right">
-                Raw, г
-              </th>
-              <th className="border-b border-slate-300 px-2 py-1.5 text-right">
-                До видачі, г
-              </th>
+              <th className="border-b border-slate-300 px-2 py-1.5 text-right">Нетто, г</th>
+              <th className="border-b border-slate-300 px-2 py-1.5 text-right">Дітей</th>
+              <th className="border-b border-slate-300 px-2 py-1.5 text-right">Raw, г</th>
+              <th className="border-b border-slate-300 px-2 py-1.5 text-right">До видачі, г</th>
               <th className="border-b border-slate-300 px-2 py-1.5">Статус</th>
-              <th className="border-b border-slate-300 px-2 py-1.5 text-right">
-                День
-              </th>
+              <th className="border-b border-slate-300 px-2 py-1.5 text-right">День</th>
             </tr>
           </thead>
           <tbody>
             {selectedCell.cell.breakdown.map((item) => (
               <BreakdownRow
-                key={`${item.service_date}:${item.requirement_id ?? "missing"}`}
+                key={`${item.service_date}:${item.requirement_id ?? 'missing'}`}
                 item={item}
               />
             ))}
@@ -417,25 +390,21 @@ function CellBreakdownPanel({
 function BreakdownRow({ item }: { item: MenuRequirementReportBreakdownItem }) {
   return (
     <tr className="border-b border-slate-200 last:border-b-0">
-      <td className="px-2 py-1.5 font-medium text-slate-900">
-        {formatDay(item.service_date)}
-      </td>
+      <td className="px-2 py-1.5 font-medium text-slate-900">{formatDay(item.service_date)}</td>
       <td className="px-2 py-1.5 text-slate-700">
-        {item.menu_title ?? "Денну меню-вимогу не сформовано"}
+        {item.menu_title ?? 'Денну меню-вимогу не сформовано'}
       </td>
       <td className="px-2 py-1.5 text-right tabular-nums text-slate-700">
-        {item.net_per_person_g ? formatGrams(item.net_per_person_g) : "-"}
+        {item.net_per_person_g ? formatGrams(item.net_per_person_g) : '-'}
       </td>
       <td className="px-2 py-1.5 text-right tabular-nums text-slate-700">
-        {item.children_count ?? "-"}
+        {item.children_count ?? '-'}
       </td>
       <td className="px-2 py-1.5 text-right tabular-nums text-slate-700">
-        {item.issue_total_raw_g ? formatGrams(item.issue_total_raw_g) : "-"}
+        {item.issue_total_raw_g ? formatGrams(item.issue_total_raw_g) : '-'}
       </td>
       <td className="px-2 py-1.5 text-right font-bold tabular-nums text-slate-900">
-        {item.issue_total_rounded_g !== null
-          ? formatInteger(item.issue_total_rounded_g)
-          : "-"}
+        {item.issue_total_rounded_g !== null ? formatInteger(item.issue_total_rounded_g) : '-'}
       </td>
       <td className="px-2 py-1.5">
         <StatusBadge status={item.status} />

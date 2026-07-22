@@ -1,49 +1,44 @@
-import { z } from "zod";
+import { z } from 'zod';
 
-export const mealTypeSchema = z.enum(["breakfast", "lunch"]);
+export const mealTypeSchema = z.enum(['breakfast', 'lunch']);
 export const weekdaySchema = z.enum([
-  "monday",
-  "tuesday",
-  "wednesday",
-  "thursday",
-  "friday",
-  "saturday",
-  "sunday",
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+  'saturday',
+  'sunday',
 ]);
-export const weeklyMenuStatusSchema = z.enum([
-  "draft",
-  "published",
-  "archived",
-  "revoked",
-]);
-export const menuItemKindSchema = z.enum(["dish_card", "product"]);
-export const ageGroupSchema = z.enum(["6-11", "11-14", "14-18"]);
-export const dayCloseReasonSchema = z.enum(["manual", "automatic"]);
+export const weeklyMenuStatusSchema = z.enum(['draft', 'published', 'archived', 'revoked']);
+export const menuItemKindSchema = z.enum(['dish_card', 'product']);
+export const ageGroupSchema = z.enum(['6-11', '11-14', '14-18']);
+export const dayCloseReasonSchema = z.enum(['manual', 'automatic']);
 
 export const WEEKDAY_LABELS: Record<z.infer<typeof weekdaySchema>, string> = {
-  monday: "Понеділок",
-  tuesday: "Вівторок",
-  wednesday: "Середа",
-  thursday: "Четвер",
-  friday: "П’ятниця",
-  saturday: "Субота",
-  sunday: "Неділя",
+  monday: 'Понеділок',
+  tuesday: 'Вівторок',
+  wednesday: 'Середа',
+  thursday: 'Четвер',
+  friday: 'П’ятниця',
+  saturday: 'Субота',
+  sunday: 'Неділя',
 };
 
 export const AGE_GROUP_LABELS: Record<z.infer<typeof ageGroupSchema>, string> = {
-  "6-11": "6-11 років",
-  "11-14": "11-14 років",
-  "14-18": "14-18 років",
+  '6-11': '6-11 років',
+  '11-14': '11-14 років',
+  '14-18': '14-18 років',
 };
 
 export const WEEKDAY_ORDER: Array<z.infer<typeof weekdaySchema>> = [
-  "monday",
-  "tuesday",
-  "wednesday",
-  "thursday",
-  "friday",
-  "saturday",
-  "sunday",
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+  'saturday',
+  'sunday',
 ];
 
 export const DEFAULT_WEEKDAYS = WEEKDAY_ORDER.slice(0, 5);
@@ -155,9 +150,7 @@ export type DailyMenuItem = z.infer<typeof dailyMenuItemSchema>;
 export type DailyMenu = z.infer<typeof dailyMenuSchema>;
 export type WeeklyMenu = z.infer<typeof weeklyMenuSchema>;
 export type WeeklyMenuList = z.infer<typeof weeklyMenuListSchema>;
-export type PublishWeeklyMenuResponse = z.infer<
-  typeof publishWeeklyMenuResponseSchema
->;
+export type PublishWeeklyMenuResponse = z.infer<typeof publishWeeklyMenuResponseSchema>;
 
 export type WeeklyMenuListRequest = {
   offset: number;

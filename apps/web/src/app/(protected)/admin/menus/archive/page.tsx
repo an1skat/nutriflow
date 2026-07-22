@@ -1,12 +1,9 @@
-import { AccessGuard } from "@/features/access/ui/AccessGuard";
-import { WeeklyMenuArchiveWorkspace } from "@/widgets/weekly-menu-admin-workspace/ui/WeeklyMenuArchiveWorkspace";
+import { AccessGuard } from '@/features/access/ui/AccessGuard';
+import { WeeklyMenuArchiveWorkspace } from '@/widgets/weekly-menu-admin-workspace/ui/WeeklyMenuArchiveWorkspace';
 
 export default function AdminMenuArchivePage() {
   return (
-    <AccessGuard
-      allowedRoles={["OWNER", "TECHNOLOGIST"]}
-      requiredPermissions={["menus.manage"]}
-    >
+    <AccessGuard allowedRoles={['OWNER', 'TECHNOLOGIST']} requiredPermissions={['menus.manage']}>
       <WeeklyMenuArchiveWorkspace />
     </AccessGuard>
   );

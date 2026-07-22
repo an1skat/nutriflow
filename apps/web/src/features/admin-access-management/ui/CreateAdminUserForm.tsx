@@ -1,47 +1,47 @@
-"use client";
+'use client';
 
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm, useWatch } from "react-hook-form";
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm, useWatch } from 'react-hook-form';
 
-import { getApiErrorMessage } from "@/shared/api/HttpClient";
+import { getApiErrorMessage } from '@/shared/api/HttpClient';
 
 import {
+  type CreateAdminUserFormValues,
   adminPermissionOptions,
   createAdminUserSchema,
   defaultLowerAdminPermissions,
-  type CreateAdminUserFormValues,
-} from "../model/AdminAccessSchemas";
-import { useCreateAdminUser } from "../model/UseAdminAccessMutations";
+} from '../model/AdminAccessSchemas';
+import { useCreateAdminUser } from '../model/UseAdminAccessMutations';
 
 export function CreateAdminUserForm() {
   const createAdminUser = useCreateAdminUser();
   const form = useForm<CreateAdminUserFormValues>({
     resolver: zodResolver(createAdminUserSchema),
     defaultValues: {
-      username: "",
-      email: "",
-      password: "",
-      role: "ADMIN",
+      username: '',
+      email: '',
+      password: '',
+      role: 'ADMIN',
       permissions: defaultLowerAdminPermissions,
     },
   });
-  const role = useWatch({ control: form.control, name: "role" });
+  const role = useWatch({ control: form.control, name: 'role' });
 
   const onSubmit = form.handleSubmit(async (values) => {
-    form.clearErrors("root");
+    form.clearErrors('root');
 
     try {
       await createAdminUser.mutateAsync(values);
       form.reset({
-        username: "",
-        email: "",
-        password: "",
-        role: "ADMIN",
+        username: '',
+        email: '',
+        password: '',
+        role: 'ADMIN',
         permissions: defaultLowerAdminPermissions,
       });
     } catch (error) {
-      form.setError("root", {
-        type: "server",
+      form.setError('root', {
+        type: 'server',
         message: getApiErrorMessage(error),
       });
     }
@@ -56,7 +56,7 @@ export function CreateAdminUserForm() {
           </label>
           <input
             id="admin-username"
-            {...form.register("username")}
+            {...form.register('username')}
             className="nf-input"
             autoComplete="off"
           />
@@ -74,7 +74,7 @@ export function CreateAdminUserForm() {
           <input
             id="admin-email"
             type="email"
-            {...form.register("email")}
+            {...form.register('email')}
             className="nf-input"
             autoComplete="off"
           />
@@ -92,7 +92,7 @@ export function CreateAdminUserForm() {
           <input
             id="admin-password"
             type="password"
-            {...form.register("password")}
+            {...form.register('password')}
             className="nf-input"
             autoComplete="new-password"
           />
@@ -109,15 +109,13 @@ export function CreateAdminUserForm() {
           </label>
           <select
             id="admin-role"
-            {...form.register("role", {
+            {...form.register('role', {
               onChange: (event) => {
                 const nextRole = event.target.value;
                 form.setValue(
-                  "permissions",
-                  nextRole === "TECHNOLOGIST"
-                    ? []
-                    : defaultLowerAdminPermissions,
-                  { shouldValidate: true },
+                  'permissions',
+                  nextRole === 'TECHNOLOGIST' ? [] : defaultLowerAdminPermissions,
+                  { shouldValidate: true }
                 );
               },
             })}
@@ -129,7 +127,7 @@ export function CreateAdminUserForm() {
         </div>
       </div>
 
-      {role === "ADMIN" ? (
+      {role === 'ADMIN' ? (
         <fieldset>
           <legend className="nf-label">Права доступу</legend>
           <div className="grid gap-2 md:grid-cols-2">
@@ -141,13 +139,11 @@ export function CreateAdminUserForm() {
                 <input
                   type="checkbox"
                   value={permission.value}
-                  {...form.register("permissions")}
+                  {...form.register('permissions')}
                   className="mt-1 size-4"
                 />
                 <span>
-                  <span className="block font-bold text-slate-900">
-                    {permission.label}
-                  </span>
+                  <span className="block font-bold text-slate-900">{permission.label}</span>
                   <span className="mt-0.5 block text-xs leading-5 text-slate-600">
                     {permission.description}
                   </span>
@@ -176,18 +172,16 @@ export function CreateAdminUserForm() {
           className="nf-button nf-button-primary"
         >
           {form.formState.isSubmitting
-            ? "Створюємо…"
-            : role === "TECHNOLOGIST"
-              ? "Створити технолога"
-              : "Створити адміністратора"}
+            ? 'Створюємо…'
+            : role === 'TECHNOLOGIST'
+              ? 'Створити технолога'
+              : 'Створити адміністратора'}
         </button>
       </div>
 
       {createAdminUser.isSuccess ? (
         <p role="status" className="nf-success">
-          {role === "TECHNOLOGIST"
-            ? "Технолога створено."
-            : "Адміністратора створено."}
+          {role === 'TECHNOLOGIST' ? 'Технолога створено.' : 'Адміністратора створено.'}
         </p>
       ) : null}
     </form>

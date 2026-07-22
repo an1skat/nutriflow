@@ -1,26 +1,23 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
-import { useSchool } from "@/entities/school/api/SchoolQueries";
-import { useSchoolUser } from "@/entities/school-user/api/SchoolUserQueries";
-import { DeleteSchoolUserAction } from "@/features/school-user-management/ui/DeleteSchoolUserAction";
-import { EditSchoolUserForm } from "@/features/school-user-management/ui/EditSchoolUserForm";
-import { ResetSchoolUserPasswordForm } from "@/features/school-user-management/ui/ResetSchoolUserPasswordForm";
-import { formatDate } from "@/shared/lib/FormatDate";
-import { RequestError } from "@/shared/ui/RequestError";
-import { StatusBadge } from "@/shared/ui/StatusBadge";
+import { useSchoolUser } from '@/entities/school-user/api/SchoolUserQueries';
+import { useSchool } from '@/entities/school/api/SchoolQueries';
+import { DeleteSchoolUserAction } from '@/features/school-user-management/ui/DeleteSchoolUserAction';
+import { EditSchoolUserForm } from '@/features/school-user-management/ui/EditSchoolUserForm';
+import { ResetSchoolUserPasswordForm } from '@/features/school-user-management/ui/ResetSchoolUserPasswordForm';
+import { formatDate } from '@/shared/lib/FormatDate';
+import { RequestError } from '@/shared/ui/RequestError';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 
 type SchoolUserDetailsProps = {
   schoolId: string;
   userId: string;
 };
 
-export function SchoolUserDetails({
-  schoolId,
-  userId,
-}: SchoolUserDetailsProps) {
+export function SchoolUserDetails({ schoolId, userId }: SchoolUserDetailsProps) {
   const router = useRouter();
   const school = useSchool(schoolId);
   const user = useSchoolUser(schoolId, userId);
@@ -52,10 +49,7 @@ export function SchoolUserDetails({
   return (
     <main className="nf-page">
       <header className="nf-page-header">
-        <Link
-          href={`/admin/schools/${schoolId}`}
-          className="nf-link text-xs"
-        >
+        <Link href={`/admin/schools/${schoolId}`} className="nf-link text-xs">
           ← До школи «{school.data.name}»
         </Link>
         <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -70,8 +64,7 @@ export function SchoolUserDetails({
           />
         </div>
         <p className="nf-description">
-          {user.data.email ?? "Email не вказано"} · Створено{" "}
-          {formatDate(user.data.created_at)}
+          {user.data.email ?? 'Email не вказано'} · Створено {formatDate(user.data.created_at)}
         </p>
       </header>
 
@@ -91,31 +84,23 @@ export function SchoolUserDetails({
               <h2 className="nf-panel-title">Зміна пароля</h2>
             </div>
             <div className="nf-panel-body">
-              <ResetSchoolUserPasswordForm
-                schoolId={schoolId}
-                userId={userId}
-              />
+              <ResetSchoolUserPasswordForm schoolId={schoolId} userId={userId} />
             </div>
           </section>
         </div>
 
         <section className="nf-panel h-fit border-red-300">
           <div className="nf-panel-header bg-red-50">
-            <h2 className="nf-panel-title text-red-900">
-              Видалення користувача
-            </h2>
+            <h2 className="nf-panel-title text-red-900">Видалення користувача</h2>
           </div>
           <div className="nf-panel-body">
             <p className="mb-4 text-xs leading-5 text-slate-600">
-              Обліковий запис буде фізично видалено, а його поточні сесії —
-              завершено.
+              Обліковий запис буде фізично видалено, а його поточні сесії — завершено.
             </p>
             <DeleteSchoolUserAction
               schoolId={schoolId}
               userId={userId}
-              onDeleted={() =>
-                router.replace(`/admin/schools/${schoolId}`)
-              }
+              onDeleted={() => router.replace(`/admin/schools/${schoolId}`)}
             />
           </div>
         </section>

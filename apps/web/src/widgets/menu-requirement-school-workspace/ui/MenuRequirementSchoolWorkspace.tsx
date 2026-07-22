@@ -1,31 +1,34 @@
-"use client";
+'use client';
 
-import { FileSpreadsheet } from "lucide-react";
-import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
-import { toast } from "sonner";
+import { useMemo, useState } from 'react';
 
-import { useMenuRequirements } from "@/entities/menu-requirement/api/MenuRequirementQueries";
-import type { UpdateMenuRequirementPayload } from "@/entities/menu-requirement/model/MenuRequirement";
-import { useCurrentUser } from "@/entities/session/api/SessionQueries";
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+
+import { FileSpreadsheet } from 'lucide-react';
+import { toast } from 'sonner';
+
+import { useMenuRequirements } from '@/entities/menu-requirement/api/MenuRequirementQueries';
+import type { UpdateMenuRequirementPayload } from '@/entities/menu-requirement/model/MenuRequirement';
+import { useCurrentUser } from '@/entities/session/api/SessionQueries';
 import {
   useDeleteMenuRequirement,
   useUpdateMenuRequirement,
-} from "@/features/menu-requirement-edit/model/UseMenuRequirementMutations";
-import { getApiErrorMessage } from "@/shared/api/HttpClient";
-import { RequestError } from "@/shared/ui/RequestError";
+} from '@/features/menu-requirement-edit/model/UseMenuRequirementMutations';
+import { getApiErrorMessage } from '@/shared/api/HttpClient';
+import { RequestError } from '@/shared/ui/RequestError';
+
 import {
-  filterRequirementsForUser,
   MenuRequirementTable,
   RequirementNavigator,
-} from "./requirement/RequirementContent";
+  filterRequirementsForUser,
+} from './requirement/RequirementContent';
 
 export {
   filterRequirementsForUser,
   MenuRequirementTable,
   RequirementNavigator,
-} from "./requirement/RequirementContent";
+} from './requirement/RequirementContent';
 
 export function MenuRequirementSchoolWorkspace() {
   const searchParams = useSearchParams();
@@ -34,42 +37,31 @@ export function MenuRequirementSchoolWorkspace() {
     offset: 0,
     limit: 100,
   });
-  const [selectedId, setSelectedId] = useState("");
-  const allItems = useMemo(
-    () => requirements.data?.items ?? [],
-    [requirements.data?.items],
-  );
+  const [selectedId, setSelectedId] = useState('');
+  const allItems = useMemo(() => requirements.data?.items ?? [], [requirements.data?.items]);
   const items = useMemo(
     () => filterRequirementsForUser(allItems, currentUser.data),
-    [allItems, currentUser.data],
+    [allItems, currentUser.data]
   );
-  const requestedRequirementId = searchParams.get("requirement_id") ?? "";
+  const requestedRequirementId = searchParams.get('requirement_id') ?? '';
   const effectiveSelectedId = items.some((item) => item.id === selectedId)
     ? selectedId
     : items.some((item) => item.id === requestedRequirementId)
       ? requestedRequirementId
-      : (items[0]?.id ?? "");
+      : (items[0]?.id ?? '');
 
-  const selectedRequirement =
-    items.find((item) => item.id === effectiveSelectedId) ?? null;
+  const selectedRequirement = items.find((item) => item.id === effectiveSelectedId) ?? null;
   const viewerRole = currentUser.data?.role;
-  const isSchoolUser = viewerRole === "SCHOOL_USER";
-  const showAdminHierarchy =
-    viewerRole === "OWNER" || viewerRole === "TECHNOLOGIST";
+  const isSchoolUser = viewerRole === 'SCHOOL_USER';
+  const showAdminHierarchy = viewerRole === 'OWNER' || viewerRole === 'TECHNOLOGIST';
   const canEditRequirement = showAdminHierarchy;
-  const updateRequirement = useUpdateMenuRequirement(
-    selectedRequirement?.id ?? "",
-  );
-  const deleteRequirement = useDeleteMenuRequirement(
-    selectedRequirement?.id ?? "",
-  );
+  const updateRequirement = useUpdateMenuRequirement(selectedRequirement?.id ?? '');
+  const deleteRequirement = useDeleteMenuRequirement(selectedRequirement?.id ?? '');
 
-  const handleSaveRequirement = async (
-    payload: UpdateMenuRequirementPayload,
-  ) => {
+  const handleSaveRequirement = async (payload: UpdateMenuRequirementPayload) => {
     try {
       await updateRequirement.mutateAsync(payload);
-      toast.success("Меню-вимогу оновлено.");
+      toast.success('Меню-вимогу оновлено.');
     } catch (error) {
       toast.error(getApiErrorMessage(error));
       throw error;
@@ -83,8 +75,8 @@ export function MenuRequirementSchoolWorkspace() {
 
     try {
       await deleteRequirement.mutateAsync();
-      setSelectedId("");
-      toast.success("Меню-вимогу видалено.");
+      setSelectedId('');
+      toast.success('Меню-вимогу видалено.');
     } catch (error) {
       toast.error(getApiErrorMessage(error));
       throw error;
@@ -97,20 +89,15 @@ export function MenuRequirementSchoolWorkspace() {
         <p className="nf-eyebrow">Облік продуктів</p>
         <h1 className="nf-title">Меню-вимога</h1>
         <p className="nf-description">
-          Нетто інгредієнтів на одну особу та округлена кількість продуктів до
-          видачі для конкретної групи.
-          {viewerRole === "ADMIN" ? " Дані згруповано за школами." : null}
-          {showAdminHierarchy
-            ? " Дані згруповано за адміністратором і школою."
-            : null}
+          Нетто інгредієнтів на одну особу та округлена кількість продуктів до видачі для конкретної
+          групи.
+          {viewerRole === 'ADMIN' ? ' Дані згруповано за школами.' : null}
+          {showAdminHierarchy ? ' Дані згруповано за адміністратором і школою.' : null}
         </p>
       </header>
 
       {requirements.isError ? (
-        <RequestError
-          error={requirements.error}
-          onRetry={() => void requirements.refetch()}
-        />
+        <RequestError error={requirements.error} onRetry={() => void requirements.refetch()} />
       ) : null}
 
       {requirements.isPending ? (
@@ -127,10 +114,7 @@ export function MenuRequirementSchoolWorkspace() {
         <section className="nf-panel">
           <div className="nf-panel-body">
             <div className="nf-empty">
-              <FileSpreadsheet
-                className="mx-auto mb-3 size-8 text-slate-400"
-                aria-hidden
-              />
+              <FileSpreadsheet className="mx-auto mb-3 size-8 text-slate-400" aria-hidden />
               <p>Ще немає сформованих меню-вимог.</p>
               {isSchoolUser ? (
                 <Link href="/daily-menu" className="nf-link mt-2 inline-block">

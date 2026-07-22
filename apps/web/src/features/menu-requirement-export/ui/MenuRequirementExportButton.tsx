@@ -1,20 +1,21 @@
-"use client";
+'use client';
 
-import { FileSpreadsheet, LoaderCircle } from "lucide-react";
-import { useState } from "react";
-import { toast } from "sonner";
+import { useState } from 'react';
 
-import { getApiErrorMessage } from "@/shared/api/HttpClient";
+import { FileSpreadsheet, LoaderCircle } from 'lucide-react';
+import { toast } from 'sonner';
+
+import { getApiErrorMessage } from '@/shared/api/HttpClient';
 
 import {
+  type MenuRequirementExportTarget,
   exportMenuRequirementWorkbook,
   triggerMenuRequirementDownload,
-  type MenuRequirementExportTarget,
-} from "../api/MenuRequirementExportApi";
+} from '../api/MenuRequirementExportApi';
 
 export function MenuRequirementExportButton({
   target,
-  label = "Експорт в Excel",
+  label = 'Експорт в Excel',
   disabled = false,
 }: {
   target: MenuRequirementExportTarget;
@@ -28,11 +29,9 @@ export function MenuRequirementExportButton({
     try {
       const workbook = await exportMenuRequirementWorkbook(target);
       triggerMenuRequirementDownload(workbook);
-      toast.success("Меню-вимогу експортовано.");
+      toast.success('Меню-вимогу експортовано.');
     } catch (error) {
-      toast.error(
-        getApiErrorMessage(error, "Не вдалося експортувати меню-вимогу."),
-      );
+      toast.error(getApiErrorMessage(error, 'Не вдалося експортувати меню-вимогу.'));
     } finally {
       setIsPending(false);
     }
@@ -50,7 +49,7 @@ export function MenuRequirementExportButton({
       ) : (
         <FileSpreadsheet className="size-4" aria-hidden />
       )}
-      {isPending ? "Експортуємо…" : label}
+      {isPending ? 'Експортуємо…' : label}
     </button>
   );
 }

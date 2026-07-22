@@ -1,13 +1,14 @@
-"use client";
+'use client';
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import { useEffect, useState, type ReactNode } from "react";
-import { Toaster } from "sonner";
+import { type ReactNode, useEffect, useState } from 'react';
 
-import { replaceAuthenticatedUser } from "@/features/auth/model/UseSession";
-import { subscribeToSessionExpired } from "@/shared/api/HttpClient";
-import { ConfirmDialogProvider } from "@/shared/ui/ConfirmDialog";
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { Toaster } from 'sonner';
+
+import { replaceAuthenticatedUser } from '@/features/auth/model/UseSession';
+import { subscribeToSessionExpired } from '@/shared/api/HttpClient';
+import { ConfirmDialogProvider } from '@/shared/ui/ConfirmDialog';
 
 export function AppProviders({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -21,7 +22,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
             retry: false,
           },
         },
-      }),
+      })
   );
 
   useEffect(
@@ -29,7 +30,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       subscribeToSessionExpired(() => {
         replaceAuthenticatedUser(queryClient, null);
       }),
-    [queryClient],
+    [queryClient]
   );
 
   return (
@@ -41,12 +42,10 @@ export function AppProviders({ children }: { children: ReactNode }) {
         closeButton
         toastOptions={{
           duration: 5000,
-          className: "font-sans",
+          className: 'font-sans',
         }}
       />
-      {process.env.NODE_ENV === "development" ? (
-        <ReactQueryDevtools initialIsOpen={false} />
-      ) : null}
+      {process.env.NODE_ENV === 'development' ? <ReactQueryDevtools initialIsOpen={false} /> : null}
     </QueryClientProvider>
   );
 }

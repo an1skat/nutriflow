@@ -1,11 +1,11 @@
-import { z } from "zod";
+import { z } from 'zod';
 
-import type { SchoolGroup } from "@/entities/school-group/model/SchoolGroup";
+import type { SchoolGroup } from '@/entities/school-group/model/SchoolGroup';
 import {
-  dailyMenuSchema,
   type DailyMenu,
   type DailyMenuItem,
-} from "@/entities/weekly-menu/model/WeeklyMenu";
+  dailyMenuSchema,
+} from '@/entities/weekly-menu/model/WeeklyMenu';
 
 const DAILY_MENU_DRAFT_VERSION = 1;
 
@@ -18,10 +18,7 @@ const dailyMenuDraftSchema = z.object({
 
 export type DailyMenuDraft = z.infer<typeof dailyMenuDraftSchema>;
 
-export function prepareDailyMenuDays(
-  sourceDays: DailyMenu[],
-  groups: SchoolGroup[],
-): DailyMenu[] {
+export function prepareDailyMenuDays(sourceDays: DailyMenu[], groups: SchoolGroup[]): DailyMenu[] {
   const activeGroups = groups.filter((group) => group.is_active);
 
   return sourceDays.map((day) => ({
@@ -37,8 +34,8 @@ export function prepareDailyMenuDays(
         school_group_id: group.id,
         age_group: group.age_group,
         children_count:
-          item.servings.find((serving) => serving.school_group_id === group.id)
-            ?.children_count ?? 0,
+          item.servings.find((serving) => serving.school_group_id === group.id)?.children_count ??
+          0,
       })),
     })),
   }));
@@ -47,12 +44,12 @@ export function prepareDailyMenuDays(
 export function replaceDailyMenuDish(
   currentItem: DailyMenuItem,
   selectedDish: DailyMenuItem,
-  groups: SchoolGroup[],
+  groups: SchoolGroup[]
 ): DailyMenuItem {
   const [preparedDay] = prepareDailyMenuDays(
     [
       {
-        weekday: "monday",
+        weekday: 'monday',
         date: null,
         notes: null,
         closed_at: null,
@@ -61,7 +58,7 @@ export function replaceDailyMenuDish(
         items: [selectedDish],
       },
     ],
-    groups,
+    groups
   );
 
   return {
@@ -71,11 +68,8 @@ export function replaceDailyMenuDish(
   };
 }
 
-export function loadDailyMenuDraft(
-  menuId: string,
-  baseUpdatedAt: string,
-): DailyMenuDraft | null {
-  if (typeof window === "undefined") {
+export function loadDailyMenuDraft(menuId: string, baseUpdatedAt: string): DailyMenuDraft | null {
+  if (typeof window === 'undefined') {
     return null;
   }
 
@@ -103,9 +97,9 @@ export function loadDailyMenuDraft(
 export function saveDailyMenuDraft(
   menuId: string,
   baseUpdatedAt: string,
-  days: DailyMenu[],
+  days: DailyMenu[]
 ): string | null {
-  if (typeof window === "undefined") {
+  if (typeof window === 'undefined') {
     return null;
   }
 
@@ -117,16 +111,13 @@ export function saveDailyMenuDraft(
     days,
   };
 
-  window.localStorage.setItem(
-    getDailyMenuDraftKey(menuId),
-    JSON.stringify(payload),
-  );
+  window.localStorage.setItem(getDailyMenuDraftKey(menuId), JSON.stringify(payload));
 
   return savedAt;
 }
 
 export function clearDailyMenuDraft(menuId: string): void {
-  if (typeof window === "undefined") {
+  if (typeof window === 'undefined') {
     return;
   }
 

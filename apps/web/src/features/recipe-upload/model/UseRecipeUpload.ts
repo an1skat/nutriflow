@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useMutation } from "@tanstack/react-query";
+import { useMutation } from '@tanstack/react-query';
 
 import {
   confirmDishCardVersion,
@@ -11,19 +11,14 @@ import {
   fetchAllergens,
   fetchIngredients,
   validateDishCardVersion,
-} from "@/entities/recipe/api/RecipeApi";
-import { getApiErrorMessage } from "@/shared/api/HttpClient";
-import { createObjectId } from "@/shared/lib/ObjectId";
+} from '@/entities/recipe/api/RecipeApi';
+import { getApiErrorMessage } from '@/shared/api/HttpClient';
+import { createObjectId } from '@/shared/lib/ObjectId';
 
-import { orNull, orZero, type RecipeUploadFormValues } from "./RecipeUploadSchema";
+import { type RecipeUploadFormValues, orNull, orZero } from './RecipeUploadSchema';
 
 export type UploadProgress = {
-  step:
-    | "resolving-catalog"
-    | "creating-card"
-    | "creating-version"
-    | "validating"
-    | "confirming";
+  step: 'resolving-catalog' | 'creating-card' | 'creating-version' | 'validating' | 'confirming';
   message: string;
 };
 
@@ -33,14 +28,17 @@ export type UploadResult = {
 };
 
 export class RecipeUploadError extends Error {
-  constructor(message: string, readonly step: UploadProgress["step"]) {
+  constructor(
+    message: string,
+    readonly step: UploadProgress['step']
+  ) {
     super(message);
-    this.name = "RecipeUploadError";
+    this.name = 'RecipeUploadError';
   }
 }
 
 function normalizeLookupText(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, " ");
+  return value.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
 async function findAllergenByCode(code: string) {
@@ -74,8 +72,7 @@ async function findIngredientByNameAndUnit(name: string, unit: string) {
   return (
     result.items.find(
       (item) =>
-        item.normalized_name === normalizedName &&
-        normalizeLookupText(item.unit) === normalizedUnit,
+        item.normalized_name === normalizedName && normalizeLookupText(item.unit) === normalizedUnit
     ) ?? null
   );
 }
@@ -120,7 +117,7 @@ async function resolveCatalogReferences(values: RecipeUploadFormValues) {
     const key = `${normalizeLookupText(name)}|g`;
     let ingredientId = ingredientIdsByName.get(key);
     if (!ingredientId) {
-      ingredientId = await ensureIngredientId(name, "g");
+      ingredientId = await ensureIngredientId(name, 'g');
       ingredientIdsByName.set(key, ingredientId);
     }
     ingredientIdsByTempId[ingredient.tempId] = ingredientId;
@@ -135,7 +132,7 @@ async function resolveCatalogReferences(values: RecipeUploadFormValues) {
 function buildVersionPayload(
   values: RecipeUploadFormValues,
   portionIds: Record<string, string>,
-  catalogReferences: Awaited<ReturnType<typeof resolveCatalogReferences>>,
+  catalogReferences: Awaited<ReturnType<typeof resolveCatalogReferences>>
 ) {
   return {
     technology_text: orNull(values.technology_text),
@@ -161,23 +158,23 @@ function buildVersionPayload(
         alternative_label: orNull(ingredient.alternative_label),
         gross_amount: ingredient.amounts[portion.tempId].gross,
         net_amount: ingredient.amounts[portion.tempId].net,
-        unit: "g",
-        amount_basis: "per_portion" as const,
+        unit: 'g',
+        amount_basis: 'per_portion' as const,
         portion_variant_id: portionIds[portion.tempId],
         notes: orNull(ingredient.notes),
-      })),
+      }))
     ),
   };
 }
 
 async function uploadDishCard(
   values: RecipeUploadFormValues,
-  onProgress: (progress: UploadProgress) => void,
+  onProgress: (progress: UploadProgress) => void
 ): Promise<UploadResult> {
-  onProgress({ step: "resolving-catalog", message: "Оновлюємо довідники…" });
+  onProgress({ step: 'resolving-catalog', message: 'Оновлюємо довідники…' });
   const catalogReferences = await resolveCatalogReferences(values);
 
-  onProgress({ step: "creating-card", message: "Створюємо картку страви…" });
+  onProgress({ step: 'creating-card', message: 'Створюємо картку страви…' });
   const dishCard = await createDishCard({
     card_number: values.card_number,
     name: values.name,
@@ -192,22 +189,22 @@ async function uploadDishCard(
     portionIds[portion.tempId] = createObjectId();
   }
 
-  onProgress({ step: "creating-version", message: "Зберігаємо версію техкарти…" });
+  onProgress({ step: 'creating-version', message: 'Зберігаємо версію техкарти…' });
   const version = await createDishCardVersion(
     dishCard.id,
-    buildVersionPayload(values, portionIds, catalogReferences),
+    buildVersionPayload(values, portionIds, catalogReferences)
   );
 
-  onProgress({ step: "validating", message: "Перевіряємо техкарту…" });
+  onProgress({ step: 'validating', message: 'Перевіряємо техкарту…' });
   const validation = await validateDishCardVersion(version.id);
   if (validation.blocking_errors.length > 0) {
     throw new RecipeUploadError(
-      validation.blocking_errors[0]?.message ?? "Техкарта має блокуючі помилки.",
-      "validating",
+      validation.blocking_errors[0]?.message ?? 'Техкарта має блокуючі помилки.',
+      'validating'
     );
   }
 
-  onProgress({ step: "confirming", message: "Підтверджуємо техкарту…" });
+  onProgress({ step: 'confirming', message: 'Підтверджуємо техкарту…' });
   await confirmDishCardVersion(version.id);
 
   return { dishCardId: dishCard.id, versionId: version.id };

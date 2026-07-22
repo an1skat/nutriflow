@@ -1,11 +1,11 @@
-import { z } from "zod";
+import { z } from 'zod';
 
-export const ageGroupSchema = z.enum(["6-11", "11-14", "14-18"]);
+export const ageGroupSchema = z.enum(['6-11', '11-14', '14-18']);
 
 export const ageGroupLabels: Record<AgeGroup, string> = {
-  "6-11": "6-11 років",
-  "11-14": "11-14 років",
-  "14-18": "14-18 років",
+  '6-11': '6-11 років',
+  '11-14': '11-14 років',
+  '14-18': '14-18 років',
 };
 
 export const ageGroupOptions = ageGroupSchema.options.map((value) => ({

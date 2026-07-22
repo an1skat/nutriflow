@@ -1,75 +1,62 @@
-"use client";
+'use client';
 
-import { useMemo, useState } from "react";
+import { useMemo, useState } from 'react';
 
 import {
   useMenuRequirementCalendar,
   useMenuRequirementReport,
-} from "@/entities/menu-requirement/api/MenuRequirementQueries";
-import { useSchools } from "@/entities/school/api/SchoolQueries";
-import { useSchoolGroups } from "@/entities/school-group/api/SchoolGroupQueries";
-import { useCurrentUser } from "@/entities/session/api/SessionQueries";
-import type { MealType } from "@/entities/weekly-menu/model/WeeklyMenu";
-import { RequestError } from "@/shared/ui/RequestError";
+} from '@/entities/menu-requirement/api/MenuRequirementQueries';
+import { useSchoolGroups } from '@/entities/school-group/api/SchoolGroupQueries';
+import { useSchools } from '@/entities/school/api/SchoolQueries';
+import { useCurrentUser } from '@/entities/session/api/SessionQueries';
+import type { MealType } from '@/entities/weekly-menu/model/WeeklyMenu';
+import { RequestError } from '@/shared/ui/RequestError';
+
 import {
-  buildNormComplianceHref,
   RequirementPeriodNavigator,
   RequirementReportDialog,
-} from "./calendar/RequirementCalendarContent";
+  buildNormComplianceHref,
+} from './calendar/RequirementCalendarContent';
 import type {
   SelectedRange,
   SelectedReportCell,
   SelectedWeekRange,
-} from "./calendar/RequirementCalendarContent";
+} from './calendar/RequirementCalendarContent';
 
 export {
   buildNormComplianceHref,
   RequirementPeriodNavigator,
   RequirementReportDialog,
   RequirementReportTable,
-} from "./calendar/RequirementCalendarContent";
+} from './calendar/RequirementCalendarContent';
 
-const mealTypeOptions: Array<{ value: "" | MealType; label: string }> = [
-  { value: "", label: "Усі" },
-  { value: "breakfast", label: "Сніданок" },
-  { value: "lunch", label: "Обід" },
+const mealTypeOptions: Array<{ value: '' | MealType; label: string }> = [
+  { value: '', label: 'Усі' },
+  { value: 'breakfast', label: 'Сніданок' },
+  { value: 'lunch', label: 'Обід' },
 ];
 
 export function MenuRequirementCalendarWorkspace() {
   const currentYear = new Date().getFullYear();
-  const [selectedSchoolId, setSelectedSchoolId] = useState("");
+  const [selectedSchoolId, setSelectedSchoolId] = useState('');
   const [selectedYear, setSelectedYear] = useState(currentYear);
-  const [selectedMealType, setSelectedMealType] = useState<"" | MealType>(
-    "",
-  );
-  const [selectedGroupId, setSelectedGroupId] = useState("");
-  const [selectedMonthNumber, setSelectedMonthNumber] = useState<number | null>(
-    null,
-  );
-  const [selectedWeekRange, setSelectedWeekRange] =
-    useState<SelectedWeekRange | null>(null);
+  const [selectedMealType, setSelectedMealType] = useState<'' | MealType>('');
+  const [selectedGroupId, setSelectedGroupId] = useState('');
+  const [selectedMonthNumber, setSelectedMonthNumber] = useState<number | null>(null);
+  const [selectedWeekRange, setSelectedWeekRange] = useState<SelectedWeekRange | null>(null);
   const [reportRange, setReportRange] = useState<SelectedRange | null>(null);
-  const [selectedCell, setSelectedCell] =
-    useState<SelectedReportCell | null>(null);
+  const [selectedCell, setSelectedCell] = useState<SelectedReportCell | null>(null);
 
   const currentUser = useCurrentUser();
-  const isSchoolUser = currentUser.data?.role === "SCHOOL_USER";
-  const schools = useSchools(
-    { offset: 0, limit: 100 },
-    Boolean(currentUser.data && !isSchoolUser),
-  );
-  const ownSchoolId =
-    currentUser.data?.role === "SCHOOL_USER"
-      ? currentUser.data.school_id
-      : "";
+  const isSchoolUser = currentUser.data?.role === 'SCHOOL_USER';
+  const schools = useSchools({ offset: 0, limit: 100 }, Boolean(currentUser.data && !isSchoolUser));
+  const ownSchoolId = currentUser.data?.role === 'SCHOOL_USER' ? currentUser.data.school_id : '';
   const effectiveSchoolId = isSchoolUser
     ? ownSchoolId
-    : selectedSchoolId || schools.data?.items[0]?.id || "";
+    : selectedSchoolId || schools.data?.items[0]?.id || '';
   const groups = useSchoolGroups(
-    isSchoolUser
-      ? { mode: "own" }
-      : { mode: "admin", schoolId: effectiveSchoolId },
-    { offset: 0, limit: 100 },
+    isSchoolUser ? { mode: 'own' } : { mode: 'admin', schoolId: effectiveSchoolId },
+    { offset: 0, limit: 100 }
   );
 
   const calendar = useMenuRequirementCalendar({
@@ -81,11 +68,8 @@ export function MenuRequirementCalendarWorkspace() {
   });
 
   const selectedMonth = useMemo(
-    () =>
-      calendar.data?.months.find(
-        (month) => month.month === selectedMonthNumber,
-      ) ?? null,
-    [calendar.data?.months, selectedMonthNumber],
+    () => calendar.data?.months.find((month) => month.month === selectedMonthNumber) ?? null,
+    [calendar.data?.months, selectedMonthNumber]
   );
 
   const selectedWeek = useMemo(() => {
@@ -95,17 +79,16 @@ export function MenuRequirementCalendarWorkspace() {
     return (
       selectedMonth.weeks.find(
         (week) =>
-          week.date_from === selectedWeekRange.dateFrom &&
-          week.date_to === selectedWeekRange.dateTo,
+          week.date_from === selectedWeekRange.dateFrom && week.date_to === selectedWeekRange.dateTo
       ) ?? null
     );
   }, [selectedMonth, selectedWeekRange]);
 
   const report = useMenuRequirementReport({
     school_id: effectiveSchoolId,
-    date_from: reportRange?.dateFrom ?? "",
-    date_to: reportRange?.dateTo ?? "",
-    granularity: reportRange?.granularity ?? "month",
+    date_from: reportRange?.dateFrom ?? '',
+    date_to: reportRange?.dateTo ?? '',
+    granularity: reportRange?.granularity ?? 'month',
     meal_type: selectedMealType || undefined,
     school_group_id: selectedGroupId || undefined,
     enabled: Boolean(effectiveSchoolId && reportRange),
@@ -134,8 +117,8 @@ export function MenuRequirementCalendarWorkspace() {
         <p className="nf-eyebrow">Облік продуктів</p>
         <h1 className="nf-title">Календар меню-вимог</h1>
         <p className="nf-description">
-          Оберіть місяць, потім тиждень і день. Таблиця відкриється окремо й не
-          перевантажуватиме календар.
+          Оберіть місяць, потім тиждень і день. Таблиця відкриється окремо й не перевантажуватиме
+          календар.
         </p>
       </header>
 
@@ -145,7 +128,7 @@ export function MenuRequirementCalendarWorkspace() {
             <div className="grid gap-1">
               <span className="nf-label">Школа</span>
               <div className="nf-input flex items-center bg-slate-50 text-slate-700">
-                {calendar.data?.school_name ?? "Ваша школа"}
+                {calendar.data?.school_name ?? 'Ваша школа'}
               </div>
             </div>
           ) : (
@@ -156,7 +139,7 @@ export function MenuRequirementCalendarWorkspace() {
                 value={effectiveSchoolId}
                 onChange={(event) => {
                   setSelectedSchoolId(event.target.value);
-                  setSelectedGroupId("");
+                  setSelectedGroupId('');
                   resetNavigation();
                 }}
                 disabled={schools.isPending}
@@ -194,12 +177,10 @@ export function MenuRequirementCalendarWorkspace() {
 
                 return (
                   <button
-                    key={option.value || "all"}
+                    key={option.value || 'all'}
                     type="button"
                     className={`min-h-10 px-3 text-sm font-semibold transition-colors ${
-                      selected
-                        ? "bg-emerald-700 text-white"
-                        : "text-slate-700 hover:bg-emerald-50"
+                      selected ? 'bg-emerald-700 text-white' : 'text-slate-700 hover:bg-emerald-50'
                     }`}
                     aria-pressed={selected}
                     onClick={() => {
@@ -237,17 +218,11 @@ export function MenuRequirementCalendarWorkspace() {
       </section>
 
       {!isSchoolUser && schools.isError ? (
-        <RequestError
-          error={schools.error}
-          onRetry={() => void schools.refetch()}
-        />
+        <RequestError error={schools.error} onRetry={() => void schools.refetch()} />
       ) : null}
 
       {calendar.isError ? (
-        <RequestError
-          error={calendar.error}
-          onRetry={() => void calendar.refetch()}
-        />
+        <RequestError error={calendar.error} onRetry={() => void calendar.refetch()} />
       ) : null}
 
       <section className="nf-panel overflow-hidden">
@@ -281,7 +256,7 @@ export function MenuRequirementCalendarWorkspace() {
             }}
             onBackToWeeks={() => setSelectedWeekRange(null)}
             onOpenReport={openReport}
-            allowIncompleteReports={currentUser.data?.role === "OWNER"}
+            allowIncompleteReports={currentUser.data?.role === 'OWNER'}
             normComplianceHref={
               selectedWeek
                 ? buildNormComplianceHref({

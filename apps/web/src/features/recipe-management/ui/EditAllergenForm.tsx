@@ -1,17 +1,15 @@
-"use client";
+'use client';
 
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useEffect } from 'react';
 
-import type { Allergen } from "@/entities/recipe/model/Recipe";
-import { getApiErrorMessage } from "@/shared/api/HttpClient";
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
 
-import {
-  allergenFormSchema,
-  type AllergenFormValues,
-} from "../model/RecipeManagementSchemas";
-import { useUpdateAllergen } from "../model/UseRecipeMutations";
+import type { Allergen } from '@/entities/recipe/model/Recipe';
+import { getApiErrorMessage } from '@/shared/api/HttpClient';
+
+import { type AllergenFormValues, allergenFormSchema } from '../model/RecipeManagementSchemas';
+import { useUpdateAllergen } from '../model/UseRecipeMutations';
 
 type EditAllergenFormProps = {
   allergen: Allergen;
@@ -25,7 +23,7 @@ export function EditAllergenForm({ allergen, onSaved }: EditAllergenFormProps) {
     defaultValues: {
       code: allergen.code,
       name: allergen.name,
-      description: allergen.description ?? "",
+      description: allergen.description ?? '',
     },
   });
 
@@ -33,17 +31,17 @@ export function EditAllergenForm({ allergen, onSaved }: EditAllergenFormProps) {
     form.reset({
       code: allergen.code,
       name: allergen.name,
-      description: allergen.description ?? "",
+      description: allergen.description ?? '',
     });
   }, [form, allergen]);
 
   const onSubmit = form.handleSubmit(async (values) => {
-    form.clearErrors("root");
+    form.clearErrors('root');
     try {
       await update.mutateAsync({ id: allergen.id, payload: values });
       onSaved?.();
     } catch (error) {
-      form.setError("root", { type: "server", message: getApiErrorMessage(error) });
+      form.setError('root', { type: 'server', message: getApiErrorMessage(error) });
     }
   });
 
@@ -51,30 +49,58 @@ export function EditAllergenForm({ allergen, onSaved }: EditAllergenFormProps) {
     <form onSubmit={onSubmit} className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-[100px_1fr]">
         <div>
-          <label htmlFor="edit-allergen-code" className="nf-label">Код</label>
-          <input id="edit-allergen-code" className="nf-input uppercase" {...form.register("code")} />
+          <label htmlFor="edit-allergen-code" className="nf-label">
+            Код
+          </label>
+          <input
+            id="edit-allergen-code"
+            className="nf-input uppercase"
+            {...form.register('code')}
+          />
           {form.formState.errors.code ? (
-            <p role="alert" className="nf-field-error">{form.formState.errors.code.message}</p>
+            <p role="alert" className="nf-field-error">
+              {form.formState.errors.code.message}
+            </p>
           ) : null}
         </div>
         <div>
-          <label htmlFor="edit-allergen-name" className="nf-label">Назва</label>
-          <input id="edit-allergen-name" className="nf-input" {...form.register("name")} />
+          <label htmlFor="edit-allergen-name" className="nf-label">
+            Назва
+          </label>
+          <input id="edit-allergen-name" className="nf-input" {...form.register('name')} />
           {form.formState.errors.name ? (
-            <p role="alert" className="nf-field-error">{form.formState.errors.name.message}</p>
+            <p role="alert" className="nf-field-error">
+              {form.formState.errors.name.message}
+            </p>
           ) : null}
         </div>
       </div>
       <div>
-        <label htmlFor="edit-allergen-description" className="nf-label">Опис</label>
-        <input id="edit-allergen-description" className="nf-input" {...form.register("description")} />
+        <label htmlFor="edit-allergen-description" className="nf-label">
+          Опис
+        </label>
+        <input
+          id="edit-allergen-description"
+          className="nf-input"
+          {...form.register('description')}
+        />
       </div>
       {form.formState.errors.root ? (
-        <p role="alert" className="nf-error">{form.formState.errors.root.message}</p>
+        <p role="alert" className="nf-error">
+          {form.formState.errors.root.message}
+        </p>
       ) : null}
-      {update.isSuccess ? <p role="status" className="nf-success">Зміни збережено.</p> : null}
-      <button type="submit" disabled={form.formState.isSubmitting} className="nf-button nf-button-primary">
-        {form.formState.isSubmitting ? "Зберігаємо…" : "Зберегти зміни"}
+      {update.isSuccess ? (
+        <p role="status" className="nf-success">
+          Зміни збережено.
+        </p>
+      ) : null}
+      <button
+        type="submit"
+        disabled={form.formState.isSubmitting}
+        className="nf-button nf-button-primary"
+      >
+        {form.formState.isSubmitting ? 'Зберігаємо…' : 'Зберегти зміни'}
       </button>
     </form>
   );

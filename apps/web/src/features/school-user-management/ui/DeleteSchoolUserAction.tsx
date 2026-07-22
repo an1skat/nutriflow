@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import { useState } from "react";
+import { useState } from 'react';
 
-import { getApiErrorMessage } from "@/shared/api/HttpClient";
+import { getApiErrorMessage } from '@/shared/api/HttpClient';
 
-import { useDeleteSchoolUser } from "../model/UseSchoolUserMutations";
+import { useDeleteSchoolUser } from '../model/UseSchoolUserMutations';
 
 type DeleteSchoolUserActionProps = {
   schoolId: string;
@@ -44,8 +44,7 @@ export function DeleteSchoolUserAction({
   return (
     <div className="border border-red-300 bg-red-50 p-3">
       <p className="text-xs leading-5 text-red-900">
-        Обліковий запис і всі його сесії буде видалено без можливості
-        відновлення.
+        Обліковий запис і всі його сесії буде видалено без можливості відновлення.
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         <button
@@ -54,7 +53,7 @@ export function DeleteSchoolUserAction({
           disabled={deleteUser.isPending}
           className="nf-button border-red-800 bg-red-700 text-white hover:bg-red-800"
         >
-          {deleteUser.isPending ? "Видаляємо…" : "Підтвердити видалення"}
+          {deleteUser.isPending ? 'Видаляємо…' : 'Підтвердити видалення'}
         </button>
         <button
           type="button"

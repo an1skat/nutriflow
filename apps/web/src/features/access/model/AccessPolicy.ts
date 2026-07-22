@@ -1,11 +1,7 @@
-import type {
-  AdminPermission,
-  AuthUser,
-  UserRole,
-} from "@/entities/session/model/Session";
+import type { AdminPermission, AuthUser, UserRole } from '@/entities/session/model/Session';
 
 export type RouteAccessDecision =
-  "allow" | "unauthenticated" | "forbidden-role" | "forbidden-tenant";
+  'allow' | 'unauthenticated' | 'forbidden-role' | 'forbidden-tenant';
 
 type AccessRequirements = {
   allowedRoles?: readonly UserRole[];
@@ -15,36 +11,26 @@ type AccessRequirements = {
 
 export function getHomePath(user: AuthUser): string {
   switch (user.role) {
-    case "OWNER":
-    case "ADMIN":
-      return "/";
-    case "TECHNOLOGIST":
-      return "/admin/menu-changes";
-    case "SCHOOL_USER":
-      return "/menu";
+    case 'OWNER':
+    case 'ADMIN':
+      return '/';
+    case 'TECHNOLOGIST':
+      return '/admin/menu-changes';
+    case 'SCHOOL_USER':
+      return '/menu';
   }
 }
 
 export function isBackofficeUser(user: AuthUser): boolean {
-  return (
-    user.role === "OWNER" ||
-    user.role === "ADMIN" ||
-    user.role === "TECHNOLOGIST"
-  );
+  return user.role === 'OWNER' || user.role === 'ADMIN' || user.role === 'TECHNOLOGIST';
 }
 
-export function hasPermission(
-  user: AuthUser,
-  permission: AdminPermission,
-): boolean {
-  if (user.role === "OWNER") {
+export function hasPermission(user: AuthUser, permission: AdminPermission): boolean {
+  if (user.role === 'OWNER') {
     return true;
   }
 
-  if (
-    permission === "recipes.view" &&
-    user.permissions.includes("recipes.manage")
-  ) {
+  if (permission === 'recipes.view' && user.permissions.includes('recipes.manage')) {
     return true;
   }
 
@@ -53,7 +39,7 @@ export function hasPermission(
 
 export function hasEveryPermission(
   user: AuthUser,
-  permissions: readonly AdminPermission[],
+  permissions: readonly AdminPermission[]
 ): boolean {
   return permissions.every((permission) => hasPermission(user, permission));
 }
@@ -61,7 +47,7 @@ export function hasEveryPermission(
 export function canAccessPath(user: AuthUser, path: string): boolean {
   const pathname = path.split(/[?#]/, 1)[0];
 
-  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+  if (pathname === '/admin' || pathname.startsWith('/admin/')) {
     return isBackofficeUser(user);
   }
 
@@ -70,7 +56,7 @@ export function canAccessPath(user: AuthUser, path: string): boolean {
 
 export function getPostLoginPath(
   user: AuthUser,
-  requestedPath: string,
+  requestedPath: string
 ): { path: string; denied: boolean } {
   if (canAccessPath(user, requestedPath)) {
     return { path: requestedPath, denied: false };
@@ -79,41 +65,32 @@ export function getPostLoginPath(
   return { path: getHomePath(user), denied: true };
 }
 
-export function canAccessSchool(
-  user: AuthUser,
-  requestedSchoolId: string,
-): boolean {
+export function canAccessSchool(user: AuthUser, requestedSchoolId: string): boolean {
   return isBackofficeUser(user) || user.school_id === requestedSchoolId;
 }
 
 export function getRouteAccess(
   user: AuthUser | null,
-  requirements: AccessRequirements = {},
+  requirements: AccessRequirements = {}
 ): RouteAccessDecision {
   if (!user) {
-    return "unauthenticated";
+    return 'unauthenticated';
   }
 
-  if (
-    requirements.allowedRoles &&
-    !requirements.allowedRoles.includes(user.role)
-  ) {
-    return "forbidden-role";
+  if (requirements.allowedRoles && !requirements.allowedRoles.includes(user.role)) {
+    return 'forbidden-role';
   }
 
   if (
     requirements.requiredPermissions &&
     !hasEveryPermission(user, requirements.requiredPermissions)
   ) {
-    return "forbidden-role";
+    return 'forbidden-role';
   }
 
-  if (
-    requirements.schoolId !== undefined &&
-    !canAccessSchool(user, requirements.schoolId)
-  ) {
-    return "forbidden-tenant";
+  if (requirements.schoolId !== undefined && !canAccessSchool(user, requirements.schoolId)) {
+    return 'forbidden-tenant';
   }
 
-  return "allow";
+  return 'allow';
 }

@@ -1,17 +1,15 @@
-"use client";
+'use client';
 
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useEffect } from 'react';
 
-import type { School } from "@/entities/school/model/School";
-import { getApiErrorMessage } from "@/shared/api/HttpClient";
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
 
-import {
-  editSchoolFormSchema,
-  type EditSchoolFormValues,
-} from "../model/SchoolFormSchema";
-import { useUpdateSchool } from "../model/UseSchoolMutations";
+import type { School } from '@/entities/school/model/School';
+import { getApiErrorMessage } from '@/shared/api/HttpClient';
+
+import { type EditSchoolFormValues, editSchoolFormSchema } from '../model/SchoolFormSchema';
+import { useUpdateSchool } from '../model/UseSchoolMutations';
 
 type EditSchoolFormProps = {
   school: School;
@@ -37,13 +35,13 @@ export function EditSchoolForm({ school }: EditSchoolFormProps) {
   }, [form, school]);
 
   const onSubmit = form.handleSubmit(async (values) => {
-    form.clearErrors("root");
+    form.clearErrors('root');
 
     try {
       await updateSchool.mutateAsync(values);
     } catch (error) {
-      form.setError("root", {
-        type: "server",
+      form.setError('root', {
+        type: 'server',
         message: getApiErrorMessage(error),
       });
     }
@@ -53,17 +51,10 @@ export function EditSchoolForm({ school }: EditSchoolFormProps) {
     <form onSubmit={onSubmit} className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label
-            htmlFor="edit-school-name"
-            className="nf-label"
-          >
+          <label htmlFor="edit-school-name" className="nf-label">
             Назва школи
           </label>
-          <input
-            id="edit-school-name"
-            {...form.register("name")}
-            className="nf-input"
-          />
+          <input id="edit-school-name" {...form.register('name')} className="nf-input" />
           {form.formState.errors.name ? (
             <p role="alert" className="nf-field-error">
               {form.formState.errors.name.message}
@@ -72,17 +63,10 @@ export function EditSchoolForm({ school }: EditSchoolFormProps) {
         </div>
 
         <div>
-          <label
-            htmlFor="edit-school-code"
-            className="nf-label"
-          >
+          <label htmlFor="edit-school-code" className="nf-label">
             Код
           </label>
-          <input
-            id="edit-school-code"
-            {...form.register("code")}
-            className="nf-input uppercase"
-          />
+          <input id="edit-school-code" {...form.register('code')} className="nf-input uppercase" />
           {form.formState.errors.code ? (
             <p role="alert" className="nf-field-error">
               {form.formState.errors.code.message}
@@ -92,11 +76,7 @@ export function EditSchoolForm({ school }: EditSchoolFormProps) {
       </div>
 
       <label className="nf-checkbox-row">
-        <input
-          type="checkbox"
-          {...form.register("is_active")}
-          className="mt-0.5 size-4"
-        />
+        <input type="checkbox" {...form.register('is_active')} className="mt-0.5 size-4" />
         <span>
           <span className="block text-sm font-bold">Школа активна</span>
           <span className="block text-xs text-slate-600">
@@ -121,7 +101,7 @@ export function EditSchoolForm({ school }: EditSchoolFormProps) {
         disabled={form.formState.isSubmitting}
         className="nf-button nf-button-primary"
       >
-        {form.formState.isSubmitting ? "Зберігаємо…" : "Зберегти зміни"}
+        {form.formState.isSubmitting ? 'Зберігаємо…' : 'Зберегти зміни'}
       </button>
     </form>
   );

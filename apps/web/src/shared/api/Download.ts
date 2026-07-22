@@ -1,6 +1,6 @@
-import axios, { type AxiosRequestConfig } from "axios";
+import axios, { type AxiosRequestConfig } from 'axios';
 
-import { apiClient } from "./HttpClient";
+import { apiClient } from './HttpClient';
 
 export type DownloadedFile = {
   blob: Blob;
@@ -10,19 +10,16 @@ export type DownloadedFile = {
 export async function downloadFile(
   url: string,
   fallbackFilename: string,
-  config?: AxiosRequestConfig,
+  config?: AxiosRequestConfig
 ): Promise<DownloadedFile> {
   try {
     const response = await apiClient.get<Blob>(url, {
       ...config,
-      responseType: "blob",
+      responseType: 'blob',
     });
     return {
       blob: response.data,
-      filename: extractDownloadFilename(
-        response.headers["content-disposition"],
-        fallbackFilename,
-      ),
+      filename: extractDownloadFilename(response.headers['content-disposition'], fallbackFilename),
     };
   } catch (error) {
     return normalizeBlobApiError(error);
@@ -31,10 +28,10 @@ export async function downloadFile(
 
 export function triggerFileDownload(file: DownloadedFile): void {
   const url = URL.createObjectURL(file.blob);
-  const anchor = document.createElement("a");
+  const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = file.filename;
-  anchor.style.display = "none";
+  anchor.style.display = 'none';
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
@@ -43,7 +40,7 @@ export function triggerFileDownload(file: DownloadedFile): void {
 
 export function extractDownloadFilename(
   contentDisposition: string | undefined,
-  fallback: string,
+  fallback: string
 ): string {
   if (!contentDisposition) {
     return fallback;

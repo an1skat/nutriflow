@@ -1,19 +1,16 @@
-"use client";
+'use client';
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import {
   createSchoolUser,
   deleteSchoolUser,
   resetSchoolUserPassword,
   updateSchoolUser,
-} from "@/entities/school-user/api/SchoolUserApi";
-import { schoolUserQueryKeys } from "@/entities/school-user/api/SchoolUserQueries";
+} from '@/entities/school-user/api/SchoolUserApi';
+import { schoolUserQueryKeys } from '@/entities/school-user/api/SchoolUserQueries';
 
-import type {
-  CreateSchoolUserFormValues,
-  EditSchoolUserFormValues,
-} from "./SchoolUserFormSchemas";
+import type { CreateSchoolUserFormValues, EditSchoolUserFormValues } from './SchoolUserFormSchemas';
 
 export function useCreateSchoolUser(schoolId: string) {
   const queryClient = useQueryClient();
@@ -33,10 +30,7 @@ export function useCreateSchoolUser(schoolId: string) {
   });
 }
 
-export function useUpdateSchoolUser(
-  schoolId: string,
-  userId: string,
-) {
+export function useUpdateSchoolUser(schoolId: string, userId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -47,10 +41,7 @@ export function useUpdateSchoolUser(
         is_active: values.is_active,
       }),
     onSuccess: async (user) => {
-      queryClient.setQueryData(
-        schoolUserQueryKeys.detail(schoolId, userId),
-        user,
-      );
+      queryClient.setQueryData(schoolUserQueryKeys.detail(schoolId, userId), user);
       await queryClient.invalidateQueries({
         queryKey: schoolUserQueryKeys.lists(schoolId),
       });
@@ -58,10 +49,7 @@ export function useUpdateSchoolUser(
   });
 }
 
-export function useDeleteSchoolUser(
-  schoolId: string,
-  userId: string,
-) {
+export function useDeleteSchoolUser(schoolId: string, userId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -77,15 +65,11 @@ export function useDeleteSchoolUser(
   });
 }
 
-export function useResetSchoolUserPassword(
-  schoolId: string,
-  userId: string,
-) {
+export function useResetSchoolUserPassword(schoolId: string, userId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (password: string) =>
-      resetSchoolUserPassword(schoolId, userId, password),
+    mutationFn: (password: string) => resetSchoolUserPassword(schoolId, userId, password),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({

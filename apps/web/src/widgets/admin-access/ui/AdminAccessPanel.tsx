@@ -1,27 +1,28 @@
-"use client";
+'use client';
 
-import { Trash2 } from "lucide-react";
-import { useState } from "react";
-import { toast } from "sonner";
+import { useState } from 'react';
 
-import { useAdminUsers } from "@/entities/admin-user/api/AdminUserQueries";
-import type { AdminUser } from "@/entities/admin-user/model/AdminUser";
-import type { AdminPermission } from "@/entities/session/model/Session";
+import { Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
+
+import { useAdminUsers } from '@/entities/admin-user/api/AdminUserQueries';
+import type { AdminUser } from '@/entities/admin-user/model/AdminUser';
+import type { AdminPermission } from '@/entities/session/model/Session';
 import {
   adminPermissionOptions,
   defaultLowerAdminPermissions,
-} from "@/features/admin-access-management/model/AdminAccessSchemas";
+} from '@/features/admin-access-management/model/AdminAccessSchemas';
 import {
   useDeleteAdminUser,
   useUpdateAdminUser,
-} from "@/features/admin-access-management/model/UseAdminAccessMutations";
-import { CreateAdminUserForm } from "@/features/admin-access-management/ui/CreateAdminUserForm";
-import { getApiErrorMessage } from "@/shared/api/HttpClient";
-import { formatDate } from "@/shared/lib/FormatDate";
-import { useConfirm } from "@/shared/ui/ConfirmDialog";
-import { PaginationControls } from "@/shared/ui/PaginationControls";
-import { RequestError } from "@/shared/ui/RequestError";
-import { StatusBadge } from "@/shared/ui/StatusBadge";
+} from '@/features/admin-access-management/model/UseAdminAccessMutations';
+import { CreateAdminUserForm } from '@/features/admin-access-management/ui/CreateAdminUserForm';
+import { getApiErrorMessage } from '@/shared/api/HttpClient';
+import { formatDate } from '@/shared/lib/FormatDate';
+import { useConfirm } from '@/shared/ui/ConfirmDialog';
+import { PaginationControls } from '@/shared/ui/PaginationControls';
+import { RequestError } from '@/shared/ui/RequestError';
+import { StatusBadge } from '@/shared/ui/StatusBadge';
 
 const PAGE_SIZE = 20;
 
@@ -60,9 +61,7 @@ export function AdminAccessPanel() {
               Нижні адміністратори
             </h2>
             {admins.data ? (
-              <p className="mt-0.5 text-xs text-slate-600">
-                Записів: {admins.data.total}
-              </p>
+              <p className="mt-0.5 text-xs text-slate-600">Записів: {admins.data.total}</p>
             ) : null}
           </div>
         </div>
@@ -75,10 +74,7 @@ export function AdminAccessPanel() {
           ) : null}
 
           {admins.isError ? (
-            <RequestError
-              error={admins.error}
-              onRetry={() => void admins.refetch()}
-            />
+            <RequestError error={admins.error} onRetry={() => void admins.refetch()} />
           ) : null}
 
           {admins.data?.items.length === 0 ? (
@@ -113,10 +109,7 @@ function AdminUserAccessRow({ admin }: { admin: AdminUser }) {
   const updateAdmin = useUpdateAdminUser(admin.id);
   const deleteAdmin = useDeleteAdminUser(admin.id);
 
-  const handlePermissionChange = async (
-    permission: AdminPermission,
-    checked: boolean,
-  ) => {
+  const handlePermissionChange = async (permission: AdminPermission, checked: boolean) => {
     const nextPermissions = checked
       ? [...admin.permissions, permission]
       : admin.permissions.filter((item) => item !== permission);
@@ -125,7 +118,7 @@ function AdminUserAccessRow({ admin }: { admin: AdminUser }) {
       await updateAdmin.mutateAsync({
         permissions: Array.from(new Set(nextPermissions)),
       });
-      toast.success("Права оновлено.");
+      toast.success('Права оновлено.');
     } catch (error) {
       toast.error(getApiErrorMessage(error));
     }
@@ -136,7 +129,7 @@ function AdminUserAccessRow({ admin }: { admin: AdminUser }) {
       await updateAdmin.mutateAsync({
         is_active: !admin.is_active,
       });
-      toast.success("Статус оновлено.");
+      toast.success('Статус оновлено.');
     } catch (error) {
       toast.error(getApiErrorMessage(error));
     }
@@ -144,10 +137,10 @@ function AdminUserAccessRow({ admin }: { admin: AdminUser }) {
 
   const handleDelete = async () => {
     const confirmed = await confirm({
-      title: "Видалити адміністратора?",
+      title: 'Видалити адміністратора?',
       description: `Адміністратор ${admin.username} буде видалений із системи.`,
-      confirmLabel: "Видалити",
-      variant: "danger",
+      confirmLabel: 'Видалити',
+      variant: 'danger',
     });
 
     if (!confirmed) {
@@ -156,7 +149,7 @@ function AdminUserAccessRow({ admin }: { admin: AdminUser }) {
 
     try {
       await deleteAdmin.mutateAsync();
-      toast.success("Адміністратора видалено.");
+      toast.success('Адміністратора видалено.');
     } catch (error) {
       toast.error(getApiErrorMessage(error));
     }
@@ -166,16 +159,12 @@ function AdminUserAccessRow({ admin }: { admin: AdminUser }) {
     <article className="border border-[var(--nf-line)] bg-white p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-base font-bold text-slate-900">
-            {admin.username}
-          </h3>
+          <h3 className="text-base font-bold text-slate-900">{admin.username}</h3>
           <p className="mt-1 text-xs text-slate-600">{admin.email}</p>
           <p className="mt-1 text-xs font-bold text-slate-700">
-            {admin.role === "TECHNOLOGIST" ? "Технолог" : "Адміністратор"}
+            {admin.role === 'TECHNOLOGIST' ? 'Технолог' : 'Адміністратор'}
           </p>
-          <p className="mt-1 text-xs text-slate-500">
-            Оновлено: {formatDate(admin.updated_at)}
-          </p>
+          <p className="mt-1 text-xs text-slate-500">Оновлено: {formatDate(admin.updated_at)}</p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -186,7 +175,7 @@ function AdminUserAccessRow({ admin }: { admin: AdminUser }) {
             disabled={updateAdmin.isPending}
             className="nf-button nf-button-secondary"
           >
-            {admin.is_active ? "Деактивувати" : "Активувати"}
+            {admin.is_active ? 'Деактивувати' : 'Активувати'}
           </button>
           <button
             type="button"
@@ -210,14 +199,13 @@ function AdminUserAccessRow({ admin }: { admin: AdminUser }) {
           value={admin.role}
           disabled={updateAdmin.isPending}
           onChange={async (event) => {
-            const role = event.target.value as AdminUser["role"];
+            const role = event.target.value as AdminUser['role'];
             try {
               await updateAdmin.mutateAsync({
                 role,
-                permissions:
-                  role === "ADMIN" ? defaultLowerAdminPermissions : [],
+                permissions: role === 'ADMIN' ? defaultLowerAdminPermissions : [],
               });
-              toast.success("Роль оновлено.");
+              toast.success('Роль оновлено.');
             } catch (error) {
               toast.error(getApiErrorMessage(error));
             }
@@ -228,10 +216,10 @@ function AdminUserAccessRow({ admin }: { admin: AdminUser }) {
         </select>
       </div>
 
-      {admin.role === "TECHNOLOGIST" ? (
+      {admin.role === 'TECHNOLOGIST' ? (
         <div className="mt-4 border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-950">
-          Фіксований доступ: перегляд техкарт, тижневі меню для всіх шкіл і
-          зміни від шкіл. Школи та керування доступами приховані.
+          Фіксований доступ: перегляд техкарт, тижневі меню для всіх шкіл і зміни від шкіл. Школи та
+          керування доступами приховані.
         </div>
       ) : null}
 
@@ -244,12 +232,9 @@ function AdminUserAccessRow({ admin }: { admin: AdminUser }) {
             <input
               type="checkbox"
               checked={admin.permissions.includes(permission.value)}
-              disabled={updateAdmin.isPending || admin.role === "TECHNOLOGIST"}
+              disabled={updateAdmin.isPending || admin.role === 'TECHNOLOGIST'}
               onChange={(event) =>
-                void handlePermissionChange(
-                  permission.value,
-                  event.target.checked,
-                )
+                void handlePermissionChange(permission.value, event.target.checked)
               }
               className="size-4"
             />

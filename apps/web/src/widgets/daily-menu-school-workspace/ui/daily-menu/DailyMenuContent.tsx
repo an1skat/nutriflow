@@ -1,44 +1,42 @@
-"use client";
+'use client';
 
-import { Check, ChevronDown, Filter, Package, Utensils } from "lucide-react";
-import type { ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-import {
-  useDishCards,
-  useIngredients,
-} from "@/entities/recipe/api/RecipeQueries";
+import { Check, ChevronDown, Filter, Package, Utensils } from 'lucide-react';
+
+import { useDishCards, useIngredients } from '@/entities/recipe/api/RecipeQueries';
 import type {
   DishCard,
   DishCardVersion,
   Ingredient,
   PortionVariant,
-} from "@/entities/recipe/model/Recipe";
-import type { SchoolGroup } from "@/entities/school-group/model/SchoolGroup";
+} from '@/entities/recipe/model/Recipe';
+import type { SchoolGroup } from '@/entities/school-group/model/SchoolGroup';
 import type {
   DailyMenu,
   DailyMenuItem,
   MenuPortion,
   WeeklyMenu,
   WeeklyMenuUpdatePayload,
-} from "@/entities/weekly-menu/model/WeeklyMenu";
+} from '@/entities/weekly-menu/model/WeeklyMenu';
 import {
   AGE_GROUP_LABELS,
   WEEKDAY_LABELS,
   WEEKDAY_ORDER,
-} from "@/entities/weekly-menu/model/WeeklyMenu";
-import { resolveEffectiveDayDate } from "@/features/weekly-menu-editor/model/WeeklyMenuFormSchema";
-import { normalizeGramAmount } from "@/shared/lib/Portion";
+} from '@/entities/weekly-menu/model/WeeklyMenu';
+import { resolveEffectiveDayDate } from '@/features/weekly-menu-editor/model/WeeklyMenuFormSchema';
+import { normalizeGramAmount } from '@/shared/lib/Portion';
 
-export type CatalogFilter = "dish_cards" | "products" | "all";
+export type CatalogFilter = 'dish_cards' | 'products' | 'all';
 
 export type CatalogSelection =
   | {
-      kind: "dish_card";
+      kind: 'dish_card';
       dishCard: DishCard;
     }
   | {
-      kind: "product";
+      kind: 'product';
       ingredient: Ingredient;
     };
 
@@ -55,14 +53,10 @@ export function DayMenuPanel({
   groups: SchoolGroup[];
   readOnly: boolean;
   onDishChange: (itemId: string, item: CatalogSelection) => Promise<void>;
-  onChildrenCountChange: (
-    itemId: string,
-    group: SchoolGroup,
-    childrenCount: number,
-  ) => void;
+  onChildrenCountChange: (itemId: string, group: SchoolGroup, childrenCount: number) => void;
 }) {
   return (
-    <section className={`nf-panel ${readOnly ? "border-slate-300 bg-slate-100" : ""}`}>
+    <section className={`nf-panel ${readOnly ? 'border-slate-300 bg-slate-100' : ''}`}>
       <div className="nf-panel-header">
         <div>
           <p className="nf-eyebrow">Обраний день</p>
@@ -71,7 +65,7 @@ export function DayMenuPanel({
           </h2>
         </div>
         <span className="text-xs font-bold text-slate-600">
-          {readOnly ? "Закрито" : `${day.items.length} страв`}
+          {readOnly ? 'Закрито' : `${day.items.length} страв`}
         </span>
       </div>
       {day.notes ? (
@@ -88,28 +82,24 @@ export function DayMenuPanel({
               item={item}
               groups={groups}
               readOnly={readOnly}
-              onDishChange={(selectedItem) =>
-                void onDishChange(item.id, selectedItem)
-              }
-              onChildrenCountChange={(group, count) =>
-                onChildrenCountChange(item.id, group, count)
-              }
+              onDishChange={(selectedItem) => void onDishChange(item.id, selectedItem)}
+              onChildrenCountChange={(group, count) => onChildrenCountChange(item.id, group, count)}
             />
           ))}
       </div>
       <div
         className={`border-t px-4 py-3 text-xs ${
           readOnly
-            ? "border-slate-300 bg-slate-100 text-slate-600"
-            : "border-amber-300 bg-amber-50 text-amber-950"
+            ? 'border-slate-300 bg-slate-100 text-slate-600'
+            : 'border-amber-300 bg-amber-50 text-amber-950'
         }`}
       >
         {readOnly ? (
-          "День закрито. Дані зафіксовані за останнім збереженим станом."
+          'День закрито. Дані зафіксовані за останнім збереженим станом.'
         ) : (
           <>
-            <strong>Важливо:</strong> після заповнення цього дня натисніть
-            «Зберегти зміни» вгорі сторінки.
+            <strong>Важливо:</strong> після заповнення цього дня натисніть «Зберегти зміни» вгорі
+            сторінки.
           </>
         )}
       </div>
@@ -133,7 +123,7 @@ function DishRow({
   return (
     <article
       className={`grid gap-5 p-4 lg:grid-cols-[minmax(280px,1.1fr)_minmax(360px,1fr)] ${
-        readOnly ? "bg-slate-100 text-slate-500" : "bg-white"
+        readOnly ? 'bg-slate-100 text-slate-500' : 'bg-white'
       }`}
     >
       <div className="min-w-0">
@@ -143,19 +133,11 @@ function DishRow({
           </span>
           <span>Страва</span>
         </div>
-        <DishPicker
-          selectedItem={item}
-          disabled={readOnly}
-          onSelect={onDishChange}
-        />
+        <DishPicker selectedItem={item} disabled={readOnly} onSelect={onDishChange} />
         <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(140px,0.55fr)_1fr]">
           <div className="border border-slate-200 bg-slate-50 p-3">
-            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
-              Техкарта
-            </p>
-            <p className="mt-1 text-sm font-bold text-slate-900">
-              {getTechnicalCardLabel(item)}
-            </p>
+            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Техкарта</p>
+            <p className="mt-1 text-sm font-bold text-slate-900">{getTechnicalCardLabel(item)}</p>
           </div>
           <NutritionSummary portions={item.portions} />
         </div>
@@ -171,15 +153,11 @@ function DishRow({
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
           {groups.map((group) => {
             const count =
-              item.servings.find(
-                (serving) => serving.school_group_id === group.id,
-              )?.children_count ?? 0;
+              item.servings.find((serving) => serving.school_group_id === group.id)
+                ?.children_count ?? 0;
 
             return (
-              <label
-                key={group.id}
-                className="border border-slate-200 bg-slate-50 p-3"
-              >
+              <label key={group.id} className="border border-slate-200 bg-slate-50 p-3">
                 <span className="block truncate text-xs font-bold text-slate-800">
                   {group.name}
                 </span>
@@ -190,9 +168,7 @@ function DishRow({
                   aria-label={`${group.name}: кількість дітей для страви ${item.name}`}
                   count={count}
                   disabled={readOnly}
-                  onChange={(nextCount) =>
-                    onChildrenCountChange(group, nextCount)
-                  }
+                  onChange={(nextCount) => onChildrenCountChange(group, nextCount)}
                 />
               </label>
             );
@@ -207,12 +183,12 @@ function ChildrenCountInput({
   count,
   disabled,
   onChange,
-  "aria-label": ariaLabel,
+  'aria-label': ariaLabel,
 }: {
   count: number;
   disabled: boolean;
   onChange: (count: number) => void;
-  "aria-label": string;
+  'aria-label': string;
 }) {
   return (
     <input
@@ -226,7 +202,7 @@ function ChildrenCountInput({
       disabled={disabled}
       onFocus={(event) => event.currentTarget.select()}
       onChange={(event) => {
-        const digits = event.target.value.replace(/\D/g, "").slice(0, 4);
+        const digits = event.target.value.replace(/\D/g, '').slice(0, 4);
         onChange(digits ? normalizeChildrenCount(digits) : 0);
       }}
     />
@@ -243,11 +219,11 @@ function DishPicker({
   onSelect: (item: CatalogSelection) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<CatalogFilter>("dish_cards");
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<CatalogFilter>('dish_cards');
   const pickerRef = useRef<HTMLDivElement>(null);
-  const shouldLoadDishCards = isOpen && filter !== "products";
-  const shouldLoadIngredients = isOpen && filter !== "dish_cards";
+  const shouldLoadDishCards = isOpen && filter !== 'products';
+  const shouldLoadIngredients = isOpen && filter !== 'dish_cards';
   const dishCards = useDishCards(query, shouldLoadDishCards);
   const ingredients = useIngredients(query, shouldLoadIngredients);
   const visibleDishCards = shouldLoadDishCards ? (dishCards.data?.items ?? []) : [];
@@ -256,8 +232,7 @@ function DishPicker({
     (shouldLoadDishCards && dishCards.isPending) ||
     (shouldLoadIngredients && ingredients.isPending);
   const hasError =
-    (shouldLoadDishCards && dishCards.isError) ||
-    (shouldLoadIngredients && ingredients.isError);
+    (shouldLoadDishCards && dishCards.isError) || (shouldLoadIngredients && ingredients.isError);
   const resultCount = visibleDishCards.length + visibleIngredients.length;
 
   useEffect(() => {
@@ -271,8 +246,8 @@ function DishPicker({
       }
     };
 
-    document.addEventListener("mousedown", closeOnOutsideClick);
-    return () => document.removeEventListener("mousedown", closeOnOutsideClick);
+    document.addEventListener('mousedown', closeOnOutsideClick);
+    return () => document.removeEventListener('mousedown', closeOnOutsideClick);
   }, [isOpen]);
 
   return (
@@ -287,15 +262,13 @@ function DishPicker({
           if (disabled) {
             return;
           }
-          setQuery("");
+          setQuery('');
           setIsOpen((current) => !current);
         }}
       >
         <span className="flex min-w-0 items-center gap-2">
           <Utensils className="size-4 shrink-0 text-slate-500" aria-hidden />
-          <span className="truncate font-bold text-slate-950">
-            {selectedItem.name}
-          </span>
+          <span className="truncate font-bold text-slate-950">{selectedItem.name}</span>
         </span>
         <ChevronDown className="size-4 shrink-0 text-slate-500" aria-hidden />
       </button>
@@ -309,21 +282,18 @@ function DishPicker({
             </div>
             <div className="grid gap-1 sm:grid-cols-3">
               <CatalogFilterButton
-                active={filter === "dish_cards"}
-                onClick={() => setFilter("dish_cards")}
+                active={filter === 'dish_cards'}
+                onClick={() => setFilter('dish_cards')}
               >
                 Тільки страви
               </CatalogFilterButton>
               <CatalogFilterButton
-                active={filter === "products"}
-                onClick={() => setFilter("products")}
+                active={filter === 'products'}
+                onClick={() => setFilter('products')}
               >
                 Пром. вироб.
               </CatalogFilterButton>
-              <CatalogFilterButton
-                active={filter === "all"}
-                onClick={() => setFilter("all")}
-              >
+              <CatalogFilterButton active={filter === 'all'} onClick={() => setFilter('all')}>
                 Усі
               </CatalogFilterButton>
             </div>
@@ -340,9 +310,7 @@ function DishPicker({
           </div>
           <div className="max-h-64 overflow-y-auto py-1" role="listbox">
             {isPending ? (
-              <p className="px-3 py-5 text-center text-sm text-slate-500">
-                Завантажуємо каталог…
-              </p>
+              <p className="px-3 py-5 text-center text-sm text-slate-500">Завантажуємо каталог…</p>
             ) : null}
             {hasError ? (
               <p className="px-3 py-5 text-center text-sm text-red-700">
@@ -368,7 +336,7 @@ function DishPicker({
                     if (!canSelect) {
                       return;
                     }
-                    onSelect({ kind: "dish_card", dishCard });
+                    onSelect({ kind: 'dish_card', dishCard });
                     setIsOpen(false);
                   }}
                 >
@@ -378,14 +346,10 @@ function DishPicker({
                     </span>
                     <span className="mt-0.5 block text-xs text-slate-500">
                       ТК № {dishCard.card_number}
-                      {dishCard.current_version_id
-                        ? ""
-                        : " · немає підтвердженої версії"}
+                      {dishCard.current_version_id ? '' : ' · немає підтвердженої версії'}
                     </span>
                   </span>
-                  {isSelected ? (
-                    <Check className="mt-0.5 size-4 shrink-0" aria-hidden />
-                  ) : null}
+                  {isSelected ? <Check className="mt-0.5 size-4 shrink-0" aria-hidden /> : null}
                 </button>
               );
             })}
@@ -394,7 +358,7 @@ function DishPicker({
             ) : null}
             {visibleIngredients.map((ingredient) => {
               const isSelected =
-                selectedItem.kind === "product" &&
+                selectedItem.kind === 'product' &&
                 selectedItem.product_ingredient_id === ingredient.id;
 
               return (
@@ -405,15 +369,12 @@ function DishPicker({
                   aria-selected={isSelected}
                   className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left hover:bg-slate-100"
                   onClick={() => {
-                    onSelect({ kind: "product", ingredient });
+                    onSelect({ kind: 'product', ingredient });
                     setIsOpen(false);
                   }}
                 >
                   <span className="flex min-w-0 items-start gap-2">
-                    <Package
-                      className="mt-0.5 size-4 shrink-0 text-slate-500"
-                      aria-hidden
-                    />
+                    <Package className="mt-0.5 size-4 shrink-0 text-slate-500" aria-hidden />
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-bold text-slate-900">
                         {ingredient.name}
@@ -423,9 +384,7 @@ function DishPicker({
                       </span>
                     </span>
                   </span>
-                  {isSelected ? (
-                    <Check className="mt-0.5 size-4 shrink-0" aria-hidden />
-                  ) : null}
+                  {isSelected ? <Check className="mt-0.5 size-4 shrink-0" aria-hidden /> : null}
                 </button>
               );
             })}
@@ -455,8 +414,8 @@ function CatalogFilterButton({
       type="button"
       className={`border px-2 py-1.5 text-xs font-bold ${
         active
-          ? "border-(--nf-brand) bg-emerald-50 text-emerald-900"
-          : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+          ? 'border-(--nf-brand) bg-emerald-50 text-emerald-900'
+          : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
       }`}
       onClick={onClick}
     >
@@ -476,21 +435,15 @@ function CatalogSectionTitle({ children }: { children: ReactNode }) {
 function NutritionSummary({ portions }: { portions: MenuPortion[] }) {
   return (
     <div className="border border-slate-200 bg-slate-50 p-3">
-      <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
-        КБЖВ
-      </p>
+      <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">КБЖВ</p>
       <div className="mt-1.5 space-y-1">
         {portions.map((portion) => (
           <div
             key={portion.age_group}
             className="flex flex-wrap items-baseline justify-between gap-x-3 text-xs"
           >
-            <span className="font-bold text-slate-700">
-              {AGE_GROUP_LABELS[portion.age_group]}
-            </span>
-            <span className="tabular-nums text-slate-600">
-              {displayNutrition(portion)}
-            </span>
+            <span className="font-bold text-slate-700">{AGE_GROUP_LABELS[portion.age_group]}</span>
+            <span className="tabular-nums text-slate-600">{displayNutrition(portion)}</span>
           </div>
         ))}
       </div>
@@ -501,11 +454,11 @@ function NutritionSummary({ portions }: { portions: MenuPortion[] }) {
 export function buildDishCardReplacement(
   currentItem: DailyMenuItem,
   dishCard: DishCard,
-  version: DishCardVersion,
+  version: DishCardVersion
 ): DailyMenuItem {
   return {
     ...currentItem,
-    kind: "dish_card",
+    kind: 'dish_card',
     source_text: dishCard.source ?? null,
     recipe_card_number: dishCard.card_number,
     dish_card_id: dishCard.id,
@@ -515,15 +468,12 @@ export function buildDishCardReplacement(
     name: dishCard.name,
     allergen_codes: [],
     portions: currentItem.portions.map((portion) =>
-      buildDishCardPortion(portion, version.portion_variants),
+      buildDishCardPortion(portion, version.portion_variants)
     ),
   };
 }
 
-function buildDishCardPortion(
-  portion: MenuPortion,
-  variants: PortionVariant[],
-): MenuPortion {
+function buildDishCardPortion(portion: MenuPortion, variants: PortionVariant[]): MenuPortion {
   const variant = findPortionVariant(portion, variants);
 
   return {
@@ -541,12 +491,12 @@ function buildDishCardPortion(
 
 export function buildProductMenuItem(
   currentItem: DailyMenuItem,
-  ingredient: Ingredient,
+  ingredient: Ingredient
 ): DailyMenuItem {
   return {
     ...currentItem,
-    kind: "product",
-    source_text: "пром. вироб.",
+    kind: 'product',
+    source_text: 'пром. вироб.',
     recipe_card_number: null,
     dish_card_id: null,
     dish_card_version_id: null,
@@ -569,38 +519,36 @@ export function buildProductMenuItem(
 
 function findPortionVariant(
   portion: MenuPortion,
-  variants: PortionVariant[],
+  variants: PortionVariant[]
 ): PortionVariant | undefined {
   const targetYield = normalizeGramAmount(portion.yield_amount);
   const byYield = targetYield
     ? variants.find(
         (variant) =>
           normalizeGramAmount(variant.output_grams) === targetYield ||
-          normalizeGramAmount(variant.portion_grams) === targetYield,
+          normalizeGramAmount(variant.portion_grams) === targetYield
       )
     : undefined;
 
   return (
-    byYield ??
-    variants.find((variant) => variant.age_group === portion.age_group) ??
-    variants[0]
+    byYield ?? variants.find((variant) => variant.age_group === portion.age_group) ?? variants[0]
   );
 }
 
 function getTechnicalCardLabel(item: DailyMenuItem): string {
   return item.recipe_card_number
     ? `ТК № ${item.recipe_card_number}`
-    : item.source_text?.trim() || "ТК не вказана";
+    : item.source_text?.trim() || 'ТК не вказана';
 }
 
 function displayNutrition(portion: MenuPortion): string {
   const nutrition = portion.nutrition;
   return [
-    `${nutrition.kcal ?? "—"} ккал`,
-    `Б ${nutrition.proteins ?? "—"}`,
-    `Ж ${nutrition.fats ?? "—"}`,
-    `В ${nutrition.carbs ?? "—"}`,
-  ].join(" · ");
+    `${nutrition.kcal ?? '—'} ккал`,
+    `Б ${nutrition.proteins ?? '—'}`,
+    `Ж ${nutrition.fats ?? '—'}`,
+    `В ${nutrition.carbs ?? '—'}`,
+  ].join(' · ');
 }
 
 function normalizeChildrenCount(value: string): number {
@@ -615,19 +563,15 @@ function normalizeChildrenCount(value: string): number {
 
 export function sortDays(days: DailyMenu[]): DailyMenu[] {
   return [...days].sort(
-    (left, right) =>
-      WEEKDAY_ORDER.indexOf(left.weekday) -
-      WEEKDAY_ORDER.indexOf(right.weekday),
+    (left, right) => WEEKDAY_ORDER.indexOf(left.weekday) - WEEKDAY_ORDER.indexOf(right.weekday)
   );
 }
 
 export function buildDailyMenuUpdatePayload(
   days: DailyMenu[],
-  serverDays: DailyMenu[] = [],
+  serverDays: DailyMenu[] = []
 ): WeeklyMenuUpdatePayload {
-  const serverDayByWeekday = new Map(
-    serverDays.map((day) => [day.weekday, day] as const),
-  );
+  const serverDayByWeekday = new Map(serverDays.map((day) => [day.weekday, day] as const));
 
   return {
     days: sortDays(days).map((localDay) => {
@@ -664,11 +608,7 @@ export function buildDailyMenuUpdatePayload(
 }
 
 export function resolveDayDate(menu: WeeklyMenu, day: DailyMenu): string {
-  return resolveEffectiveDayDate(
-    menu.starts_on,
-    WEEKDAY_ORDER.indexOf(day.weekday),
-    day.date,
-  );
+  return resolveEffectiveDayDate(menu.starts_on, WEEKDAY_ORDER.indexOf(day.weekday), day.date);
 }
 
 export function formatMenuDate(value: string): string {
@@ -678,9 +618,9 @@ export function formatMenuDate(value: string): string {
     return value;
   }
 
-  return new Intl.DateTimeFormat("uk-UA", {
-    day: "2-digit",
-    month: "2-digit",
+  return new Intl.DateTimeFormat('uk-UA', {
+    day: '2-digit',
+    month: '2-digit',
   }).format(date);
 }
 function formatFullMenuDate(value: string): string {
@@ -690,9 +630,9 @@ function formatFullMenuDate(value: string): string {
     return value;
   }
 
-  return new Intl.DateTimeFormat("uk-UA", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
+  return new Intl.DateTimeFormat('uk-UA', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
   }).format(date);
 }

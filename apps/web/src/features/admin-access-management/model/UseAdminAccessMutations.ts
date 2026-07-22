@@ -1,17 +1,17 @@
-"use client";
+'use client';
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import {
   createAdminUser,
   deleteAdminUser,
   resetAdminUserPassword,
   updateAdminUser,
-} from "@/entities/admin-user/api/AdminUserApi";
-import { adminUserQueryKeys } from "@/entities/admin-user/api/AdminUserQueries";
-import type { UpdateAdminUserPayload } from "@/entities/admin-user/model/AdminUser";
+} from '@/entities/admin-user/api/AdminUserApi';
+import { adminUserQueryKeys } from '@/entities/admin-user/api/AdminUserQueries';
+import type { UpdateAdminUserPayload } from '@/entities/admin-user/model/AdminUser';
 
-import type { CreateAdminUserFormValues } from "./AdminAccessSchemas";
+import type { CreateAdminUserFormValues } from './AdminAccessSchemas';
 
 export function useCreateAdminUser() {
   const queryClient = useQueryClient();
@@ -35,8 +35,7 @@ export function useUpdateAdminUser(userId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (payload: UpdateAdminUserPayload) =>
-      updateAdminUser(userId, payload),
+    mutationFn: (payload: UpdateAdminUserPayload) => updateAdminUser(userId, payload),
     onSuccess: async (user) => {
       queryClient.setQueryData(adminUserQueryKeys.detail(userId), user);
       await queryClient.invalidateQueries({
@@ -64,7 +63,6 @@ export function useDeleteAdminUser(userId: string) {
 
 export function useResetAdminUserPassword(userId: string) {
   return useMutation({
-    mutationFn: (password: string) =>
-      resetAdminUserPassword(userId, password),
+    mutationFn: (password: string) => resetAdminUserPassword(userId, password),
   });
 }

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode } from 'react';
 
 export function FormSection({
   title,
@@ -33,7 +33,11 @@ export function FormField({
     <div className="flex flex-col gap-1">
       <span className="nf-label">{label}</span>
       {children}
-      {error ? <p role="alert" className="nf-field-error">{error}</p> : null}
+      {error ? (
+        <p role="alert" className="nf-field-error">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

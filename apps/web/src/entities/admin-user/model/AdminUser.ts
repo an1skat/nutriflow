@@ -1,12 +1,12 @@
-import { z } from "zod";
+import { z } from 'zod';
 
-import { adminPermissionSchema } from "@/entities/session/model/Session";
+import { adminPermissionSchema } from '@/entities/session/model/Session';
 
 export const adminUserSchema = z.object({
   id: z.string().min(1),
   username: z.string().min(1),
   email: z.string().email(),
-  role: z.enum(["ADMIN", "TECHNOLOGIST"]),
+  role: z.enum(['ADMIN', 'TECHNOLOGIST']),
   permissions: z.array(adminPermissionSchema),
   is_active: z.boolean(),
   created_at: z.string().min(1),
@@ -27,14 +27,14 @@ export type CreateAdminUserPayload = {
   username: string;
   email: string;
   password: string;
-  role: AdminUser["role"];
-  permissions: AdminUser["permissions"];
+  role: AdminUser['role'];
+  permissions: AdminUser['permissions'];
 };
 
 export type UpdateAdminUserPayload = Partial<{
   username: string;
   email: string;
-  role: AdminUser["role"];
-  permissions: AdminUser["permissions"];
+  role: AdminUser['role'];
+  permissions: AdminUser['permissions'];
   is_active: boolean;
 }>;

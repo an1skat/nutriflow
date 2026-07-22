@@ -1,28 +1,24 @@
-"use client";
+'use client';
 
-import Link from "next/link";
+import Link from 'next/link';
 
-import {
-  useDishCard,
-  useDishCardVersion,
-} from "@/entities/recipe/api/RecipeQueries";
-import { DishCardVersionForm } from "@/features/recipe-management/ui/DishCardVersionForm";
-import { RequestError } from "@/shared/ui/RequestError";
+import { useDishCard, useDishCardVersion } from '@/entities/recipe/api/RecipeQueries';
+import { DishCardVersionForm } from '@/features/recipe-management/ui/DishCardVersionForm';
+import { RequestError } from '@/shared/ui/RequestError';
 
 type Props = {
   dishCardId: string;
   versionId?: string;
-  mode: "create" | "edit";
+  mode: 'create' | 'edit';
 };
 
 export function DishCardVersionEditorWidget({ dishCardId, versionId, mode }: Props) {
   const dishCardQuery = useDishCard(dishCardId);
-  const versionQuery = useDishCardVersion(versionId ?? "");
-  const sourceVersionId =
-    mode === "create" ? (dishCardQuery.data?.current_version_id ?? "") : "";
+  const versionQuery = useDishCardVersion(versionId ?? '');
+  const sourceVersionId = mode === 'create' ? (dishCardQuery.data?.current_version_id ?? '') : '';
   const sourceVersionQuery = useDishCardVersion(sourceVersionId);
 
-  if (mode === "edit") {
+  if (mode === 'edit') {
     if (versionQuery.isPending) {
       return (
         <main className="nf-page">
@@ -42,7 +38,7 @@ export function DishCardVersionEditorWidget({ dishCardId, versionId, mode }: Pro
     }
   }
 
-  if (mode === "create") {
+  if (mode === 'create') {
     if (dishCardQuery.isPending || (sourceVersionId && sourceVersionQuery.isPending)) {
       return (
         <main className="nf-page">
@@ -74,24 +70,24 @@ export function DishCardVersionEditorWidget({ dishCardId, versionId, mode }: Pro
           <Link href={`/admin/recipe/dish-cards/${dishCardId}`} className="nf-link">
             Версії
           </Link>
-          {" / "}
-          {mode === "create" ? "Нова версія" : `Редагування версії`}
+          {' / '}
+          {mode === 'create' ? 'Нова версія' : `Редагування версії`}
         </p>
         <h1 className="nf-title">
-          {mode === "create" ? "Нова версія техкарти" : "Редагування версії"}
+          {mode === 'create' ? 'Нова версія техкарти' : 'Редагування версії'}
         </h1>
         <p className="nf-description">
-          {mode === "create"
+          {mode === 'create'
             ? sourceVersionQuery.data
-              ? "Нова версія створюється на основі поточної. Внесіть потрібні зміни й збережіть draft."
-              : "Створіть нову версію (draft). Після перевірки її можна підтвердити."
-            : "Внесіть зміни до версії. Підтверджені та архівні версії незмінні."}
+              ? 'Нова версія створюється на основі поточної. Внесіть потрібні зміни й збережіть draft.'
+              : 'Створіть нову версію (draft). Після перевірки її можна підтвердити.'
+            : 'Внесіть зміни до версії. Підтверджені та архівні версії незмінні.'}
         </p>
       </header>
 
       <DishCardVersionForm
         dishCardId={dishCardId}
-        version={mode === "edit" ? versionQuery.data : sourceVersionQuery.data}
+        version={mode === 'edit' ? versionQuery.data : sourceVersionQuery.data}
         mode={mode}
       />
     </main>

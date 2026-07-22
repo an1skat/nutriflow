@@ -1,5 +1,5 @@
 export function parseLocalDate(value: string): Date | null {
-  const [year, month, day] = value.split("-").map(Number);
+  const [year, month, day] = value.split('-').map(Number);
   if (!year || !month || !day) {
     return null;
   }
@@ -10,8 +10,8 @@ export function parseLocalDate(value: string): Date | null {
 
 export function toLocalIsoDate(value: Date): string {
   const year = value.getFullYear();
-  const month = `${value.getMonth() + 1}`.padStart(2, "0");
-  const day = `${value.getDate()}`.padStart(2, "0");
+  const month = `${value.getMonth() + 1}`.padStart(2, '0');
+  const day = `${value.getDate()}`.padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
 

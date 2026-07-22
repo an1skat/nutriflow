@@ -1,44 +1,42 @@
-"use client";
+'use client';
 
-import { CheckCheck, Clock3, X } from "lucide-react";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from 'react';
+
+import { CheckCheck, Clock3, X } from 'lucide-react';
 
 import type {
   MenuChangeRequest,
   MenuFieldChange,
-} from "@/entities/menu-change-request/model/MenuChangeRequest";
-import {
-  AGE_GROUP_LABELS,
-  WEEKDAY_LABELS,
-} from "@/entities/weekly-menu/model/WeeklyMenu";
-import { formatDate } from "@/shared/lib/FormatDate";
-import { RequestError } from "@/shared/ui/RequestError";
+} from '@/entities/menu-change-request/model/MenuChangeRequest';
+import { AGE_GROUP_LABELS, WEEKDAY_LABELS } from '@/entities/weekly-menu/model/WeeklyMenu';
+import { formatDate } from '@/shared/lib/FormatDate';
+import { RequestError } from '@/shared/ui/RequestError';
 
 const FIELD_LABELS: Record<string, string> = {
-  kind: "Тип позиції",
-  source_text: "Джерело",
-  recipe_card_number: "Номер техкарти",
-  dish_card_id: "Техкарта (ID)",
-  dish_card_version_id: "Версія техкарти (ID)",
-  product_ingredient_id: "Інгредієнт (ID)",
-  product_name_snapshot: "Промисловий виріб",
-  name: "Назва страви",
-  allergen_codes: "Алергени",
-  portions: "Порції та КБЖВ",
-  notes: "Нотатки",
+  kind: 'Тип позиції',
+  source_text: 'Джерело',
+  recipe_card_number: 'Номер техкарти',
+  dish_card_id: 'Техкарта (ID)',
+  dish_card_version_id: 'Версія техкарти (ID)',
+  product_ingredient_id: 'Інгредієнт (ID)',
+  product_name_snapshot: 'Промисловий виріб',
+  name: 'Назва страви',
+  allergen_codes: 'Алергени',
+  portions: 'Порції та КБЖВ',
+  notes: 'Нотатки',
 };
 
 const HIDDEN_TECHNICAL_FIELDS = new Set([
-  "dish_card_id",
-  "dish_card_version_id",
-  "product_ingredient_id",
+  'dish_card_id',
+  'dish_card_version_id',
+  'product_ingredient_id',
 ]);
 
 const NUTRITION_LABELS: Record<string, string> = {
-  kcal: "ккал",
-  proteins: "Б",
-  fats: "Ж",
-  carbs: "В",
+  kcal: 'ккал',
+  proteins: 'Б',
+  fats: 'Ж',
+  carbs: 'В',
 };
 
 export function MenuChangeRequestDialog({
@@ -64,24 +62,21 @@ export function MenuChangeRequestDialog({
       return;
     }
     if (open && !dialog.open) {
-      if (typeof dialog.showModal === "function") {
+      if (typeof dialog.showModal === 'function') {
         dialog.showModal();
       } else {
-        dialog.setAttribute("open", "");
+        dialog.setAttribute('open', '');
       }
     } else if (!open && dialog.open) {
-      if (typeof dialog.close === "function") {
+      if (typeof dialog.close === 'function') {
         dialog.close();
       } else {
-        dialog.removeAttribute("open");
+        dialog.removeAttribute('open');
       }
     }
   }, [open]);
 
-  const groupedChanges = useMemo(
-    () => (request ? groupChanges(request) : []),
-    [request],
-  );
+  const groupedChanges = useMemo(() => (request ? groupChanges(request) : []), [request]);
 
   return (
     <dialog
@@ -101,14 +96,14 @@ export function MenuChangeRequestDialog({
       <div className="flex max-h-[92vh] flex-col">
         <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 bg-slate-50 px-5 py-4">
           <div className="min-w-0">
-            <p className="nf-eyebrow">{request?.school_name ?? "Зміни меню"}</p>
+            <p className="nf-eyebrow">{request?.school_name ?? 'Зміни меню'}</p>
             <h2 id="menu-change-dialog-title" className="nf-panel-title mt-1">
-              {request?.menu_title ?? "Завантажуємо деталі…"}
+              {request?.menu_title ?? 'Завантажуємо деталі…'}
             </h2>
             {request ? (
               <p className="mt-1 text-xs text-slate-600">
-                {request.meal_type === "lunch" ? "Обід" : "Сніданок"}
-                {request.cycle_week ? ` · цикл ${request.cycle_week}` : ""}
+                {request.meal_type === 'lunch' ? 'Обід' : 'Сніданок'}
+                {request.cycle_week ? ` · цикл ${request.cycle_week}` : ''}
                 {` · надіслано ${formatDate(request.created_at)}`}
               </p>
             ) : null}
@@ -145,7 +140,7 @@ export function MenuChangeRequestDialog({
                   <div className="border-b border-amber-200 bg-amber-50 px-4 py-3">
                     <h3 className="text-sm font-bold text-amber-950">
                       {WEEKDAY_LABELS[group.weekday]} · страва № {group.position}
-                      {group.date ? ` · ${formatDayDate(group.date)}` : ""}
+                      {group.date ? ` · ${formatDayDate(group.date)}` : ''}
                     </h3>
                   </div>
                   <ChangeComparisonTables changes={group.changes} />
@@ -161,7 +156,7 @@ export function MenuChangeRequestDialog({
                     <div key={day.weekday}>
                       <p className="text-xs font-bold uppercase tracking-wide text-slate-600">
                         {WEEKDAY_LABELS[day.weekday]}
-                        {day.date ? ` · ${formatDayDate(day.date)}` : ""}
+                        {day.date ? ` · ${formatDayDate(day.date)}` : ''}
                       </p>
                       <ol className="mt-1 list-decimal space-y-1 pl-5 text-sm text-slate-800">
                         {[...day.items]
@@ -182,14 +177,14 @@ export function MenuChangeRequestDialog({
   );
 }
 
-function StatusBadge({ status }: { status: MenuChangeRequest["status"] }) {
-  const pending = status === "pending";
+function StatusBadge({ status }: { status: MenuChangeRequest['status'] }) {
+  const pending = status === 'pending';
   return (
     <span
       className={`inline-flex items-center gap-1 border px-2 py-1 text-xs font-bold ${
         pending
-          ? "border-amber-300 bg-amber-50 text-amber-900"
-          : "border-emerald-300 bg-emerald-50 text-emerald-900"
+          ? 'border-amber-300 bg-amber-50 text-amber-900'
+          : 'border-emerald-300 bg-emerald-50 text-emerald-900'
       }`}
     >
       {pending ? (
@@ -197,7 +192,7 @@ function StatusBadge({ status }: { status: MenuChangeRequest["status"] }) {
       ) : (
         <CheckCheck className="size-3.5" aria-hidden />
       )}
-      {pending ? "Нова зміна" : "Переглянуто"}
+      {pending ? 'Нова зміна' : 'Переглянуто'}
     </span>
   );
 }
@@ -215,25 +210,23 @@ function ComparisonTable({
   side,
   changes,
 }: {
-  side: "before" | "after";
+  side: 'before' | 'after';
   changes: MenuFieldChange[];
 }) {
-  const isBefore = side === "before";
+  const isBefore = side === 'before';
 
   return (
     <div
-      className={`overflow-hidden border ${
-        isBefore ? "border-rose-200" : "border-emerald-200"
-      }`}
+      className={`overflow-hidden border ${isBefore ? 'border-rose-200' : 'border-emerald-200'}`}
     >
       <div
         className={`border-b px-3 py-2 text-sm font-bold ${
           isBefore
-            ? "border-rose-200 bg-rose-50 text-rose-900"
-            : "border-emerald-200 bg-emerald-50 text-emerald-900"
+            ? 'border-rose-200 bg-rose-50 text-rose-900'
+            : 'border-emerald-200 bg-emerald-50 text-emerald-900'
         }`}
       >
-        {isBefore ? "Було" : "Стало"}
+        {isBefore ? 'Було' : 'Стало'}
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[420px] border-collapse text-sm">
@@ -258,8 +251,8 @@ function ComparisonTable({
                 <td
                   className={`border-l-4 px-3 py-3 align-top ${
                     isBefore
-                      ? "border-l-rose-400 bg-rose-50/70"
-                      : "border-l-emerald-500 bg-emerald-50/70"
+                      ? 'border-l-rose-400 bg-rose-50/70'
+                      : 'border-l-emerald-500 bg-emerald-50/70'
                   }`}
                 >
                   <ValuePreview
@@ -277,23 +270,23 @@ function ComparisonTable({
 }
 
 function ValuePreview({ field, value }: { field: string; value: unknown }) {
-  if (value === null || value === undefined || value === "") {
+  if (value === null || value === undefined || value === '') {
     return <span className="text-slate-500">Не вказано</span>;
   }
-  if (field === "kind") {
-    return value === "dish_card" ? "Страва з техкарти" : "Промисловий виріб";
+  if (field === 'kind') {
+    return value === 'dish_card' ? 'Страва з техкарти' : 'Промисловий виріб';
   }
-  if (field === "portions" && Array.isArray(value)) {
+  if (field === 'portions' && Array.isArray(value)) {
     return <PortionsPreview portions={value} />;
   }
   if (Array.isArray(value)) {
-    if (value.every((item) => typeof item === "string")) {
-      return value.length > 0 ? value.join(", ") : "Немає";
+    if (value.every((item) => typeof item === 'string')) {
+      return value.length > 0 ? value.join(', ') : 'Немає';
     }
-    return "Дані оновлено";
+    return 'Дані оновлено';
   }
-  if (typeof value === "object") {
-    return "Дані оновлено";
+  if (typeof value === 'object') {
+    return 'Дані оновлено';
   }
   return <span className="break-words text-slate-800">{String(value)}</span>;
 }
@@ -311,36 +304,32 @@ function PortionsPreview({ portions }: { portions: unknown[] }) {
         }
 
         const ageGroup =
-          typeof portion.age_group === "string"
-            ? (AGE_GROUP_LABELS[
-                portion.age_group as keyof typeof AGE_GROUP_LABELS
-              ] ?? portion.age_group)
-            : "Вікова група";
+          typeof portion.age_group === 'string'
+            ? (AGE_GROUP_LABELS[portion.age_group as keyof typeof AGE_GROUP_LABELS] ??
+              portion.age_group)
+            : 'Вікова група';
         const yieldAmount =
-          typeof portion.yield_amount === "string"
+          typeof portion.yield_amount === 'string'
             ? `${portion.yield_amount} г`
-            : "вагу не вказано";
-        const nutritionValues = isRecord(portion.nutrition)
-          ? portion.nutrition
-          : null;
+            : 'вагу не вказано';
+        const nutritionValues = isRecord(portion.nutrition) ? portion.nutrition : null;
         const nutrition = nutritionValues
           ? Object.entries(NUTRITION_LABELS)
               .flatMap(([key, label]) => {
                 const nutritionValue = nutritionValues[key];
                 return nutritionValue === null ||
                   nutritionValue === undefined ||
-                  nutritionValue === ""
+                  nutritionValue === ''
                   ? []
                   : [`${label}: ${String(nutritionValue)}`];
               })
-              .join(" · ")
-          : "";
+              .join(' · ')
+          : '';
 
         return (
           <li key={`${String(portion.age_group)}-${index}`}>
-            <span className="font-bold text-slate-800">{ageGroup}:</span>{" "}
-            {yieldAmount}
-            {nutrition ? ` · ${nutrition}` : ""}
+            <span className="font-bold text-slate-800">{ageGroup}:</span> {yieldAmount}
+            {nutrition ? ` · ${nutrition}` : ''}
           </li>
         );
       })}
@@ -349,14 +338,14 @@ function PortionsPreview({ portions }: { portions: unknown[] }) {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function groupChanges(request: MenuChangeRequest) {
   const groups = new Map<
     string,
     {
-      weekday: MenuFieldChange["weekday"];
+      weekday: MenuFieldChange['weekday'];
       position: number;
       date: string | null;
       visibleChanges: MenuFieldChange[];
@@ -368,9 +357,7 @@ function groupChanges(request: MenuChangeRequest) {
     const existing = groups.get(key) ?? {
       weekday: change.weekday,
       position: change.position,
-      date:
-        request.days_snapshot.find((day) => day.weekday === change.weekday)
-          ?.date ?? null,
+      date: request.days_snapshot.find((day) => day.weekday === change.weekday)?.date ?? null,
       visibleChanges: [],
     };
     if (!HIDDEN_TECHNICAL_FIELDS.has(change.field)) {
@@ -394,9 +381,9 @@ function formatDayDate(value: string): string {
   if (Number.isNaN(date.getTime())) {
     return value;
   }
-  return new Intl.DateTimeFormat("uk-UA", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
+  return new Intl.DateTimeFormat('uk-UA', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
   }).format(date);
 }
