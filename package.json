@@ -1,10 +1,16 @@
 {
   "name": "nutriflow",
   "private": true,
-  "workspaces": ["apps/web", "packages/*"],
+  "workspaces": [
+    "apps/web",
+    "packages/*"
+  ],
   "scripts": {
-    "dev:web": "bun --cwd apps/web run dev",
-    "lint:web": "bun --cwd apps/web run lint",
-    "build:web": "bun --cwd apps/web run build"
+    "dev:web": "bun run --cwd apps/web dev",
+    "lint:web": "bun run --cwd apps/web lint",
+    "typecheck:web": "bun run --cwd apps/web typecheck",
+    "format:web": "bun run --cwd apps/web format",
+    "format:check:web": "bun run --cwd apps/web format:check",
+    "build:web": "bun run --cwd apps/web build"
   }
 }
