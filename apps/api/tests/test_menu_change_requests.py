@@ -11,7 +11,7 @@ from app.modules.menus.models import (
     MenuPortion,
     Weekday,
 )
-from app.modules.menus.service import _collect_school_dish_changes
+from app.modules.menus.service import _collect_school_dish_changes, _merge_distributed_days
 
 pytestmark = pytest.mark.no_clean_database
 
@@ -69,3 +69,16 @@ def test_dish_replacement_creates_readable_field_diff() -> None:
     name_change = next(change for change in changes if change.field == "name")
     assert name_change.before_value == "Каша гречана"
     assert name_change.after_value == "Рис з овочами"
+
+
+def test_template_update_preserves_school_dish_replacement() -> None:
+    source_days = build_days()
+    school_days = deepcopy(source_days)
+    school_item = school_days[0].items[0]
+    school_item.recipe_card_number = "2.17"
+    school_item.name = "Рис з овочами"
+
+    merged = _merge_distributed_days(source_days, school_days)
+
+    assert merged[0].items[0].recipe_card_number == "2.17"
+    assert merged[0].items[0].name == "Рис з овочами"

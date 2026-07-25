@@ -584,12 +584,15 @@ def _merge_distributed_days(
                 item.id: item for item in current_day.items if item.id is not None
             }
             current_items_by_position = {item.position: item for item in current_day.items}
-            for item in merged_day.items:
+            for index, item in enumerate(merged_day.items):
                 current_item = current_items_by_id.get(item.id)
                 if current_item is None:
                     current_item = current_items_by_position.get(item.position)
                 if current_item is not None:
-                    item.servings = deepcopy(current_item.servings)
+                    if _school_dish_override(item, current_item):
+                        merged_day.items[index] = deepcopy(current_item)
+                    else:
+                        item.servings = deepcopy(current_item.servings)
             merged_day.dev_reopened_at = current_day.dev_reopened_at
         merged_days.append(merged_day)
 
@@ -600,6 +603,25 @@ def _merge_distributed_days(
         if day.weekday not in source_weekdays and day.closed_at is not None
     )
     return sorted(merged_days, key=lambda day: list(Weekday).index(day.weekday))
+
+
+def _school_dish_override(source: DailyMenuItem, school: DailyMenuItem) -> bool:
+    return any(
+        getattr(source, field) != getattr(school, field)
+        for field in (
+            "kind",
+            "source_text",
+            "recipe_card_number",
+            "dish_card_id",
+            "dish_card_version_id",
+            "product_ingredient_id",
+            "product_name_snapshot",
+            "name",
+            "allergen_codes",
+            "portions",
+            "notes",
+        )
+    )
 
 
 async def publish_weekly_menu(

@@ -213,7 +213,12 @@ class WeeklyMenu(Document):
                     ("source_menu_id", ASCENDING),
                     ("school_id", ASCENDING),
                 ],
-                name="ix_weekly_menu_source_school",
+                unique=True,
+                partialFilterExpression={
+                    "source_menu_id": {"$type": "objectId"},
+                    "school_id": {"$type": "objectId"},
+                },
+                name="uq_weekly_menu_source_school",
             ),
             IndexModel([("created_at", ASCENDING)], name="ix_weekly_menu_created_at"),
         ]

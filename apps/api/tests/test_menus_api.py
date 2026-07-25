@@ -3,6 +3,7 @@ from io import BytesIO
 import openpyxl
 from beanie import PydanticObjectId
 from fastapi.testclient import TestClient
+from pymongo import MongoClient
 
 from app.core.config import get_settings
 from app.modules.menus.models import MealType
@@ -309,6 +310,24 @@ def test_admin_publishes_template_to_school_copy(seeded_client):
     assert get_response.status_code == 200
     assert get_response.json()["school_id"] == str(identities.own_school.id)
     assert get_response.json()["source_menu_id"] == source_id
+
+
+def test_weekly_menu_source_school_index_is_unique_and_partial(seeded_client):
+    _client, _identities = seeded_client
+    settings = get_settings()
+    mongo_client = MongoClient(settings.mongo_uri, tz_aware=True)
+    try:
+        index = mongo_client[settings.mongo_db]["weekly_menus"].index_information()[
+            "uq_weekly_menu_source_school"
+        ]
+    finally:
+        mongo_client.close()
+
+    assert index["unique"] is True
+    assert index["partialFilterExpression"] == {
+        "source_menu_id": {"$type": "objectId"},
+        "school_id": {"$type": "objectId"},
+    }
 
 
 def test_template_update_propagates_to_existing_school_copy(seeded_client):
