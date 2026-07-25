@@ -1,11 +1,13 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pymongo.errors import PyMongoError
 
 from app.core.config import Settings, get_settings
 from app.db.mongo import get_mongo_client
 
 router = APIRouter()
+ready_router = APIRouter()
 AppSettings = Annotated[Settings, Depends(get_settings)]
 
 
@@ -29,3 +31,13 @@ async def database_health_check(settings: AppSettings):
         "status": "ok",
         "database": "mongodb",
     }
+
+
+@ready_router.get("")
+async def ready_check():
+    try:
+        await get_mongo_client().admin.command("ping")
+    except PyMongoError as exc:
+        raise HTTPException(status_code=503, detail="MongoDB unavailable") from exc
+
+    return {"status": "ok", "detail": "MongoDB available"}

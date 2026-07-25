@@ -2,6 +2,7 @@
 set -eu
 
 : "${HEALTH_URL:?HEALTH_URL is required}"
+: "${READY_URL:?READY_URL is required}"
 : "${HEARTBEAT_URL:?HEARTBEAT_URL is required}"
 
 DISK_PATH="${DISK_PATH:-/}"
@@ -18,16 +19,36 @@ fail() {
     exit 1
 }
 
-if ! HEALTH_RESPONSE="$(
-    curl -fsS --max-time "$HTTP_TIMEOUT_SECONDS" "$HEALTH_URL"
-)"; then
-    fail "NutriFlow health endpoint is unavailable: $HEALTH_URL"
-fi
+RESPONSE_FILE="$(
+    mktemp "${TMPDIR:-/tmp}/nutriflow-monitor.XXXXXX"
+)" || fail "Cannot create a temporary file for NutriFlow HTTP checks"
+trap 'rm -f "$RESPONSE_FILE"' EXIT HUP INT TERM
 
-case "$HEALTH_RESPONSE" in
-    *'"status":"ok"'*) ;;
-    *) fail "NutriFlow health endpoint returned an unexpected response" ;;
-esac
+check_endpoint() {
+    CHECK_NAME="$1"
+    CHECK_URL="$2"
+
+    if ! HTTP_STATUS="$(
+        curl -sS --max-time "$HTTP_TIMEOUT_SECONDS" \
+            --output "$RESPONSE_FILE" \
+            --write-out "%{http_code}" \
+            "$CHECK_URL"
+    )"; then
+        fail "NutriFlow $CHECK_NAME endpoint is unavailable"
+    fi
+
+    case "$HTTP_STATUS" in
+        2??) ;;
+        *) fail "NutriFlow $CHECK_NAME endpoint returned HTTP $HTTP_STATUS" ;;
+    esac
+
+    if ! grep -Fq '"status":"ok"' "$RESPONSE_FILE"; then
+        fail "NutriFlow $CHECK_NAME endpoint returned an unexpected response"
+    fi
+}
+
+check_endpoint "liveness" "$HEALTH_URL"
+check_endpoint "readiness" "$READY_URL"
 
 DISK_STATS="$(
     df -Pk "$DISK_PATH" 2>/dev/null |
@@ -49,5 +70,8 @@ if [ "$USED_PERCENT" -ge "$MAX_USED_PERCENT" ] || [ "$FREE_KB" -le "$MIN_FREE_KB
     fail "Disk alert: path=$DISK_PATH used=${USED_PERCENT}% free_kb=$FREE_KB"
 fi
 
-curl -fsS --max-time "$HTTP_TIMEOUT_SECONDS" "$HEARTBEAT_URL" >/dev/null
-echo "Health and disk checks passed: used=${USED_PERCENT}% free_kb=$FREE_KB"
+if ! curl -fsS --max-time "$HTTP_TIMEOUT_SECONDS" "$HEARTBEAT_URL" >/dev/null; then
+    fail "Cannot send the successful NutriFlow host heartbeat"
+fi
+
+echo "Liveness, readiness, and disk checks passed: used=${USED_PERCENT}% free_kb=$FREE_KB"

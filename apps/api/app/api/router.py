@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.modules.admin.router import router as admin_router
 from app.modules.auth.router import router as auth_router
+from app.modules.health.router import ready_router
 from app.modules.health.router import router as health_router
 from app.modules.menu_requirements.router import router as menu_requirements_router
 from app.modules.menus.router import router as menus_router
@@ -12,6 +13,7 @@ from app.modules.school.router import router as school_router
 api_router = APIRouter()
 
 api_router.include_router(health_router, prefix="/health", tags=["health"])
+api_router.include_router(ready_router, prefix="/ready", tags=["health"])
 api_router.include_router(
     auth_router,
     prefix="/auth",
