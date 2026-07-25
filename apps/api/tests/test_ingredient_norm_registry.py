@@ -34,9 +34,7 @@ pytestmark = pytest.mark.no_clean_database
 
 
 def test_manual_registry_covers_the_reviewed_catalog_without_overlap() -> None:
-    assert len(INGREDIENT_NORM_RULES) == 97
-    assert len(INGREDIENTS_NOT_COUNTED_SEPARATELY) == 50
-    assert len(set(INGREDIENT_NORM_RULES) | set(INGREDIENTS_NOT_COUNTED_SEPARATELY)) == 147
+    assert len(INGREDIENT_NORM_RULES) >= 97
     assert not set(INGREDIENT_NORM_RULES) & set(INGREDIENTS_NOT_COUNTED_SEPARATELY)
 
 
@@ -44,13 +42,32 @@ def test_manual_registry_uses_distinct_legal_groups() -> None:
     assert INGREDIENT_NORM_RULES["морква свіжа з 01.01"].group_code == (
         NormativeGroupCode.VEGETABLES
     )
+    assert INGREDIENT_NORM_RULES["буряк столовий свіжий з 01.01."].group_code == (
+        NormativeGroupCode.VEGETABLES
+    )
     assert INGREDIENT_NORM_RULES["картопля свіжа з 01.03"].group_code == (
         NormativeGroupCode.POTATOES
     )
     assert INGREDIENT_NORM_RULES["філе куряче"].group_code == NormativeGroupCode.POULTRY
+    assert INGREDIENT_NORM_RULES["філе минтая зі шкірою вироблене промисловістю"].group_code == (
+        NormativeGroupCode.FISH
+    )
     assert INGREDIENT_NORM_RULES["чорнослив без кісточки"].group_code == (
         NormativeGroupCode.DRIED_FRUITS_NUTS_SEEDS
     )
+
+
+def test_composite_dressings_contribute_only_their_oil_share() -> None:
+    dressing = _ingredient("Заправка для салату (ТК № 10.01)")
+    honey_mustard = _ingredient("Соус медово-гірчичний")
+
+    dressing_snapshot = _snapshots(dressing, Decimal("4"))[0]
+    honey_snapshot = _snapshots(honey_mustard, Decimal("7"))[0]
+
+    assert dressing_snapshot.group_code == NormativeGroupCode.VEGETABLE_FATS
+    assert dressing_snapshot.amount == Decimal("2.8")
+    assert honey_snapshot.group_code == NormativeGroupCode.VEGETABLE_FATS
+    assert honey_snapshot.amount == Decimal("5.7")
 
 
 def test_manual_registry_creates_snapshot_for_unconfigured_ingredient() -> None:

@@ -324,6 +324,28 @@ export function NormComplianceReportView({
         </div>
       </section>
 
+      <section className="nf-panel" aria-labelledby="compliance-rules-title">
+        <div className="nf-panel-body py-3">
+          <h2 id="compliance-rules-title" className="text-sm font-bold text-slate-900">
+            Як оцінюється виконання
+          </h2>
+          <div className="mt-2 grid gap-2 text-xs text-slate-700 md:grid-cols-3">
+            <p>
+              <span className="font-bold text-slate-900">Більшість груп:</span> нетто-порція
+              може відхилятися до 10%.
+            </p>
+            <p>
+              <span className="font-bold text-slate-900">Риба, птиця та червоне м’ясо:</span>{' '}
+              тижнева маса має бути виконана повністю.
+            </p>
+            <p>
+              <span className="font-bold text-slate-900">Сіль, цукор, какао й чай:</span> норма
+              виконана від 50%.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {report.groups.length === 0 ? (
         <section className="nf-panel">
           <div className="nf-panel-body">
@@ -391,7 +413,13 @@ export function NormComplianceReportView({
                         <AmountCell value={row.required_amount} unit={row.unit} />
                         <AmountCell value={row.actual_amount} unit={row.unit} />
                         <td
-                          className={`text-right font-bold ${row.deviation < 0 ? 'text-rose-700' : row.deviation > 0 ? 'text-rose-700' : 'text-emerald-700'}`}
+                          className={`text-right font-bold ${
+                            row.status === 'complete'
+                              ? 'text-emerald-700'
+                              : row.status === 'under' || row.status === 'over'
+                                ? 'text-rose-700'
+                                : 'text-slate-700'
+                          }`}
                         >
                           {formatSigned(row.deviation)} {unitLabels[row.unit]}
                         </td>
@@ -645,7 +673,7 @@ function ComplianceDetailsPanel({
           </section>
 
           <div className="border-t border-slate-200 pt-3 text-xs text-slate-600">
-            Допуск:{' '}
+            Правило оцінки:{' '}
             {row.tolerance.description ||
               `${formatNumber(row.tolerance.minimum_percent)}–${formatNumber(row.tolerance.maximum_percent)}%`}
             .{row.characteristic ? ` ${row.characteristic}` : ''}

@@ -106,6 +106,9 @@ def contribution_value(
         return value, value
 
     option = norm.portion_options[0]
+    if contribution.portion_equivalent is not None:
+        value = contribution.portion_equivalent
+        return option.amount * value, value
     if contribution.unit != option.unit:
         return None
     return contribution.amount, contribution.amount / option.amount

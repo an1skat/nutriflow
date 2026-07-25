@@ -33,6 +33,7 @@ from app.modules.norm_compliance.service import (
     _validate_complete_requirement_week,
     _validate_range,
     calculate_numeric_status,
+    contribution_value,
 )
 from app.modules.norm_compliance.xlsx import build_norm_compliance_workbook
 from app.modules.nutrition.domain import (
@@ -108,7 +109,7 @@ def test_numeric_status_uses_tolerance(actual: Decimal, expected: ComplianceStat
         NormativeGroupCode.TEA,
     ],
 )
-def test_every_group_uses_one_percent_tolerance(
+def test_limited_products_are_complete_from_fifty_percent(
     group_code: NormativeGroupCode,
 ) -> None:
     meal_type = MealType.BREAKFAST
@@ -116,14 +117,78 @@ def test_every_group_uses_one_percent_tolerance(
     assert norm is not None
 
     status, percent = calculate_numeric_status(
-        Decimal("98.99"),
+        Decimal("50"),
         Decimal("100"),
         minimum_percent=norm.tolerance.minimum_percent,
         maximum_percent=norm.tolerance.maximum_percent,
     )
 
-    assert percent == Decimal("98.99")
+    assert percent == Decimal("50")
+    assert status == ComplianceStatus.COMPLETE
+
+
+@pytest.mark.parametrize(
+    "group_code",
+    [
+        NormativeGroupCode.FISH,
+        NormativeGroupCode.POULTRY,
+        NormativeGroupCode.RED_MEAT,
+    ],
+)
+def test_fish_and_meat_groups_require_exact_weekly_mass(group_code: NormativeGroupCode) -> None:
+    meal_type = MealType.LUNCH if group_code == NormativeGroupCode.RED_MEAT else MealType.BREAKFAST
+    norm = get_norm(meal_type, AgeGroup.SIX_TO_ELEVEN, group_code)
+    assert norm is not None
+
+    status, _ = calculate_numeric_status(
+        Decimal("99.99"),
+        Decimal("100"),
+        minimum_percent=norm.tolerance.minimum_percent,
+        maximum_percent=norm.tolerance.maximum_percent,
+    )
+
     assert status == ComplianceStatus.UNDER
+
+
+def test_regular_groups_allow_a_ten_percent_net_portion_deviation() -> None:
+    norm = get_norm(
+        MealType.BREAKFAST,
+        AgeGroup.SIX_TO_ELEVEN,
+        NormativeGroupCode.VEGETABLES,
+    )
+    assert norm is not None
+
+    assert calculate_numeric_status(
+        Decimal("90"),
+        Decimal("100"),
+        minimum_percent=norm.tolerance.minimum_percent,
+        maximum_percent=norm.tolerance.maximum_percent,
+    )[0] == ComplianceStatus.COMPLETE
+    assert calculate_numeric_status(
+        Decimal("110"),
+        Decimal("100"),
+        minimum_percent=norm.tolerance.minimum_percent,
+        maximum_percent=norm.tolerance.maximum_percent,
+    )[0] == ComplianceStatus.COMPLETE
+
+
+def test_ready_portion_is_compared_with_the_appendix_portion_amount() -> None:
+    norm = get_norm(
+        MealType.BREAKFAST,
+        AgeGroup.SIX_TO_ELEVEN,
+        NormativeGroupCode.CEREALS_GRAINS_LEGUMES,
+    )
+    assert norm is not None
+    contribution = NormativeContributionSnapshot(
+        group_code=NormativeGroupCode.CEREALS_GRAINS_LEGUMES,
+        amount=Decimal("95"),
+        unit=NormativeUnit.GRAM,
+        portion_equivalent=Decimal("1"),
+        source_type=NormativeContributionSource.PORTION_VARIANT,
+        source_name="Каша вівсяна",
+    )
+
+    assert contribution_value(contribution, norm) == (Decimal("120"), Decimal("1"))
 
 
 def test_section_reports_complete_row_and_stale_requirement() -> None:

@@ -116,6 +116,8 @@ describe('NormComplianceReportView', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Невідома страва')).toBeInTheDocument();
     expect(screen.getByText('1 / 1')).toBeInTheDocument();
+    expect(screen.getByText('Як оцінюється виконання')).toBeInTheDocument();
+    expect(screen.getByText(/тижнева маса має бути виконана повністю/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Овочі' }));
     expect(onSelectRow).toHaveBeenCalledWith(
@@ -148,6 +150,38 @@ describe('NormComplianceReportView', () => {
     ).toBeInTheDocument();
     expect(within(dialog).getByText('Борщ')).toBeInTheDocument();
     expect(within(dialog).getByText('За інгредієнтом')).toBeInTheDocument();
+  });
+
+  it('shows an allowed deviation in green', () => {
+    const inToleranceReport = {
+      ...report,
+      groups: report.groups.map((group) => ({
+        ...group,
+        sections: group.sections.map((section) => ({
+          ...section,
+          rows: section.rows.map((row) => ({
+            ...row,
+            status: 'complete' as const,
+            deviation: -25,
+          })),
+        })),
+      })),
+    };
+
+    render(
+      <NormComplianceReportView
+        report={inToleranceReport}
+        selectedRow={null}
+        onSelectRow={() => undefined}
+        onCloseDetails={() => undefined}
+      />
+    );
+
+    expect(
+      screen.getByText(
+        (_content, element) => element?.tagName === 'TD' && element.textContent?.includes('25 г')
+      )
+    ).toHaveClass('text-emerald-700');
   });
 });
 

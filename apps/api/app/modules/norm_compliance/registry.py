@@ -51,9 +51,21 @@ class NutritionNorm:
 
 
 DEFAULT_TOLERANCE = ToleranceRule(
-    minimum_percent=Decimal("99"),
-    maximum_percent=Decimal("101"),
-    description="Допустиме тижневе відхилення: ±1%.",
+    minimum_percent=Decimal("90"),
+    maximum_percent=Decimal("110"),
+    description="Допустиме відхилення нетто-порції: до 10%.",
+)
+
+STRICT_WEEKLY_TOLERANCE = ToleranceRule(
+    minimum_percent=Decimal("100"),
+    maximum_percent=Decimal("100"),
+    description="За тиждень маса цієї групи має бути виконана повністю.",
+)
+
+MINIMUM_HALF_TOLERANCE = ToleranceRule(
+    minimum_percent=Decimal("50"),
+    maximum_percent=Decimal("1000000"),
+    description="Норма вважається виконаною від 50%.",
 )
 
 GROUP_NAMES = {
@@ -98,6 +110,19 @@ _AGES = (
 
 def _d(value: str | int) -> Decimal:
     return Decimal(str(value))
+
+
+def _tolerance_for(code: NormativeGroupCode) -> ToleranceRule:
+    if code in {NormativeGroupCode.FISH, NormativeGroupCode.POULTRY, NormativeGroupCode.RED_MEAT}:
+        return STRICT_WEEKLY_TOLERANCE
+    if code in {
+        NormativeGroupCode.SALT,
+        NormativeGroupCode.SUGAR,
+        NormativeGroupCode.COCOA,
+        NormativeGroupCode.TEA,
+    }:
+        return MINIMUM_HALF_TOLERANCE
+    return DEFAULT_TOLERANCE
 
 
 _BREAKFAST_ROWS = (
@@ -420,7 +445,7 @@ def _build_registry() -> tuple[NutritionNorm, ...]:
                         characteristic=row.characteristic,
                         frequency=row.frequency,
                         source_appendix=appendix,
-                        tolerance=DEFAULT_TOLERANCE,
+                        tolerance=_tolerance_for(row.code),
                     )
                 )
     return tuple(result)

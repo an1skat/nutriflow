@@ -54,6 +54,7 @@ from app.modules.menus.models import (
     DailyMenuItem,
     MealType,
     MenuItemKind,
+    MenuPortion,
     MenuPortionCalculationSource,
     Weekday,
     WeeklyMenu,
@@ -67,6 +68,8 @@ from app.modules.nutrition.domain import (
     NormativeContributionBasis,
     NormativeContributionSnapshot,
     NormativeContributionSource,
+    NormativeGroupCode,
+    NormativeUnit,
 )
 from app.modules.recipe.models import (
     DishCardVersion,
@@ -159,6 +162,7 @@ async def generate_menu_requirements(
         calculations = await _build_dish_calculations(
             day,
             group,
+            service_date=resolved_service_date,
             catalog_by_id=catalog_by_id,
             catalog_by_name=catalog_by_name,
         )
@@ -556,6 +560,7 @@ async def _build_dish_calculations(
     day: DailyMenu,
     group: SchoolGroup,
     *,
+    service_date: Date,
     catalog_by_id: dict[PydanticObjectId, Ingredient],
     catalog_by_name: dict[str, Ingredient],
 ) -> list[DishCalculation]:
@@ -583,7 +588,7 @@ async def _build_dish_calculations(
         if item.kind == MenuItemKind.PRODUCT:
             lines, normative_contributions = await _product_ingredient_lines(
                 item,
-                portion.yield_amount,
+                portion,
                 catalog_by_id=catalog_by_id,
                 catalog_by_name=catalog_by_name,
             )
@@ -597,9 +602,20 @@ async def _build_dish_calculations(
                 portion.dish_card_portion_variant_id,
                 portion.calculated_from,
                 portion.yield_amount,
+                service_date=service_date,
                 catalog_by_id=catalog_by_id,
                 catalog_by_name=catalog_by_name,
             )
+            ready_portion = _ready_dish_contribution_snapshot(item, portion)
+            if ready_portion is not None:
+                normative_contributions = [
+                    ready_portion,
+                    *[
+                        contribution
+                        for contribution in normative_contributions
+                        if contribution.group_code != ready_portion.group_code
+                    ],
+                ]
 
         dish = MenuRequirementDish(
             menu_item_id=item.id,
@@ -632,6 +648,7 @@ async def _dish_card_ingredient_lines(
     calculated_from: MenuPortionCalculationSource | None,
     yield_amount: str,
     *,
+    service_date: Date,
     catalog_by_id: dict[PydanticObjectId, Ingredient],
     catalog_by_name: dict[str, Ingredient],
 ) -> tuple[
@@ -664,9 +681,14 @@ async def _dish_card_ingredient_lines(
         item.name,
     )
 
-    amounts = [
-        amount for amount in version.ingredient_amounts if amount.portion_variant_id == variant.id
-    ]
+    amounts = _select_seasonal_amounts(
+        [
+            amount
+            for amount in version.ingredient_amounts
+            if amount.portion_variant_id == variant.id
+        ],
+        service_date,
+    )
 
     if not amounts:
         raise MenuRequirementValidationError(
@@ -739,13 +761,13 @@ def _resolve_requirement_portion_variant(
 
 async def _product_ingredient_lines(
     item: DailyMenuItem,
-    yield_amount: str,
+    portion: MenuPortion,
     *,
     catalog_by_id: dict[PydanticObjectId, Ingredient],
     catalog_by_name: dict[str, Ingredient],
 ) -> tuple[list[IngredientLine], list[NormativeContributionSnapshot]]:
     try:
-        amount = Decimal(yield_amount.strip().replace(",", "."))
+        amount = Decimal(portion.yield_amount.strip().replace(",", "."))
     except InvalidOperation as exc:
         raise MenuRequirementValidationError(
             f'Product "{item.name}" must have a single numeric yield in grams'
@@ -772,14 +794,131 @@ async def _product_ingredient_lines(
             net_per_person_g=amount,
         )
     ]
-    snapshots = ingredient_contribution_snapshots(
+    explicit = _menu_portion_contribution_snapshots(portion, item)
+    fallback = ingredient_contribution_snapshots(
         lines,
         catalog_by_id=catalog_by_id,
         catalog_by_name=catalog_by_name,
-        excluded_groups=set(),
+        excluded_groups={contribution.group_code for contribution in explicit},
         source_type=NormativeContributionSource.PRODUCT,
     )
-    return lines, snapshots
+    return lines, [*explicit, *fallback]
+
+
+def _menu_portion_contribution_snapshots(
+    portion: MenuPortion,
+    item: DailyMenuItem,
+) -> list[NormativeContributionSnapshot]:
+    return [
+        NormativeContributionSnapshot(
+            group_code=contribution.group_code,
+            amount=contribution.amount,
+            unit=contribution.unit,
+            portion_equivalent=contribution.portion_equivalent,
+            product_variant=contribution.product_variant,
+            source_type=NormativeContributionSource.PRODUCT,
+            source_id=str(item.id),
+            source_name=item.name,
+        )
+        for contribution in portion.normative_contributions
+        if contribution.basis == NormativeContributionBasis.PER_PORTION
+    ]
+
+
+def _ready_dish_contribution_snapshot(
+    item: DailyMenuItem,
+    portion: MenuPortion,
+) -> NormativeContributionSnapshot | None:
+    name = normalize_lookup_text(item.name)
+    group_code = (
+        NormativeGroupCode.POTATOES
+        if "картопля" in name
+        else NormativeGroupCode.CEREALS_GRAINS_LEGUMES
+        if any(term in name for term in ("каша", "макарони", "запіканка рисова"))
+        else None
+    )
+    output = parse_menu_yield_grams(portion.yield_amount)
+    if group_code is None or output is None or output <= 0:
+        return None
+    return NormativeContributionSnapshot(
+        group_code=group_code,
+        amount=output,
+        unit=NormativeUnit.GRAM,
+        portion_equivalent=Decimal("1"),
+        source_type=NormativeContributionSource.PORTION_VARIANT,
+        source_id=str(item.id),
+        source_name=item.name,
+    )
+
+
+def _select_seasonal_amounts(
+    amounts: list[IngredientAmount],
+    service_date: Date,
+) -> list[IngredientAmount]:
+    grouped: dict[str, list[IngredientAmount]] = defaultdict(list)
+    for amount in amounts:
+        key = re.sub(
+            r"\s+(?:до|з)\s+\d{2}\.\d{2}\.?\s*(?:по\s+\d{2}(?:-\d{2})?\.\d{2}\.)?",
+            "",
+            normalize_lookup_text(amount.ingredient_name_snapshot),
+        )
+        key = key.replace("грунтові", "").replace("теплично-парникові", "")
+        grouped[" ".join(key.split())].append(amount)
+
+    selected: list[IngredientAmount] = []
+    for candidates in grouped.values():
+        if len(candidates) == 1:
+            selected.extend(candidates)
+            continue
+        matched = next(
+            (
+                item
+                for item in candidates
+                if _is_in_ingredient_season(item.ingredient_name_snapshot, service_date)
+            ),
+            None,
+        )
+        if matched is not None:
+            selected.append(matched)
+            continue
+        if any("грунтові" in item.ingredient_name_snapshot.casefold() for item in candidates):
+            selected.append(
+                next(
+                    item
+                    for item in candidates
+                    if ("грунтові" in item.ingredient_name_snapshot.casefold())
+                    == (5 <= service_date.month <= 9)
+                )
+            )
+            continue
+        selected.append(candidates[0])
+    return selected
+
+
+def _is_in_ingredient_season(name: str, service_date: Date) -> bool:
+    normalized = normalize_lookup_text(name)
+    range_match = re.search(
+        r"з\s+(\d{2})\.(\d{2})\.?\s+по\s+(\d{2})(?:-\d{2})?\.(\d{2})\.?",
+        normalized,
+    )
+    if range_match is not None:
+        start = (int(range_match.group(2)), int(range_match.group(1)))
+        end = (int(range_match.group(4)), int(range_match.group(3)))
+        current = (service_date.month, service_date.day)
+        return start <= current <= end if start <= end else current >= start or current <= end
+    start_match = re.search(r"з\s+(\d{2})\.(\d{2})", normalized)
+    if start_match is not None:
+        return (service_date.month, service_date.day) >= (
+            int(start_match.group(2)),
+            int(start_match.group(1)),
+        )
+    end_match = re.search(r"до\s+(\d{2})\.(\d{2})", normalized)
+    if end_match is not None:
+        return (service_date.month, service_date.day) < (
+            int(end_match.group(2)),
+            int(end_match.group(1)),
+        )
+    return False
 
 
 def _portion_variant_contribution_snapshots(

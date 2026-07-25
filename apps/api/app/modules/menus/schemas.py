@@ -26,6 +26,7 @@ from app.modules.menus.models import (
     WeeklyMenu,
     WeeklyMenuStatus,
 )
+from app.modules.nutrition.domain import NormativeContribution
 from app.modules.recipe.models import AmountDecimal
 
 
@@ -42,6 +43,7 @@ class MenuPortionPayload(BaseModel):
     dish_card_portion_variant_id: PydanticObjectId | None = None
     calculated_from: MenuPortionCalculationSource | None = None
     nutrition: MenuNutritionPayload = Field(default_factory=MenuNutritionPayload)
+    normative_contributions: list[NormativeContribution] = Field(default_factory=list)
 
     @field_validator("yield_amount", mode="before")
     @classmethod

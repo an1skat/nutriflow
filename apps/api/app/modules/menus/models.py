@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, StringConstraints, field_validator, model
 from pymongo import ASCENDING, IndexModel
 
 from app.modules.identity.models import AgeGroup, utc_now
+from app.modules.nutrition.domain import NormativeContribution
 from app.modules.recipe.models import AmountDecimal
 
 MenuText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
@@ -82,6 +83,7 @@ class MenuPortion(BaseModel):
     dish_card_portion_variant_id: PydanticObjectId | None = None
     calculated_from: MenuPortionCalculationSource | None = None
     nutrition: MenuNutrition = Field(default_factory=MenuNutrition)
+    normative_contributions: list[NormativeContribution] = Field(default_factory=list)
 
 
 class MenuItemServingCount(BaseModel):

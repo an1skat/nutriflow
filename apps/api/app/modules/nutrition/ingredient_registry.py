@@ -10,13 +10,15 @@ class IngredientNormRule:
     unit: NormativeUnit = NormativeUnit.GRAM
     product_variant: str | None = None
     divisor: Decimal = Decimal("1")
+    numerator: Decimal = Decimal("1")
+    denominator: Decimal = Decimal("1")
     count_directly: bool = True
     whole_items: bool = False
 
     def contribution_amount(self, source_amount: Decimal) -> Decimal | None:
         if not self.count_directly:
             return None
-        amount = source_amount / self.divisor
+        amount = source_amount * self.numerator / self.denominator / self.divisor
         if self.whole_items:
             amount = amount.to_integral_value(rounding=ROUND_FLOOR)
             return amount if amount > 0 else None
@@ -29,6 +31,8 @@ def _rule(
     unit: NormativeUnit = NormativeUnit.GRAM,
     product_variant: str | None = None,
     divisor: str = "1",
+    numerator: str = "1",
+    denominator: str = "1",
     count_directly: bool = True,
     whole_items: bool = False,
 ) -> IngredientNormRule:
@@ -37,6 +41,8 @@ def _rule(
         unit=unit,
         product_variant=product_variant,
         divisor=Decimal(divisor),
+        numerator=Decimal(numerator),
+        denominator=Decimal(denominator),
         count_directly=count_directly,
         whole_items=whole_items,
     )
@@ -68,6 +74,7 @@ INGREDIENT_NORM_RULES: dict[str, IngredientNormRule] = {
     "буряк свіжий": _rule(NormativeGroupCode.VEGETABLES),
     "буряк столовий свіжий до 01.01": _rule(NormativeGroupCode.VEGETABLES),
     "буряк столовий свіжий з 01.01": _rule(NormativeGroupCode.VEGETABLES),
+    "буряк столовий свіжий з 01.01.": _rule(NormativeGroupCode.VEGETABLES),
     "гарбуз свіжий": _rule(NormativeGroupCode.VEGETABLES),
     "зелень кропу свіжого": _rule(NormativeGroupCode.VEGETABLES),
     "зелень петрушки свіжої": _rule(NormativeGroupCode.VEGETABLES),
@@ -92,6 +99,10 @@ INGREDIENT_NORM_RULES: dict[str, IngredientNormRule] = {
     "цибуля ріпчаста": _rule(NormativeGroupCode.VEGETABLES),
     # Potato.
     "картопля молода до 01.09": _rule(NormativeGroupCode.POTATOES),
+    "картопля свіжа з 01.01. по 28-29.02": _rule(NormativeGroupCode.POTATOES),
+    "картопля свіжа з 01.03. по 01.09": _rule(NormativeGroupCode.POTATOES),
+    "картопля свіжа з 01.09. по 31.10": _rule(NormativeGroupCode.POTATOES),
+    "картопля свіжа з 01.11. по 31.12": _rule(NormativeGroupCode.POTATOES),
     "картопля свіжа з 01.01 по 28–29.02": _rule(NormativeGroupCode.POTATOES),
     "картопля свіжа з 01.03": _rule(NormativeGroupCode.POTATOES),
     "картопля свіжа з 01.03 по 01.09": _rule(NormativeGroupCode.POTATOES),
@@ -125,6 +136,7 @@ INGREDIENT_NORM_RULES: dict[str, IngredientNormRule] = {
     "яловичина великими шматками охолоджена": _rule(NormativeGroupCode.RED_MEAT),
     "філе куряче": _rule(NormativeGroupCode.POULTRY),
     "філе минтая зі шкірою, що вироблене промисловістю": _rule(NormativeGroupCode.FISH),
+    "філе минтая зі шкірою вироблене промисловістю": _rule(NormativeGroupCode.FISH),
     # Appendix 9/9-1 counts eggs as whole items: one portion is one piece.
     "яйце": _rule(
         NormativeGroupCode.EGGS,
@@ -184,6 +196,21 @@ INGREDIENT_NORM_RULES: dict[str, IngredientNormRule] = {
     "олія соняшникова": _rule(NormativeGroupCode.VEGETABLE_FATS),
     "олія соняшникова для деко": _rule(NormativeGroupCode.VEGETABLE_FATS),
     "олія соняшникова для змащування деко": _rule(NormativeGroupCode.VEGETABLE_FATS),
+    # Composite salad dressings are issued as ready components. Their oil share
+    # comes from the underlying technological recipes, not from the total salad yield.
+    "соус вінегрет": _rule(NormativeGroupCode.VEGETABLE_FATS),
+    "заправка для салату (тк № 10.01)": _rule(
+        NormativeGroupCode.VEGETABLE_FATS,
+        numerator="7",
+        denominator="10",
+    ),
+    "соус медово-гірчичний": _rule(
+        NormativeGroupCode.VEGETABLE_FATS,
+        numerator="57",
+        denominator="70",
+    ),
+    "соус «ароматна олія»": _rule(NormativeGroupCode.VEGETABLE_FATS),
+    'соус "ароматна олія"': _rule(NormativeGroupCode.VEGETABLE_FATS),
     "олія соняшникова рафінована": _rule(NormativeGroupCode.VEGETABLE_FATS),
     # Limited products.
     "сіль": _rule(NormativeGroupCode.SALT),
@@ -238,10 +265,7 @@ INGREDIENTS_NOT_COUNTED_SEPARATELY = frozenset(
         "перець чорний мелений",
         "перець чорний молотий",
         "прянощі орегано сухе",
-        "соус «ароматна олія»",
         "соус «бешамель»",
-        "соус вінегрет",
-        "соус медово-гірчичний",
         "сухарі панірувальні",
         "сухарі панірувальні пшеничні мелені",
         "сушений орегано",
