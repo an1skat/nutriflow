@@ -41,6 +41,27 @@ export function prepareDailyMenuDays(sourceDays: DailyMenu[], groups: SchoolGrou
   }));
 }
 
+export function updateDailyMenuGroupChildrenCount(
+  days: DailyMenu[],
+  weekday: DailyMenu['weekday'],
+  schoolGroupId: string,
+  childrenCount: number
+): DailyMenu[] {
+  return days.map((day) =>
+    day.weekday !== weekday
+      ? day
+      : {
+          ...day,
+          items: day.items.map((item) => ({
+            ...item,
+            servings: item.servings.map((serving) =>
+              serving.school_group_id === schoolGroupId ? { ...serving, children_count: childrenCount } : serving
+            ),
+          })),
+        }
+  );
+}
+
 export function replaceDailyMenuDish(
   currentItem: DailyMenuItem,
   selectedDish: DailyMenuItem,

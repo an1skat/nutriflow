@@ -53,7 +53,7 @@ export function DayMenuPanel({
   groups: SchoolGroup[];
   readOnly: boolean;
   onDishChange: (itemId: string, item: CatalogSelection) => Promise<void>;
-  onChildrenCountChange: (itemId: string, group: SchoolGroup, childrenCount: number) => void;
+  onChildrenCountChange: (group: SchoolGroup, childrenCount: number) => void;
 }) {
   return (
     <section className={`nf-panel ${readOnly ? 'border-slate-300 bg-slate-100' : ''}`}>
@@ -73,6 +73,33 @@ export function DayMenuPanel({
           {day.notes}
         </div>
       ) : null}
+      <section className="border-b border-slate-200 bg-slate-50 p-4">
+        <div className="mb-3">
+          <p className="text-sm font-bold text-slate-800">Кількість дітей за групами</p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Це значення буде застосовано до кожної страви дня.
+          </p>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {groups.map((group) => (
+            <div
+              key={group.id}
+              className="flex items-center justify-between gap-3 border border-slate-200 bg-white p-3"
+            >
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold text-slate-800">{group.name}</p>
+                <p className="text-[11px] text-slate-500">{AGE_GROUP_LABELS[group.age_group]}</p>
+              </div>
+              <ChildrenCountInput
+                aria-label={`${group.name}: кількість дітей`}
+                count={getGroupChildrenCount(day, group.id)}
+                disabled={readOnly}
+                onChange={(count) => onChildrenCountChange(group, count)}
+              />
+            </div>
+          ))}
+        </div>
+      </section>
       <div className="divide-y divide-slate-200">
         {[...day.items]
           .sort((left, right) => left.position - right.position)
@@ -80,10 +107,8 @@ export function DayMenuPanel({
             <DishRow
               key={item.id}
               item={item}
-              groups={groups}
               readOnly={readOnly}
               onDishChange={(selectedItem) => void onDishChange(item.id, selectedItem)}
-              onChildrenCountChange={(group, count) => onChildrenCountChange(item.id, group, count)}
             />
           ))}
       </div>
@@ -98,8 +123,7 @@ export function DayMenuPanel({
           'День закрито. Дані зафіксовані за останнім збереженим станом.'
         ) : (
           <>
-            <strong>Важливо:</strong> після заповнення цього дня натисніть «Зберегти зміни» вгорі
-            сторінки.
+            <strong>Важливо:</strong> перед закриттям дня зміни буде збережено автоматично.
           </>
         )}
       </div>
@@ -109,23 +133,15 @@ export function DayMenuPanel({
 
 function DishRow({
   item,
-  groups,
   readOnly,
   onDishChange,
-  onChildrenCountChange,
 }: {
   item: DailyMenuItem;
-  groups: SchoolGroup[];
   readOnly: boolean;
   onDishChange: (item: CatalogSelection) => void;
-  onChildrenCountChange: (group: SchoolGroup, count: number) => void;
 }) {
   return (
-    <article
-      className={`grid gap-5 p-4 lg:grid-cols-[minmax(280px,1.1fr)_minmax(360px,1fr)] ${
-        readOnly ? 'bg-slate-100 text-slate-500' : 'bg-white'
-      }`}
-    >
+    <article className={`p-4 ${readOnly ? 'bg-slate-100 text-slate-500' : 'bg-white'}`}>
       <div className="min-w-0">
         <div className="mb-2 flex items-center gap-2 text-xs font-bold text-slate-500">
           <span className="flex size-6 items-center justify-center border border-slate-300 bg-slate-50 tabular-nums">
@@ -142,39 +158,6 @@ function DishRow({
           <NutritionSummary portions={item.portions} />
         </div>
       </div>
-
-      <div>
-        <div className="mb-2">
-          <p className="text-xs font-bold text-slate-700">Кількість дітей</p>
-          <p className="mt-0.5 text-xs text-slate-500">
-            Скільки дітей у кожній групі поїли цю страву
-          </p>
-        </div>
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-          {groups.map((group) => {
-            const count =
-              item.servings.find((serving) => serving.school_group_id === group.id)
-                ?.children_count ?? 0;
-
-            return (
-              <label key={group.id} className="border border-slate-200 bg-slate-50 p-3">
-                <span className="block truncate text-xs font-bold text-slate-800">
-                  {group.name}
-                </span>
-                <span className="mt-0.5 block text-[11px] text-slate-500">
-                  {AGE_GROUP_LABELS[group.age_group]}
-                </span>
-                <ChildrenCountInput
-                  aria-label={`${group.name}: кількість дітей для страви ${item.name}`}
-                  count={count}
-                  disabled={readOnly}
-                  onChange={(nextCount) => onChildrenCountChange(group, nextCount)}
-                />
-              </label>
-            );
-          })}
-        </div>
-      </div>
     </article>
   );
 }
@@ -185,28 +168,54 @@ function ChildrenCountInput({
   onChange,
   'aria-label': ariaLabel,
 }: {
-  count: number;
+  count: number | null;
   disabled: boolean;
   onChange: (count: number) => void;
   'aria-label': string;
 }) {
   return (
-    <input
-      type="text"
-      inputMode="numeric"
-      pattern="[0-9]*"
-      maxLength={4}
-      className="nf-input mt-2 text-right font-bold tabular-nums"
-      aria-label={ariaLabel}
-      value={count}
-      disabled={disabled}
-      onFocus={(event) => event.currentTarget.select()}
-      onChange={(event) => {
-        const digits = event.target.value.replace(/\D/g, '').slice(0, 4);
-        onChange(digits ? normalizeChildrenCount(digits) : 0);
-      }}
-    />
+    <div className="flex shrink-0 items-center border border-slate-300 bg-white">
+      <button
+        type="button"
+        className="flex size-9 items-center justify-center text-lg font-bold text-slate-700 hover:bg-slate-100 disabled:text-slate-300"
+        aria-label={`${ariaLabel}: зменшити`}
+        disabled={disabled || !count}
+        onClick={() => onChange(Math.max(0, (count ?? 0) - 1))}
+      >
+        −
+      </button>
+      <input
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        className="h-9 w-16 border-x border-slate-300 text-center text-sm font-bold tabular-nums outline-none disabled:bg-slate-100"
+        aria-label={ariaLabel}
+        value={count ?? ''}
+        placeholder={count === null ? '—' : undefined}
+        disabled={disabled}
+        onFocus={(event) => event.currentTarget.select()}
+        onChange={(event) => onChange(normalizeChildrenCount(event.target.value))}
+      />
+      <button
+        type="button"
+        className="flex size-9 items-center justify-center text-lg font-bold text-slate-700 hover:bg-slate-100 disabled:text-slate-300"
+        aria-label={`${ariaLabel}: збільшити`}
+        disabled={disabled || count === 100000}
+        onClick={() => onChange(Math.min(100000, (count ?? 0) + 1))}
+      >
+        +
+      </button>
+    </div>
   );
+}
+
+function getGroupChildrenCount(day: DailyMenu, schoolGroupId: string): number | null {
+  const counts = day.items.map(
+    (item) =>
+      item.servings.find((serving) => serving.school_group_id === schoolGroupId)?.children_count ?? 0
+  );
+
+  return counts.every((count) => count === counts[0]) ? (counts[0] ?? 0) : null;
 }
 
 function DishPicker({
@@ -552,13 +561,8 @@ function displayNutrition(portion: MenuPortion): string {
 }
 
 function normalizeChildrenCount(value: string): number {
-  const parsed = Number(value);
-
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    return 0;
-  }
-
-  return Math.min(Math.floor(parsed), 9999);
+  const digits = value.replace(/\D/g, '').slice(0, 6);
+  return Math.min(Number(digits || 0), 100000);
 }
 
 export function sortDays(days: DailyMenu[]): DailyMenu[] {

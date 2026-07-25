@@ -8,6 +8,7 @@ import {
   prepareDailyMenuDays,
   replaceDailyMenuDish,
   saveDailyMenuDraft,
+  updateDailyMenuGroupChildrenCount,
 } from './DailyMenuDraftStorage';
 
 const groups: SchoolGroup[] = [
@@ -101,6 +102,30 @@ describe('daily menu local draft', () => {
     expect(result.name).toBe('Суп');
     expect(result.recipe_card_number).toBe('2.4');
     expect(result.servings.map((serving) => serving.children_count)).toEqual([0, 0]);
+  });
+
+  it('applies a group count to every dish in the selected day', () => {
+    const secondItem = createItem({
+      id: 'slot-2',
+      name: 'Суп',
+      cardNumber: '2.4',
+      servings: [
+        {
+          school_group_id: 'group-younger',
+          age_group: '6-11',
+          children_count: 7,
+        },
+      ],
+    });
+
+    const result = updateDailyMenuGroupChildrenCount(
+      prepareDailyMenuDays([{ ...days[0], items: [originalItem, secondItem] }], groups),
+      'monday',
+      'group-younger',
+      15
+    );
+
+    expect(result[0].items.map((item) => item.servings[0].children_count)).toEqual([15, 15]);
   });
 
   it('loads a saved draft only while its weekly menu version is current', () => {

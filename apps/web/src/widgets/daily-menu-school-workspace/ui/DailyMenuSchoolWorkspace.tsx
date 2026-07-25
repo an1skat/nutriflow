@@ -20,6 +20,7 @@ import {
   loadDailyMenuDraft,
   prepareDailyMenuDays,
   saveDailyMenuDraft,
+  updateDailyMenuGroupChildrenCount,
 } from '@/features/daily-menu/model/DailyMenuDraftStorage';
 import { useGenerateMenuRequirements } from '@/features/menu-requirement-generation/model/UseGenerateMenuRequirements';
 import {
@@ -89,7 +90,11 @@ export function DailyMenuSchoolWorkspace() {
 
     initializedMenuKey.current = menuKey;
     setDays(nextDays);
-    setActiveWeekday(nextDays[0]?.weekday ?? null);
+    setActiveWeekday((currentWeekday) =>
+      nextDays.some((day) => day.weekday === currentWeekday)
+        ? currentWeekday
+        : (nextDays[0]?.weekday ?? null)
+    );
     setSavedAt(draft?.savedAt ?? null);
     setIsDirty(false);
   }, [activeGroups, groups.data, selectedMenu.data]);
@@ -191,30 +196,17 @@ export function DailyMenuSchoolWorkspace() {
     }
   };
 
-  const changeChildrenCount = (itemId: string, group: SchoolGroup, childrenCount: number) => {
+  const changeChildrenCount = (group: SchoolGroup, childrenCount: number) => {
     if (!activeDay || activeDay.closed_at) {
       return;
     }
 
     setDays((currentDays) =>
-      currentDays.map((day) =>
-        day.weekday !== activeDay.weekday
-          ? day
-          : {
-              ...day,
-              items: day.items.map((item) =>
-                item.id !== itemId
-                  ? item
-                  : {
-                      ...item,
-                      servings: item.servings.map((serving) =>
-                        serving.school_group_id === group.id
-                          ? { ...serving, children_count: childrenCount }
-                          : serving
-                      ),
-                    }
-              ),
-            }
+      updateDailyMenuGroupChildrenCount(
+        currentDays,
+        activeDay.weekday,
+        group.id,
+        childrenCount
       )
     );
     setIsDirty(true);
@@ -289,7 +281,7 @@ export function DailyMenuSchoolWorkspace() {
     const confirmed = await confirm({
       title: 'Закрити день?',
       description:
-        'День буде закрито за останніми збереженими даними. Незбережені локальні зміни зникнуть.',
+        'Усі зміни буде збережено, а фінальну меню-вимогу сформовано автоматично. Після закриття день не можна буде редагувати.',
       confirmLabel: 'Закрити день',
       variant: 'danger',
     });
@@ -298,10 +290,15 @@ export function DailyMenuSchoolWorkspace() {
       return;
     }
 
-    clearDailyMenuDraft(menu.id);
+    const savedMenu = isDirty ? await saveChanges() : menu;
+
+    if (!savedMenu) {
+      return;
+    }
 
     try {
       const updatedMenu = await closeWeeklyMenuDay.mutateAsync(activeDay.weekday);
+      clearDailyMenuDraft(menu.id);
       const nextDays = prepareDailyMenuDays(sortDays(updatedMenu.days), activeGroups);
       initializedMenuKey.current = `${updatedMenu.id}:${updatedMenu.updated_at}`;
       setDays(nextDays);
@@ -310,9 +307,9 @@ export function DailyMenuSchoolWorkspace() {
       setIsDirty(false);
       toast.success('День закрито, меню-вимогу сформовано.');
     } catch (error) {
-      const serverDays = prepareDailyMenuDays(sortDays(menu.days), activeGroups);
+      const serverDays = prepareDailyMenuDays(sortDays(savedMenu.days), activeGroups);
       setDays(serverDays);
-      setSavedAt(menu.updated_at);
+      setSavedAt(savedMenu.updated_at);
       setIsDirty(false);
       toast.error(getApiErrorMessage(error));
     }
@@ -358,7 +355,7 @@ export function DailyMenuSchoolWorkspace() {
         <h1 className="nf-title">Денне меню</h1>
         <p className="nf-description">
           Оберіть день, за потреби замініть страви та вкажіть кількість дітей, які поїли кожну
-          страву.
+          страву в кожній групі.
         </p>
       </header>
 
