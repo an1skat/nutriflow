@@ -6,9 +6,11 @@ import openpyxl
 import pytest
 from beanie import PydanticObjectId
 from fastapi.testclient import TestClient
+from pymongo import MongoClient
 
 from app.core.config import get_settings
 from app.modules.menu_requirements.service import _menu_day_service_date, resolve_service_date
+from app.modules.menu_requirements.utils import hash_daily_menu
 from app.modules.menus.models import DailyMenu, MealType, Weekday, WeeklyMenu
 from app.modules.menus.service import _resolve_auto_close_service_date
 
@@ -79,6 +81,23 @@ def test_dev_reopened_day_is_not_auto_closed_again() -> None:
     )
 
     assert _resolve_auto_close_service_date(menu, day, Date(2026, 7, 20)) is None
+
+
+@pytest.mark.no_clean_database
+def test_requirement_hash_ignores_close_notification_delivery_state() -> None:
+    day = DailyMenu.model_construct(
+        weekday=Weekday.MONDAY,
+        date=Date(2026, 7, 6),
+        items=[],
+        close_notification_pending=False,
+        close_notification_sent_at=None,
+    )
+    initial_hash = hash_daily_menu(day)
+
+    day.close_notification_pending = True
+    day.close_notification_sent_at = datetime(2026, 7, 6, 16, 0, tzinfo=UTC)
+
+    assert hash_daily_menu(day) == initial_hash
 
 
 def create_confirmed_dish(
@@ -437,6 +456,28 @@ def test_school_closes_day_and_locks_saved_daily_menu(seeded_client) -> None:
     assert closed_day["closed_at"] is not None
     assert closed_day["closed_by"] == str(identities.school_user.id)
     assert closed_day["close_reason"] == "manual"
+    assert closed_menu["revision"] == menu["revision"] + 1
+
+    duplicate_close_response = client.post(
+        f"/api/v1/menus/weekly/{menu['id']}/days/monday/close",
+        headers=csrf_headers(client),
+    )
+    assert duplicate_close_response.status_code == 200
+    duplicate_closed_menu = duplicate_close_response.json()
+    assert duplicate_closed_menu["days"][0]["closed_at"] == closed_day["closed_at"]
+    assert duplicate_closed_menu["revision"] == closed_menu["revision"]
+
+    settings = get_settings()
+    mongo_client = MongoClient(settings.mongo_uri, tz_aware=True)
+    try:
+        stored_menu = mongo_client[settings.mongo_db]["weekly_menus"].find_one(
+            {"_id": PydanticObjectId(menu["id"])}
+        )
+    finally:
+        mongo_client.close()
+    assert stored_menu is not None
+    assert stored_menu["days"][0]["close_notification_pending"] is True
+    assert stored_menu["days"][0]["close_notification_sent_at"] is None
 
     requirements_response = client.get(f"/api/v1/menu-requirements?weekly_menu_id={menu['id']}")
     assert requirements_response.status_code == 200

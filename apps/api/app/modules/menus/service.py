@@ -1267,6 +1267,8 @@ def _copy_day_close_metadata(
         submitted_day.closed_at = current_day.closed_at
         submitted_day.closed_by = current_day.closed_by
         submitted_day.close_reason = current_day.close_reason
+        submitted_day.close_notification_pending = current_day.close_notification_pending
+        submitted_day.close_notification_sent_at = current_day.close_notification_sent_at
         submitted_day.dev_reopened_at = current_day.dev_reopened_at
 
 
@@ -1275,6 +1277,8 @@ def _day_content_dump(day: DailyMenu) -> dict[str, Any]:
     data.pop("closed_at", None)
     data.pop("closed_by", None)
     data.pop("close_reason", None)
+    data.pop("close_notification_pending", None)
+    data.pop("close_notification_sent_at", None)
     data.pop("dev_reopened_at", None)
     return data
 

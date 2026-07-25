@@ -8,13 +8,15 @@ from app.modules.identity.models import AgeGroup
 from app.modules.menus.models import (
     DailyMenu,
     DailyMenuItem,
+    DayCloseReason,
     MealType,
     MenuChangeRequest,
     MenuFieldChange,
     MenuPortion,
     Weekday,
+    WeeklyMenu,
 )
-from app.modules.menus.notifications import build_menu_change_email
+from app.modules.menus.notifications import build_day_close_email, build_menu_change_email
 
 pytestmark = pytest.mark.no_clean_database
 
@@ -74,3 +76,47 @@ def test_builds_menu_change_email_with_date_and_deep_link() -> None:
         f"https://app.example.com/admin/menu-changes?requestId={request_id}"
         in plain_body.get_content()
     )
+
+
+def test_builds_day_close_email_for_assigned_administrator() -> None:
+    closed_at = datetime(2026, 7, 13, 15, 0, tzinfo=UTC)
+    menu = WeeklyMenu.model_construct(
+        id=PydanticObjectId(),
+        title="Меню на тиждень",
+        school_id=PydanticObjectId(),
+        meal_type=MealType.LUNCH,
+        days=[
+            DailyMenu.model_construct(
+                weekday=Weekday.MONDAY,
+                date=date(2026, 7, 13),
+                items=[],
+                closed_at=closed_at,
+                close_reason=DayCloseReason.AUTOMATIC,
+            )
+        ],
+    )
+    settings = Settings(
+        _env_file=None,
+        jwt_secret_key="j" * 32,
+        refresh_token_pepper="r" * 32,
+        mail_enabled=True,
+        smtp_host="smtp.example.com",
+        smtp_username="notifications@example.com",
+        smtp_password="smtp-secret",
+        smtp_from_email="notifications@example.com",
+    )
+
+    message = build_day_close_email(
+        menu,
+        weekday=Weekday.MONDAY,
+        school_name="Школа Трата",
+        recipients=["admin@example.com"],
+        settings=settings,
+    )
+
+    assert message["Subject"] == "Школа «Школа Трата» закрила день — 13.07.2026"
+    assert message["To"] == "admin@example.com"
+    assert str(menu.id) in message["Message-ID"]
+    plain_body = message.get_body(preferencelist=("plain",))
+    assert plain_body is not None
+    assert "закрила денне меню" in plain_body.get_content()

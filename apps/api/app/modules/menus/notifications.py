@@ -2,14 +2,22 @@ import asyncio
 import logging
 import smtplib
 import ssl
+from datetime import UTC, datetime
 from email.message import EmailMessage
 from html import escape
+from zoneinfo import ZoneInfo
 
 from beanie import PydanticObjectId
 
 from app.core.config import Settings, get_settings
 from app.modules.identity.models import School, User, UserRole
-from app.modules.menus.models import MenuChangeRequest
+from app.modules.menu_requirements.utils import resolve_service_date
+from app.modules.menus.models import (
+    DayCloseReason,
+    MenuChangeRequest,
+    Weekday,
+    WeeklyMenu,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +55,158 @@ async def send_menu_change_request_notification(request_id: PydanticObjectId) ->
         await asyncio.to_thread(_send_message, message, recipients, settings)
     except Exception:
         logger.exception("Failed to send menu change notification for request %s", request_id)
+
+
+async def send_pending_day_close_notifications() -> tuple[int, int]:
+    settings = get_settings()
+    if not settings.mail_enabled:
+        return 0, 0
+
+    menus = await WeeklyMenu.find(
+        {"days": {"$elemMatch": {"close_notification_pending": True}}}
+    ).to_list()
+    sent = 0
+    failed = 0
+    for menu in menus:
+        for day in menu.days:
+            if not day.close_notification_pending:
+                continue
+            if await _send_day_close_notification(menu, day.weekday, settings):
+                sent += 1
+            else:
+                failed += 1
+    return sent, failed
+
+
+async def _send_day_close_notification(
+    menu: WeeklyMenu,
+    weekday: Weekday,
+    settings: Settings,
+) -> bool:
+    day = next((candidate for candidate in menu.days if candidate.weekday == weekday), None)
+    if (
+        menu.id is None
+        or menu.school_id is None
+        or day is None
+        or day.closed_at is None
+        or day.close_reason is None
+    ):
+        logger.error("Invalid pending day-close notification for menu %s, %s", menu.id, weekday)
+        return False
+
+    school = await School.get(menu.school_id)
+    if school is None:
+        logger.error("Day-close email skipped: school %s was not found", menu.school_id)
+        return False
+    recipients = await _day_close_recipients(school)
+    if not recipients:
+        logger.error("Day-close email skipped: school %s has no active administrator", school.id)
+        return False
+
+    message = build_day_close_email(
+        menu,
+        weekday=weekday,
+        school_name=school.name,
+        recipients=recipients,
+        settings=settings,
+    )
+    try:
+        await asyncio.to_thread(_send_message, message, recipients, settings)
+    except Exception:
+        logger.exception("Failed to send day-close notification for menu %s, %s", menu.id, weekday)
+        return False
+
+    sent_at = datetime.now(UTC)
+    result = await WeeklyMenu.get_pymongo_collection().update_one(
+        {
+            "_id": menu.id,
+            "days": {
+                "$elemMatch": {
+                    "weekday": weekday.value,
+                    "close_notification_pending": True,
+                    "closed_at": day.closed_at,
+                }
+            },
+        },
+        {
+            "$set": {
+                "days.$.close_notification_pending": False,
+                "days.$.close_notification_sent_at": sent_at,
+            }
+        },
+    )
+    return result.modified_count == 1
+
+
+async def _day_close_recipients(school: School) -> list[str]:
+    if school.admin_owner_id is not None:
+        administrator = await User.get(school.admin_owner_id)
+        if (
+            administrator is not None
+            and administrator.is_active
+            and administrator.email is not None
+        ):
+            return [str(administrator.email)]
+
+    owners = await User.find(
+        {
+            "role": UserRole.OWNER.value,
+            "is_active": True,
+            "email": {"$type": "string"},
+        }
+    ).to_list()
+    return sorted({str(owner.email) for owner in owners if owner.email is not None})
+
+
+def build_day_close_email(
+    menu: WeeklyMenu,
+    *,
+    weekday: Weekday,
+    school_name: str,
+    recipients: list[str],
+    settings: Settings,
+) -> EmailMessage:
+    if menu.id is None or settings.smtp_from_email is None:
+        raise RuntimeError("Persisted menu and sender email are required")
+
+    day = next((candidate for candidate in menu.days if candidate.weekday == weekday), None)
+    if day is None or day.closed_at is None or day.close_reason is None:
+        raise RuntimeError("Closed daily menu is required")
+
+    closed_date = day.closed_at.astimezone(ZoneInfo("Europe/Kyiv")).date()
+    service_date = resolve_service_date(menu, day, closed_date)
+    date_label = service_date.strftime("%d.%m.%Y")
+    reason_label = (
+        "автоматично"
+        if day.close_reason == DayCloseReason.AUTOMATIC
+        else "користувачем школи"
+    )
+    subject = f"Школа «{school_name}» закрила день — {date_label}"
+    text = f"Школа «{school_name}» закрила денне меню за {date_label} {reason_label}."
+    safe_school_name = escape(school_name)
+    safe_date_label = escape(date_label)
+    safe_reason_label = escape(reason_label)
+
+    message = EmailMessage()
+    message["Subject"] = subject
+    message["From"] = str(settings.smtp_from_email)
+    message["To"] = ", ".join(recipients)
+    sender_domain = str(settings.smtp_from_email).rsplit("@", maxsplit=1)[-1]
+    message["Message-ID"] = (
+        f"<day-close-{menu.id}-{weekday.value}-{int(day.closed_at.timestamp())}@{sender_domain}>"
+    )
+    message.set_content(text)
+    message.add_alternative(
+        f"""
+        <div style="font-family:Arial,sans-serif;color:#0f172a;line-height:1.5">
+          <h2 style="margin:0 0 12px;color:#166534">День закрито</h2>
+          <p>Школа <strong>«{safe_school_name}»</strong> закрила денне меню
+             за <strong>{safe_date_label}</strong> {safe_reason_label}.</p>
+        </div>
+        """,
+        subtype="html",
+    )
+    return message
 
 
 def build_menu_change_email(
