@@ -623,7 +623,7 @@ def _extract_recipe_card_number(source_text: str) -> str | None:
         return None
     matches = re.findall(r"(?:ТК\s*№\s*|№\s*)(\d+(?:[._/-]\d+)*)", source_text, re.IGNORECASE)
     if matches:
-        return matches[-1].replace("_", ".").strip()
+        return matches[0].replace("_", ".").strip()
     match = re.search(r"(\d+(?:[./-]\d+)+)", source_text)
     return match.group(1) if match else None
 

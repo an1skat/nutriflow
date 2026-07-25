@@ -4,7 +4,7 @@ from app.modules.menus.models import (
     MenuItemKind,
     MenuPortionCalculationSource,
 )
-from app.modules.menus.reference_resolver import MenuReferenceCatalog
+from app.modules.menus.reference_resolver import MenuReferenceCatalog, named_portion_variant_id
 from app.modules.menus.schemas import DailyMenuItemPayload, MenuNutritionPayload
 from app.modules.menus.xlsx import ParsedWeeklyMenuPreview
 from app.modules.recipe.models import (
@@ -123,10 +123,13 @@ def _hydrate_dish(
         return
 
     for portion_index, portion in enumerate(item.portions):
+        preferred_variant_id = portion.dish_card_portion_variant_id or named_portion_variant_id(
+            version, item.name, portion.yield_amount
+        )
         resolution = resolve_portion_variant_by_yield(
             version.portion_variants,
             portion.yield_amount,
-            preferred_variant_id=portion.dish_card_portion_variant_id,
+            preferred_variant_id=preferred_variant_id,
         )
         if resolution is None:
             preview.diagnostics.append(

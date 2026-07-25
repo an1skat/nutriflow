@@ -236,7 +236,11 @@ def resolve_portion_variant_by_yield(
     if not candidates:
         return None
 
-    nearest = min(
+    preferred = next(
+        (variant for variant in candidates if variant.id == preferred_variant_id),
+        None,
+    )
+    nearest = preferred or min(
         candidates,
         key=lambda variant: (
             abs(variant.output_grams - target),

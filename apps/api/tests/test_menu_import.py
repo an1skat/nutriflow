@@ -1,13 +1,21 @@
+from decimal import Decimal
 from io import BytesIO
 
 import openpyxl
 import pytest
+from beanie import PydanticObjectId
 
 from app.modules.menus.models import MealType, MenuImportDiagnosticLevel, MenuItemKind, Weekday
-from app.modules.menus.reference_resolver import card_number_candidates
+from app.modules.menus.reference_resolver import card_number_candidates, named_portion_variant_id
 from app.modules.menus.service import parse_weekly_menu_workbook, preview_weekly_menu_workbook
+from app.modules.menus.xlsx.parser import _extract_recipe_card_number
+from app.modules.recipe.models import DishCardVersion, IngredientAmount, Nutrition, PortionVariant
 
 pytestmark = pytest.mark.no_clean_database
+
+
+def test_parser_uses_first_recipe_card_when_excel_lists_alternatives() -> None:
+    assert _extract_recipe_card_number("ТК №37 / ТК №1.30") == "37"
 
 
 def build_menu_workbook() -> openpyxl.Workbook:
@@ -134,3 +142,49 @@ def test_weekly_menu_preview_reports_exact_invalid_cell() -> None:
 def test_card_number_candidates_accepts_final_separator_variant() -> None:
     assert card_number_candidates("2.11.1") == ["2.11.1", "2.11_1"]
     assert card_number_candidates("2.11_1") == ["2.11_1", "2.11.1"]
+
+
+def test_card_number_candidates_accepts_first_segment_leading_zero_variant() -> None:
+    assert card_number_candidates("08.01") == ["08.01", "08_01", "8.01", "8_01"]
+    assert card_number_candidates("8.02") == ["8.02", "8_02", "08.02", "08_02"]
+
+
+def test_named_variant_id_disambiguates_equal_fruit_portions() -> None:
+    orange_id = PydanticObjectId()
+    banana_id = PydanticObjectId()
+    version = DishCardVersion.model_construct(
+        dish_card_id=PydanticObjectId(),
+        version=1,
+        portion_variants=[
+            PortionVariant(
+                id=orange_id,
+                portion_grams=Decimal("100"),
+                output_grams=Decimal("100"),
+                nutrition=Nutrition(kcal=Decimal("50")),
+            ),
+            PortionVariant(
+                id=banana_id,
+                portion_grams=Decimal("100"),
+                output_grams=Decimal("100"),
+                nutrition=Nutrition(kcal=Decimal("95")),
+            ),
+        ],
+        ingredient_amounts=[
+            IngredientAmount(
+                ingredient_name_snapshot="Апельсин",
+                gross_amount=Decimal("149"),
+                net_amount=Decimal("100"),
+                unit="g",
+                portion_variant_id=orange_id,
+            ),
+            IngredientAmount(
+                ingredient_name_snapshot="Банан",
+                gross_amount=Decimal("167"),
+                net_amount=Decimal("100"),
+                unit="g",
+                portion_variant_id=banana_id,
+            ),
+        ],
+    )
+
+    assert named_portion_variant_id(version, "Банани свіжі*", "100") == banana_id

@@ -1,4 +1,3 @@
-import re
 from dataclasses import dataclass
 
 from beanie import PydanticObjectId
@@ -18,6 +17,20 @@ from app.modules.recipe.models import (
     resolve_portion_variant_by_yield,
     scale_nutrition,
 )
+
+FRUIT_NAME_ALIASES = {
+    "абрикоси": "абрикос",
+    "апельсини": "апельсин",
+    "банани": "банан",
+    "вишні": "вишня",
+    "груші": "груша",
+    "мандарини": "мандарин",
+    "персики": "персик",
+    "сливи": "слива",
+    "черешні": "черешня",
+    "яблука": "яблуко",
+}
+FRESH_NAME_WORDS = {"свіжа", "свіже", "свіжий", "свіжі"}
 
 
 class MenuReferenceError(ValueError):
@@ -162,10 +175,15 @@ async def resolve_menu_item_references(items: list[DailyMenuItem]) -> None:
             raise MenuReferenceError("Dish card version does not belong to menu item dish card")
 
         for portion in item.portions:
+            preferred_variant_id = portion.dish_card_portion_variant_id or named_portion_variant_id(
+                version,
+                item.name,
+                portion.yield_amount,
+            )
             resolution = resolve_portion_variant_by_yield(
                 version.portion_variants,
                 portion.yield_amount,
-                preferred_variant_id=portion.dish_card_portion_variant_id,
+                preferred_variant_id=preferred_variant_id,
             )
             if resolution is None:
                 portion.dish_card_portion_variant_id = None
@@ -241,7 +259,45 @@ def card_number_candidates(card_number: str) -> list[str]:
         if separator:
             candidates.append(f"{prefix}_{suffix}")
     for candidate in candidates.copy():
-        without_leading_zero = re.sub(r"\b0+(\d)", r"\1", candidate)
-        if without_leading_zero not in candidates:
-            candidates.append(without_leading_zero)
+        separator = "." if "." in candidate else "_" if "_" in candidate else None
+        if separator is None:
+            continue
+        first, remainder = candidate.split(separator, 1)
+        if not first.isdigit() or int(first) != 8:
+            continue
+        for first_variant in (str(int(first)), first.zfill(2)):
+            variant = f"{first_variant}{separator}{remainder}"
+            if variant not in candidates:
+                candidates.append(variant)
     return candidates
+
+
+def named_portion_variant_id(
+    version: DishCardVersion,
+    item_name: str,
+    yield_amount: str,
+) -> PydanticObjectId | None:
+    normalized_name = normalize_portion_variant_name(item_name)
+    matching_ids = {
+        amount.portion_variant_id
+        for amount in version.ingredient_amounts
+        if normalize_portion_variant_name(amount.ingredient_name_snapshot) == normalized_name
+    }
+    if not matching_ids:
+        return None
+
+    resolution = resolve_portion_variant_by_yield(
+        [item for item in version.portion_variants if item.id in matching_ids],
+        yield_amount,
+    )
+    return resolution.variant.id if resolution is not None else None
+
+
+def normalize_portion_variant_name(value: str) -> str:
+    words = [
+        word.strip("*.,")
+        for word in normalize_lookup_text(value).split()
+        if word.strip("*.,") not in FRESH_NAME_WORDS
+    ]
+    normalized = " ".join(word for word in words if word)
+    return FRUIT_NAME_ALIASES.get(normalized, normalized)
