@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 
 import { ChevronDown } from 'lucide-react';
 import { type UseFormReturn, useFieldArray, useWatch } from 'react-hook-form';
@@ -18,6 +18,7 @@ import {
 import {
   AllergenCheckboxList,
   DishCardLookupField,
+  DishCardProductSelect,
   IngredientLookupField,
   MenuItemReferenceSync,
   NutritionCell,
@@ -34,6 +35,7 @@ export function DailyMenuDayEditor({
   resolveReadonlyReferences,
   allergenOptions,
   effectiveStartDate,
+  validationFocus,
   onRemoveDay,
 }: {
   form: UseFormReturn<WeeklyMenuFormValues>;
@@ -44,6 +46,7 @@ export function DailyMenuDayEditor({
   resolveReadonlyReferences: boolean;
   allergenOptions: Allergen[];
   effectiveStartDate: string;
+  validationFocus: { fieldPath: string; itemIndex?: number } | null;
   onRemoveDay: () => void;
 }) {
   const itemsFieldArray = useFieldArray({
@@ -61,6 +64,21 @@ export function DailyMenuDayEditor({
   );
   const dateRegistration = form.register(`days.${dayIndex}.date` as const);
   const [openItemId, setOpenItemId] = useState<string | null>(null);
+  const focusedItemIndex = validationFocus?.itemIndex;
+  const focusedItemField =
+    focusedItemIndex === undefined
+      ? null
+      : (itemsFieldArray.fields[focusedItemIndex] ?? null);
+
+  useEffect(() => {
+    if (!focusedItemField || focusedItemIndex === undefined) {
+      return;
+    }
+
+    runAfterFrame(() => {
+      scrollToElement(getItemSectionId(dayIndex, focusedItemIndex));
+    });
+  }, [dayIndex, focusedItemField, focusedItemIndex]);
 
   return (
     <div className="space-y-4">
@@ -152,15 +170,17 @@ export function DailyMenuDayEditor({
         {itemsFieldArray.fields.map((field, itemIndex) => {
           const itemErrors = form.formState.errors.days?.[dayIndex]?.items?.[itemIndex];
           const item = day?.items[itemIndex];
-          const isItemOpen = openItemId === field.id;
+          const isItemOpen = openItemId === field.id || focusedItemField?.id === field.id;
           const itemPanelId = `day-${dayIndex}-item-${itemIndex}-panel`;
-          const hasItemErrors = Boolean(itemErrors);
 
           return (
             <section
               key={field.id}
-              className={`border bg-white ${
-                hasItemErrors ? 'border-red-300' : 'border-(--nf-line-strong)'
+              id={getItemSectionId(dayIndex, itemIndex)}
+              className={`scroll-mt-24 border bg-white ${
+                isFocusedPath(validationFocus?.fieldPath, itemPath(dayIndex, itemIndex))
+                  ? 'nf-error-pulse border-red-300'
+                  : 'border-(--nf-line-strong)'
               }`}
             >
               <header className="flex flex-wrap items-center justify-between gap-3 bg-(--nf-panel-head)">
@@ -170,7 +190,15 @@ export function DailyMenuDayEditor({
                   aria-expanded={isItemOpen}
                   aria-controls={itemPanelId}
                   onClick={() =>
-                    setOpenItemId((currentId) => (currentId === field.id ? null : field.id))
+                    setOpenItemId((currentId) => {
+                      const nextId = currentId === field.id ? null : field.id;
+                      if (nextId) {
+                        runAfterFrame(() => {
+                          scrollToElement(getItemSectionId(dayIndex, itemIndex));
+                        });
+                      }
+                      return nextId;
+                    })
                   }
                 >
                   <span className="min-w-0">
@@ -180,7 +208,7 @@ export function DailyMenuDayEditor({
                     <span className="mt-1 block text-xs text-slate-600">
                       {item?.name?.trim() || 'Нова позиція'}
                     </span>
-                    {hasItemErrors ? (
+                    {isFocusedPath(validationFocus?.fieldPath, itemPath(dayIndex, itemIndex)) ? (
                       <span className="mt-1 block text-xs font-medium text-red-700">
                         Є поля, які треба перевірити
                       </span>
@@ -214,7 +242,7 @@ export function DailyMenuDayEditor({
               />
 
               {isItemOpen ? (
-                <div id={itemPanelId} className="border-t border-(--nf-line)">
+                <div id={itemPanelId} className="nf-reveal border-t border-(--nf-line)">
                   <div className="grid gap-4 p-4 lg:grid-cols-3">
                     <div className="lg:col-span-3">
                       <label className="nf-label">Джерело позиції</label>
@@ -346,17 +374,32 @@ export function DailyMenuDayEditor({
                         Назва позиції
                       </label>
                       {allowValueEdits ? (
-                        <input
-                          id={`day-${dayIndex}-item-${itemIndex}-name`}
-                          {...form.register(`days.${dayIndex}.items.${itemIndex}.name` as const)}
-                          readOnly={!allowValueEdits}
-                          aria-invalid={itemErrors?.name ? 'true' : 'false'}
-                          className="nf-input"
-                        />
+                        item?.kind === 'dish_card' && item.recipe_card_number === '12.01' ? (
+                          <DishCardProductSelect
+                            form={form}
+                            dayIndex={dayIndex}
+                            itemIndex={itemIndex}
+                            readOnly={!allowValueEdits}
+                          />
+                        ) : (
+                          <input
+                            id={`day-${dayIndex}-item-${itemIndex}-name`}
+                            {...form.register(`days.${dayIndex}.items.${itemIndex}.name` as const)}
+                            readOnly={!allowValueEdits}
+                            aria-invalid={
+                              validationFocus?.fieldPath ===
+                              `${itemPath(dayIndex, itemIndex)}.name`
+                                ? 'true'
+                                : 'false'
+                            }
+                            className="nf-input"
+                          />
+                        )
                       ) : (
                         <ReadonlyFieldValue value={item?.name} />
                       )}
-                      {itemErrors?.name ? (
+                      {itemErrors?.name &&
+                      validationFocus?.fieldPath === `${itemPath(dayIndex, itemIndex)}.name` ? (
                         <p role="alert" className="nf-field-error">
                           {itemErrors.name.message}
                         </p>
@@ -413,9 +456,7 @@ export function DailyMenuDayEditor({
                             return (
                               <Fragment key={portion.age_group}>
                                 <tr>
-                                  <td className="font-medium text-slate-700">
-                                    {ageGroupLabel}
-                                  </td>
+                                  <td className="font-medium text-slate-700">{ageGroupLabel}</td>
                                   <td>
                                     {allowValueEdits ? (
                                       <input
@@ -424,8 +465,17 @@ export function DailyMenuDayEditor({
                                         )}
                                         readOnly={!allowValueEdits}
                                         aria-invalid={
-                                          portionErrors?.yield_amount ? 'true' : 'false'
+                                          validationFocus?.fieldPath ===
+                                          portionPath(
+                                            dayIndex,
+                                            itemIndex,
+                                            portionIndex,
+                                            'yield_amount'
+                                          )
+                                            ? 'true'
+                                            : 'false'
                                         }
+                                        id={`day-${dayIndex}-item-${itemIndex}-portion-${portionIndex}-yield`}
                                         className="nf-input"
                                       />
                                     ) : (
@@ -433,7 +483,14 @@ export function DailyMenuDayEditor({
                                         {portion.yield_amount}
                                       </div>
                                     )}
-                                    {portionErrors?.yield_amount ? (
+                                    {portionErrors?.yield_amount &&
+                                    validationFocus?.fieldPath ===
+                                      portionPath(
+                                        dayIndex,
+                                        itemIndex,
+                                        portionIndex,
+                                        'yield_amount'
+                                      ) ? (
                                       <p role="alert" className="nf-field-error">
                                         {portionErrors.yield_amount.message}
                                       </p>
@@ -449,7 +506,17 @@ export function DailyMenuDayEditor({
                                           )
                                         : undefined
                                     }
-                                    error={portionErrors?.nutrition?.kcal?.message}
+                                    error={
+                                      validationFocus?.fieldPath ===
+                                      portionPath(
+                                        dayIndex,
+                                        itemIndex,
+                                        portionIndex,
+                                        'nutrition.kcal'
+                                      )
+                                        ? portionErrors?.nutrition?.kcal?.message
+                                        : undefined
+                                    }
                                   />
                                   <NutritionCell
                                     value={portion.nutrition.proteins}
@@ -461,7 +528,17 @@ export function DailyMenuDayEditor({
                                           )
                                         : undefined
                                     }
-                                    error={portionErrors?.nutrition?.proteins?.message}
+                                    error={
+                                      validationFocus?.fieldPath ===
+                                      portionPath(
+                                        dayIndex,
+                                        itemIndex,
+                                        portionIndex,
+                                        'nutrition.proteins'
+                                      )
+                                        ? portionErrors?.nutrition?.proteins?.message
+                                        : undefined
+                                    }
                                   />
                                   <NutritionCell
                                     value={portion.nutrition.fats}
@@ -473,7 +550,17 @@ export function DailyMenuDayEditor({
                                           )
                                         : undefined
                                     }
-                                    error={portionErrors?.nutrition?.fats?.message}
+                                    error={
+                                      validationFocus?.fieldPath ===
+                                      portionPath(
+                                        dayIndex,
+                                        itemIndex,
+                                        portionIndex,
+                                        'nutrition.fats'
+                                      )
+                                        ? portionErrors?.nutrition?.fats?.message
+                                        : undefined
+                                    }
                                   />
                                   <NutritionCell
                                     value={portion.nutrition.carbs}
@@ -485,7 +572,17 @@ export function DailyMenuDayEditor({
                                           )
                                         : undefined
                                     }
-                                    error={portionErrors?.nutrition?.carbs?.message}
+                                    error={
+                                      validationFocus?.fieldPath ===
+                                      portionPath(
+                                        dayIndex,
+                                        itemIndex,
+                                        portionIndex,
+                                        'nutrition.carbs'
+                                      )
+                                        ? portionErrors?.nutrition?.carbs?.message
+                                        : undefined
+                                    }
                                   />
                                 </tr>
                                 {portion.calculated_from ? (
@@ -575,7 +672,8 @@ export function DailyMenuDayEditor({
                         ) : (
                           <ReadonlyFieldValue value={item?.notes} multiline />
                         )}
-                        {itemErrors?.notes ? (
+                        {itemErrors?.notes &&
+                        validationFocus?.fieldPath === `${itemPath(dayIndex, itemIndex)}.notes` ? (
                           <p role="alert" className="nf-field-error">
                             {itemErrors.notes.message}
                           </p>
@@ -591,6 +689,35 @@ export function DailyMenuDayEditor({
       </div>
     </div>
   );
+}
+
+function getItemSectionId(dayIndex: number, itemIndex: number) {
+  return `day-${dayIndex}-item-${itemIndex}`;
+}
+
+function itemPath(dayIndex: number, itemIndex: number) {
+  return `days.${dayIndex}.items.${itemIndex}`;
+}
+
+function portionPath(dayIndex: number, itemIndex: number, portionIndex: number, suffix: string) {
+  return `${itemPath(dayIndex, itemIndex)}.portions.${portionIndex}.${suffix}`;
+}
+
+function isFocusedPath(focusedPath: string | undefined, path: string) {
+  return Boolean(focusedPath === path || focusedPath?.startsWith(`${path}.`));
+}
+
+function scrollToElement(id: string) {
+  document.getElementById(id)?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+}
+
+function runAfterFrame(callback: () => void) {
+  if (typeof window.requestAnimationFrame === 'function') {
+    window.requestAnimationFrame(callback);
+    return;
+  }
+
+  window.setTimeout(callback, 0);
 }
 
 function formatScaleFactor(targetValue: string, sourceValue: string) {

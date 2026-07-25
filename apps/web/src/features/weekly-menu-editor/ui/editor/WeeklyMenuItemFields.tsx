@@ -15,6 +15,7 @@ import type { Allergen } from '@/entities/recipe/model/Recipe';
 
 import type { WeeklyMenuFormValues } from '../../model/WeeklyMenuFormSchema';
 import {
+  applyDishCardProductSelection,
   applyDishCardSelection,
   applyIngredientSelection,
   syncAllergensFromVersion,
@@ -142,11 +143,13 @@ export function IngredientLookupField({
     name: `days.${dayIndex}.items.${itemIndex}` as const,
   });
   const [query, setQuery] = useState('');
+  const [isLookupOpen, setIsLookupOpen] = useState(!item?.product_ingredient_id);
   const deferredQuery = useDeferredValue(query);
   const ingredients = useQuery({
     ...ingredientsQueryOptions(deferredQuery),
     enabled,
   });
+  const selectedLabel = item?.product_name_snapshot || item?.name || '';
 
   return (
     <div className="space-y-2">
@@ -154,41 +157,61 @@ export function IngredientLookupField({
         Промисловий виріб
       </label>
       {enabled ? (
-        <>
-          <input
-            id={`ingredient-lookup-${dayIndex}-${itemIndex}`}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Пошук інгредієнта або готового виробу"
-            disabled={readOnly}
-            className="nf-input"
-          />
-          {item?.product_ingredient_id ? (
-            <p className="text-xs text-slate-600">Обрано: {item.name}</p>
-          ) : null}
-          <div className="max-h-56 overflow-y-auto border border-(--nf-line) bg-white">
-            {ingredients.isPending ? (
-              <div className="px-3 py-2 text-sm text-slate-600">Завантажуємо інгредієнти…</div>
-            ) : null}
-            {ingredients.data?.items.map((ingredient) => (
-              <button
-                key={ingredient.id}
-                type="button"
-                disabled={readOnly}
-                className="block w-full border-b border-(--nf-line) px-3 py-2 text-left last:border-b-0 hover:bg-slate-50"
-                onClick={() => applyIngredientSelection(form, dayIndex, itemIndex, ingredient)}
-              >
-                <div className="text-sm font-bold text-slate-900">{ingredient.name}</div>
-                <div className="text-xs text-slate-500">Одиниця: {ingredient.unit}</div>
-              </button>
-            ))}
-            {ingredients.data && ingredients.data.items.length === 0 ? (
-              <div className="px-3 py-2 text-sm text-slate-600">
-                За цим пошуком інгредієнтів не знайдено.
-              </div>
-            ) : null}
+        item?.product_ingredient_id && !isLookupOpen ? (
+          <div className="flex items-center justify-between gap-3 border border-emerald-200 bg-emerald-50 px-3 py-2">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-emerald-800">
+                Промисловий виріб обрано
+              </p>
+              <p className="text-sm font-medium text-slate-900">{selectedLabel}</p>
+            </div>
+            <button
+              type="button"
+              disabled={readOnly}
+              className="nf-button nf-button-secondary shrink-0"
+              onClick={() => setIsLookupOpen(true)}
+            >
+              Змінити пром. виріб
+            </button>
           </div>
-        </>
+        ) : (
+          <>
+            <input
+              id={`ingredient-lookup-${dayIndex}-${itemIndex}`}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Пошук інгредієнта або готового виробу"
+              disabled={readOnly}
+              className="nf-input"
+            />
+            <div className="max-h-56 overflow-y-auto border border-(--nf-line) bg-white">
+              {ingredients.isPending ? (
+                <div className="px-3 py-2 text-sm text-slate-600">Завантажуємо інгредієнти…</div>
+              ) : null}
+              {ingredients.data?.items.map((ingredient) => (
+                <button
+                  key={ingredient.id}
+                  type="button"
+                  disabled={readOnly}
+                  className="block w-full border-b border-(--nf-line) px-3 py-2 text-left last:border-b-0 hover:bg-slate-50"
+                  onClick={() => {
+                    applyIngredientSelection(form, dayIndex, itemIndex, ingredient);
+                    setQuery('');
+                    setIsLookupOpen(false);
+                  }}
+                >
+                  <div className="text-sm font-bold text-slate-900">{ingredient.name}</div>
+                  <div className="text-xs text-slate-500">Одиниця: {ingredient.unit}</div>
+                </button>
+              ))}
+              {ingredients.data && ingredients.data.items.length === 0 ? (
+                <div className="px-3 py-2 text-sm text-slate-600">
+                  За цим пошуком інгредієнтів не знайдено.
+                </div>
+              ) : null}
+            </div>
+          </>
+        )
       ) : (
         <p className="text-xs text-slate-600">
           {readOnly
@@ -197,6 +220,59 @@ export function IngredientLookupField({
         </p>
       )}
     </div>
+  );
+}
+
+export function DishCardProductSelect({
+  form,
+  dayIndex,
+  itemIndex,
+  readOnly,
+}: {
+  form: UseFormReturn<WeeklyMenuFormValues>;
+  dayIndex: number;
+  itemIndex: number;
+  readOnly: boolean;
+}) {
+  const item = useWatch({
+    control: form.control,
+    name: `days.${dayIndex}.items.${itemIndex}` as const,
+  });
+  const versionId = item?.dish_card_version_id ?? '';
+  const version = useQuery(dishCardVersionQueryOptions(versionId));
+  const productNames = [
+    ...new Set(
+      version.data?.ingredient_amounts.map((amount) => amount.ingredient_name_snapshot) ?? []
+    ),
+  ].sort((left, right) => left.localeCompare(right, 'uk'));
+  const selectedName = productNames.includes(item?.name ?? '') ? item?.name : '';
+
+  return (
+    <select
+      id={`day-${dayIndex}-item-${itemIndex}-name`}
+      aria-label="Назва позиції"
+      value={selectedName}
+      disabled={readOnly || version.isPending}
+      className="nf-input"
+      onChange={(event) => {
+        if (event.target.value && version.data) {
+          applyDishCardProductSelection(
+            form,
+            dayIndex,
+            itemIndex,
+            event.target.value,
+            version.data
+          );
+        }
+      }}
+    >
+      <option value="">{version.isPending ? 'Завантажуємо продукти…' : 'Оберіть продукт'}</option>
+      {productNames.map((productName) => (
+        <option key={productName} value={productName}>
+          {productName}
+        </option>
+      ))}
+    </select>
   );
 }
 

@@ -365,6 +365,39 @@ a {
   font-size: 12px;
 }
 
+.nf-reveal {
+  animation: nf-reveal 0.18s ease-out;
+  transform-origin: top;
+}
+
+.nf-error-pulse {
+  box-shadow: 0 0 0 2px rgb(159 47 47 / 14%);
+  animation: nf-error-pulse 2.4s ease-out;
+}
+
+@keyframes nf-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes nf-error-pulse {
+  0%,
+  70% {
+    box-shadow: 0 0 0 2px rgb(159 47 47 / 14%);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgb(159 47 47 / 0%);
+  }
+}
+
 @media (max-width: 767px) {
   .nf-page {
     padding: 18px 14px 32px;

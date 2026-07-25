@@ -20,6 +20,7 @@ import {
   useRevokeWeeklyMenus,
   useUpdateWeeklyMenu,
 } from '@/features/weekly-menu-editor/model/UseWeeklyMenuMutations';
+import { loadWeeklyMenuDraft } from '@/features/weekly-menu-editor/model/WeeklyMenuDraftStorage';
 import {
   type WeeklyMenuFormValues,
   createBlankWeeklyMenuFormValues,
@@ -47,6 +48,7 @@ export function WeeklyMenuAdminWorkspace() {
   const createWeeklyMenu = useCreateWeeklyMenu();
   const [selectedMenuId, setSelectedMenuId] = useState<string | null>(null);
   const [isCreatingNewMenu, setIsCreatingNewMenu] = useState(false);
+  const [newMenuDraftChecked, setNewMenuDraftChecked] = useState(false);
   const [newMenuRevision, setNewMenuRevision] = useState(0);
   const [menuOverride, setMenuOverride] = useState<WeeklyMenu | null>(null);
   const [replaceExisting, setReplaceExisting] = useState(true);
@@ -70,14 +72,26 @@ export function WeeklyMenuAdminWorkspace() {
   }, [menuOverride, menus.data?.items]);
 
   useEffect(() => {
-    if (isCreatingNewMenu || selectedMenuId || !availableMenus.length) {
+    const timeoutId = window.setTimeout(() => {
+      const newMenuDraft = loadWeeklyMenuDraft('new', 'new');
+      if (newMenuDraft) {
+        setIsCreatingNewMenu(true);
+      }
+      setNewMenuDraftChecked(true);
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, []);
+
+  useEffect(() => {
+    if (!newMenuDraftChecked || isCreatingNewMenu || selectedMenuId || !availableMenus.length) {
       return;
     }
 
     startTransition(() => {
       setSelectedMenuId(availableMenus[0].id);
     });
-  }, [availableMenus, isCreatingNewMenu, selectedMenuId]);
+  }, [availableMenus, isCreatingNewMenu, newMenuDraftChecked, selectedMenuId]);
 
   const selectedMenu = useMemo(() => {
     if (isCreatingNewMenu || !selectedMenuId) {
@@ -281,7 +295,7 @@ export function WeeklyMenuAdminWorkspace() {
       });
       setMenuOverride(updatedMenu);
       toast.success('Тижневе меню збережено.');
-      return;
+      return true;
     }
 
     const createdMenu = await createWeeklyMenu.mutateAsync(payload);
@@ -289,6 +303,7 @@ export function WeeklyMenuAdminWorkspace() {
     setIsCreatingNewMenu(false);
     setSelectedMenuId(createdMenu.id);
     toast.success('Тижневе меню створено.');
+    return true;
   };
 
   const confirmSave = async (values: WeeklyMenuFormValues) => {
@@ -299,8 +314,10 @@ export function WeeklyMenuAdminWorkspace() {
     });
 
     if (confirmed) {
-      await handleSave(values);
+      return handleSave(values);
     }
+
+    return false;
   };
 
   const handleImportedMenus = (importedMenus: WeeklyMenu[]) => {
@@ -442,6 +459,8 @@ export function WeeklyMenuAdminWorkspace() {
           saving={savePending}
           onSubmit={confirmSave}
           recipeCatalogEnabled={canUseRecipeCatalog}
+          draftKey={selectedMenu?.id ?? 'new'}
+          draftBaseUpdatedAt={selectedMenu?.updated_at ?? 'new'}
           headerNote={
             selectedMenu ? (
               <div className="space-y-1">

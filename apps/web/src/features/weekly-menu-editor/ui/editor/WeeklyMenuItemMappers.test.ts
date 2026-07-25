@@ -50,4 +50,12 @@ describe('resolvePortionVariantByYield', () => {
       variant: { output_grams: '120' },
     });
   });
+
+  it('scales the explicitly selected variant instead of another nearest variant', () => {
+    expect(resolvePortionVariantByYield(variants, '100', 'portion-50')).toMatchObject({
+      factor: 2,
+      isScaled: true,
+      variant: { id: 'portion-50' },
+    });
+  });
 });

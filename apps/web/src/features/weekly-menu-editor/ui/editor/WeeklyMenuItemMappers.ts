@@ -48,6 +48,32 @@ export function applyDishCardSelection(
   });
 }
 
+export function applyDishCardProductSelection(
+  form: UseFormReturn<WeeklyMenuFormValues>,
+  dayIndex: number,
+  itemIndex: number,
+  productName: string,
+  version: DishCardVersion
+) {
+  const item = form.getValues(`days.${dayIndex}.items.${itemIndex}` as const);
+  const variants = productVariantsByName(version, productName);
+
+  form.setValue(`days.${dayIndex}.items.${itemIndex}.name`, productName, {
+    shouldDirty: true,
+  });
+  item.portions.forEach((portion, portionIndex) => {
+    const resolution = resolvePortionVariantByYield(variants, portion.yield_amount, null);
+    applyVariantToPortion(
+      form,
+      dayIndex,
+      itemIndex,
+      portionIndex,
+      portion.yield_amount,
+      resolution ?? undefined
+    );
+  });
+}
+
 export function applyIngredientSelection(
   form: UseFormReturn<WeeklyMenuFormValues>,
   dayIndex: number,
@@ -152,7 +178,8 @@ export function resolvePortionVariantByYield(
         right.output - left.output
     );
 
-  const nearest = candidates[0];
+  const nearest =
+    candidates.find((candidate) => candidate.variant.id === preferredVariantId) ?? candidates[0];
   if (!nearest) {
     return null;
   }
@@ -170,9 +197,17 @@ export function syncNutritionFromVersion(
   item: WeeklyMenuFormValues['days'][number]['items'][number],
   version: DishCardVersion
 ) {
+  const variants =
+    item.recipe_card_number === '12.01'
+      ? productVariantsByName(version, item.name)
+      : version.portion_variants;
+  if (!variants.length) {
+    return;
+  }
+
   item.portions.forEach((portion, portionIndex) => {
     const resolution = resolvePortionVariantByYield(
-      version.portion_variants,
+      variants,
       portion.yield_amount,
       portion.dish_card_portion_variant_id ?? portion.calculated_from?.portion_variant_id ?? null
     );
@@ -186,6 +221,15 @@ export function syncNutritionFromVersion(
       resolution ?? undefined
     );
   });
+}
+
+function productVariantsByName(version: DishCardVersion, productName: string) {
+  const variantIds = new Set(
+    version.ingredient_amounts
+      .filter((amount) => amount.ingredient_name_snapshot === productName)
+      .map((amount) => amount.portion_variant_id)
+  );
+  return version.portion_variants.filter((variant) => variantIds.has(variant.id));
 }
 
 export function syncAllergensFromVersion(
