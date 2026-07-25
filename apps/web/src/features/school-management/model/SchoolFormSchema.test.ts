@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { deleteSchoolFormSchema, editSchoolFormSchema, schoolFormSchema } from './SchoolFormSchema';
+import { editSchoolFormSchema, schoolFormSchema } from './SchoolFormSchema';
 
 describe('school form schemas', () => {
   it('trims school values', () => {
@@ -32,13 +32,5 @@ describe('school form schemas', () => {
         is_active: false,
       }).is_active
     ).toBe(false);
-  });
-
-  it('requires the admin password before school deletion', () => {
-    expect(deleteSchoolFormSchema.safeParse({ password: '' }).success).toBe(false);
-    expect(deleteSchoolFormSchema.safeParse({ password: '   ' }).success).toBe(false);
-    expect(deleteSchoolFormSchema.parse({ password: 'admin-password-123' })).toEqual({
-      password: 'admin-password-123',
-    });
   });
 });

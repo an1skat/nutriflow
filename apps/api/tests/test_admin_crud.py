@@ -2,7 +2,6 @@ from fastapi.testclient import TestClient
 from pymongo import MongoClient
 
 from app.core.config import get_settings
-from app.modules.admin.security import DELETE_CONFIRMATION_COOKIE_NAME
 
 
 def login(
@@ -91,7 +90,7 @@ def test_admin_can_list_get_and_update_schools(seeded_client):
     assert get_response.json()["name"] == "Updated School"
 
 
-def test_school_hard_delete_cascades_users_and_sessions(seeded_client):
+def test_school_deactivation_preserves_data_and_revokes_sessions(seeded_client):
     client, identities = seeded_client
     settings = get_settings()
     mongo_client = MongoClient(settings.mongo_uri, tz_aware=True)
@@ -99,7 +98,7 @@ def test_school_hard_delete_cascades_users_and_sessions(seeded_client):
         mongo_client[settings.mongo_db]["menu_change_requests"].insert_one(
             {
                 "school_id": identities.own_school.id,
-                "marker": "delete-with-school",
+                "marker": "preserve-on-deactivate",
             }
         )
     finally:
@@ -118,78 +117,40 @@ def test_school_hard_delete_cascades_users_and_sessions(seeded_client):
         identities.admin_password,
     )
 
-    missing_password_response = client.request(
-        "DELETE",
+    deactivate_response = client.patch(
         f"/api/v1/admin/schools/{identities.own_school.id}",
-        json={},
+        json={"is_active": False},
         headers=csrf_headers(client),
     )
 
-    assert missing_password_response.status_code == 403
-    assert missing_password_response.json()["detail"] == ("Admin password confirmation required")
-    assert client.cookies.get(DELETE_CONFIRMATION_COOKIE_NAME) is None
-
-    wrong_password_response = client.request(
-        "DELETE",
-        f"/api/v1/admin/schools/{identities.own_school.id}",
-        json={"password": "wrong-admin-password"},
-        headers=csrf_headers(client),
-    )
-
-    assert wrong_password_response.status_code == 403
-    assert wrong_password_response.json()["detail"] == "Invalid admin password"
-    assert client.cookies.get(DELETE_CONFIRMATION_COOKIE_NAME) is None
-    assert client.get(f"/api/v1/admin/schools/{identities.own_school.id}").status_code == 200
-
+    assert deactivate_response.status_code == 200
+    assert deactivate_response.json()["is_active"] is False
     delete_response = client.request(
         "DELETE",
         f"/api/v1/admin/schools/{identities.own_school.id}",
-        json={"password": identities.admin_password},
-        headers=csrf_headers(client),
     )
 
-    assert delete_response.status_code == 204
-    assert client.cookies.get(DELETE_CONFIRMATION_COOKIE_NAME) is not None
-
-    delete_without_password_response = client.request(
-        "DELETE",
-        f"/api/v1/admin/schools/{identities.other_school.id}",
-        json={},
-        headers=csrf_headers(client),
-    )
-
-    assert delete_without_password_response.status_code == 204
-
-    repeated_delete_response = client.request(
-        "DELETE",
-        f"/api/v1/admin/schools/{identities.own_school.id}",
-        json={},
-        headers=csrf_headers(client),
-    )
-
-    assert repeated_delete_response.status_code == 404
-    assert client.get(f"/api/v1/admin/schools/{identities.own_school.id}").status_code == 404
+    assert delete_response.status_code == 405
 
     school_list = client.get("/api/v1/admin/schools").json()
 
-    assert all(item["id"] != str(identities.own_school.id) for item in school_list["items"])
-    assert all(item["id"] != str(identities.other_school.id) for item in school_list["items"])
+    assert any(item["id"] == str(identities.own_school.id) for item in school_list["items"])
 
     mongo_client = MongoClient(settings.mongo_uri, tz_aware=True)
 
     try:
         database = mongo_client[settings.mongo_db]
-        assert database["schools"].count_documents({"_id": identities.own_school.id}) == 0
-        assert database["users"].count_documents({"school_id": identities.own_school.id}) == 0
+        assert database["schools"].count_documents({"_id": identities.own_school.id}) == 1
+        assert database["users"].count_documents({"school_id": identities.own_school.id}) == 1
         assert (
             database["menu_change_requests"].count_documents(
                 {"school_id": identities.own_school.id}
             )
-            == 0
+            == 1
         )
         assert (
             database["refresh_sessions"].count_documents({"user_id": identities.school_user.id})
-            == 0
+            == 1
         )
     finally:
         mongo_client.close()
@@ -203,6 +164,26 @@ def test_school_hard_delete_cascades_users_and_sessions(seeded_client):
             headers={"X-CSRF-Token": school_user_cookies[settings.csrf_cookie_name]},
         ).status_code
         == 401
+    )
+
+    login(
+        client,
+        identities.admin.username,
+        identities.admin_password,
+    )
+    reactivate_response = client.patch(
+        f"/api/v1/admin/schools/{identities.own_school.id}",
+        json={"is_active": True},
+        headers=csrf_headers(client),
+    )
+
+    assert reactivate_response.status_code == 200
+    assert reactivate_response.json()["is_active"] is True
+
+    login(
+        client,
+        identities.school_user.username,
+        identities.school_user_password,
     )
 
 

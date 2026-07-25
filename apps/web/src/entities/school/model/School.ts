@@ -29,7 +29,3 @@ export type CreateSchoolPayload = {
 export type UpdateSchoolPayload = CreateSchoolPayload & {
   is_active: boolean;
 };
-
-export type DeleteSchoolPayload = {
-  password?: string;
-};

@@ -4,7 +4,6 @@ import { toApiPaginationParams } from '@/shared/api/Pagination';
 
 import {
   type CreateSchoolPayload,
-  type DeleteSchoolPayload,
   type School,
   type SchoolList,
   type UpdateSchoolPayload,
@@ -39,11 +38,4 @@ export async function updateSchool(
     headers: getCsrfHeaders(),
   });
   return schoolSchema.parse(response.data);
-}
-
-export async function deleteSchool(schoolId: string, payload?: DeleteSchoolPayload): Promise<void> {
-  await apiClient.delete(`/admin/schools/${schoolId}`, {
-    headers: getCsrfHeaders(),
-    data: payload ?? {},
-  });
 }

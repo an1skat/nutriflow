@@ -80,7 +80,7 @@ export function EditSchoolForm({ school }: EditSchoolFormProps) {
         <span>
           <span className="block text-sm font-bold">Школа активна</span>
           <span className="block text-xs text-slate-600">
-            Деактивація завершить усі активні сесії користувачів школи.
+            Деактивація завершить сесії користувачів, але збереже школу, меню та вимоги.
           </span>
         </span>
       </label>

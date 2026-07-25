@@ -5,20 +5,17 @@ from fastapi import (
     APIRouter,
     Depends,
     Query,
-    Request,
     Response,
     status,
 )
 
 from app.api.errors import conflict, forbidden, not_found
-from app.core.config import Settings, get_settings
 from app.modules.admin.schemas import (
     AdminUserListResponse,
     AdminUserResponse,
     CreateAdminUserRequest,
     CreateSchoolRequest,
     CreateSchoolUserRequest,
-    DeleteSchoolRequest,
     ResetAdminUserPasswordRequest,
     ResetSchoolUserPasswordRequest,
     SchoolGroupListResponse,
@@ -32,25 +29,17 @@ from app.modules.admin.schemas import (
     UpdateSchoolRequest,
     UpdateSchoolUserRequest,
 )
-from app.modules.admin.security import (
-    DELETE_CONFIRMATION_COOKIE_NAME,
-    DELETE_CONFIRMATION_TTL_SECONDS,
-    create_delete_confirmation_token,
-    delete_confirmation_token_is_valid,
-)
 from app.modules.admin.service import (
     AdminAccessDeniedError,
     AdminUserAlreadyExistsError,
     AdminUserNotFoundError,
     AdminUserOwnsSchoolsError,
-    InvalidAdminPasswordError,
     SchoolAlreadyExistsError,
     SchoolGroupNotFoundError,
     SchoolInactiveError,
     SchoolNotFoundError,
     SchoolUserAlreadyExistsError,
     SchoolUserNotFoundError,
-    confirm_admin_password,
 )
 from app.modules.admin.service import (
     create_admin_user as create_admin_user_record,
@@ -63,9 +52,6 @@ from app.modules.admin.service import (
 )
 from app.modules.admin.service import (
     delete_admin_user as delete_admin_user_record,
-)
-from app.modules.admin.service import (
-    delete_school as delete_school_record,
 )
 from app.modules.admin.service import (
     delete_school_user as delete_school_user_record,
@@ -122,7 +108,6 @@ from app.modules.identity.models import AdminPermission, User, UserRole
 
 router = APIRouter()
 
-AppSettings = Annotated[Settings, Depends(get_settings)]
 OwnerUser = Annotated[
     User,
     Depends(require_owner()),
@@ -150,36 +135,6 @@ SchoolUserManagerUser = Annotated[
 ]
 Offset = Annotated[int, Query(ge=0)]
 Limit = Annotated[int, Query(ge=1, le=100)]
-
-
-def admin_path(settings: Settings) -> str:
-    api_path = settings.api_v1_prefix.rstrip("/") or "/"
-    return f"{api_path}/admin"
-
-
-def has_recent_delete_confirmation(
-    request: Request,
-    admin: User,
-    settings: Settings,
-) -> bool:
-    token = request.cookies.get(DELETE_CONFIRMATION_COOKIE_NAME)
-    return delete_confirmation_token_is_valid(token, admin, settings=settings)
-
-
-def set_delete_confirmation_cookie(
-    response: Response,
-    admin: User,
-    settings: Settings,
-) -> None:
-    response.set_cookie(
-        key=DELETE_CONFIRMATION_COOKIE_NAME,
-        value=create_delete_confirmation_token(admin, settings=settings),
-        max_age=DELETE_CONFIRMATION_TTL_SECONDS,
-        path=admin_path(settings),
-        secure=settings.auth_cookie_secure,
-        httponly=True,
-        samesite=settings.auth_cookie_samesite,
-    )
 
 
 @router.get(
@@ -378,44 +333,6 @@ async def update_school(
         raise forbidden(exc) from exc
 
     return SchoolResponse.from_school(school)
-
-
-@router.delete(
-    "/schools/{school_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-async def delete_school(
-    school_id: PydanticObjectId,
-    request: Request,
-    settings: AppSettings,
-    admin: SchoolManagerUser,
-    _csrf: CsrfProtection,
-    payload: DeleteSchoolRequest | None = None,
-) -> Response:
-    password_was_required = not has_recent_delete_confirmation(
-        request,
-        admin,
-        settings,
-    )
-
-    try:
-        if password_was_required:
-            confirm_admin_password(admin, payload)
-
-        await delete_school_record(admin, school_id)
-    except SchoolNotFoundError as exc:
-        raise not_found(exc) from exc
-    except InvalidAdminPasswordError as exc:
-        raise forbidden(exc) from exc
-    except AdminAccessDeniedError as exc:
-        raise forbidden(exc) from exc
-
-    response = Response(status_code=status.HTTP_204_NO_CONTENT)
-
-    if password_was_required:
-        set_delete_confirmation_cookie(response, admin, settings)
-
-    return response
 
 
 @router.get(

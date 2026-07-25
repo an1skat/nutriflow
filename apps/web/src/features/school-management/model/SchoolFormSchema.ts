@@ -17,16 +17,5 @@ export const editSchoolFormSchema = schoolFormSchema.extend({
   is_active: z.boolean(),
 });
 
-export const deleteSchoolFormSchema = z.object({
-  password: z
-    .string()
-    .min(1, 'Введіть пароль адміністратора')
-    .max(128, 'Пароль має містити не більше 128 символів')
-    .refine((value) => value.trim().length > 0, {
-      message: 'Введіть пароль адміністратора',
-    }),
-});
-
 export type SchoolFormValues = z.infer<typeof schoolFormSchema>;
 export type EditSchoolFormValues = z.infer<typeof editSchoolFormSchema>;
-export type DeleteSchoolFormValues = z.infer<typeof deleteSchoolFormSchema>;

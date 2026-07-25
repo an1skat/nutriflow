@@ -3,7 +3,6 @@
 import { useState } from 'react';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 
 import { toast } from 'sonner';
 
@@ -11,7 +10,6 @@ import { useSchoolUsers } from '@/entities/school-user/api/SchoolUserQueries';
 import { useSchool } from '@/entities/school/api/SchoolQueries';
 import { useWeeklyMenus } from '@/entities/weekly-menu/api/WeeklyMenuQueries';
 import type { WeeklyMenu } from '@/entities/weekly-menu/model/WeeklyMenu';
-import { DeleteSchoolAction } from '@/features/school-management/ui/DeleteSchoolAction';
 import { EditSchoolForm } from '@/features/school-management/ui/EditSchoolForm';
 import { CreateSchoolUserForm } from '@/features/school-user-management/ui/CreateSchoolUserForm';
 import { useRevokeWeeklyMenu } from '@/features/weekly-menu-editor/model/UseWeeklyMenuMutations';
@@ -28,7 +26,6 @@ import { SchoolMenuPreviewDialog } from './SchoolMenuPreviewDialog';
 const PAGE_SIZE = 20;
 
 export function SchoolDetails({ schoolId }: { schoolId: string }) {
-  const router = useRouter();
   const school = useSchool(schoolId);
   const [offset, setOffset] = useState(0);
   const users = useSchoolUsers(schoolId, {
@@ -72,28 +69,12 @@ export function SchoolDetails({ schoolId }: { schoolId: string }) {
         </p>
       </header>
 
-      <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_310px]">
-        <div className="nf-panel">
-          <div className="nf-panel-header">
-            <h2 className="nf-panel-title">Параметри школи</h2>
-          </div>
-          <div className="nf-panel-body">
-            <EditSchoolForm school={school.data} />
-          </div>
+      <section className="nf-panel">
+        <div className="nf-panel-header">
+          <h2 className="nf-panel-title">Параметри школи</h2>
         </div>
-        <div className="nf-panel border-red-300">
-          <div className="nf-panel-header bg-red-50">
-            <h2 className="nf-panel-title text-red-900">Видалення</h2>
-          </div>
-          <div className="nf-panel-body">
-            <p className="mb-4 text-xs leading-5 text-slate-600">
-              Школу буде видалено разом з користувачами. Перед видаленням потрібно підтвердити дію.
-            </p>
-            <DeleteSchoolAction
-              schoolId={schoolId}
-              onDeleted={() => router.replace('/admin/schools')}
-            />
-          </div>
+        <div className="nf-panel-body">
+          <EditSchoolForm school={school.data} />
         </div>
       </section>
 

@@ -9,7 +9,6 @@ from app.modules.admin.schemas import (
     CreateAdminUserRequest,
     CreateSchoolRequest,
     CreateSchoolUserRequest,
-    DeleteSchoolRequest,
     ResetAdminUserPasswordRequest,
     ResetSchoolUserPasswordRequest,
     UpdateAdminUserRequest,
@@ -17,7 +16,7 @@ from app.modules.admin.schemas import (
     UpdateSchoolRequest,
     UpdateSchoolUserRequest,
 )
-from app.modules.auth.security import hash_password, verify_password
+from app.modules.auth.security import hash_password
 from app.modules.identity.models import (
     AdminPermission,
     RefreshRevokeReason,
@@ -27,7 +26,6 @@ from app.modules.identity.models import (
     User,
     UserRole,
 )
-from app.modules.menus.models import MenuChangeRequest
 
 
 class SchoolAlreadyExistsError(ValueError):
@@ -40,10 +38,6 @@ class SchoolNotFoundError(ValueError):
 
 class SchoolInactiveError(ValueError):
     """The requested school is inactive."""
-
-
-class InvalidAdminPasswordError(ValueError):
-    """The administrator password confirmation is invalid."""
 
 
 class SchoolUserAlreadyExistsError(ValueError):
@@ -157,62 +151,6 @@ async def update_school(
         )
 
     return school
-
-
-def confirm_admin_password(
-    admin: User,
-    data: DeleteSchoolRequest | None,
-) -> None:
-    if data is None or data.password is None:
-        raise InvalidAdminPasswordError("Admin password confirmation required")
-
-    if not verify_password(data.password, admin.password_hash):
-        raise InvalidAdminPasswordError("Invalid admin password")
-
-
-async def delete_school(actor: User, school_id: PydanticObjectId) -> None:
-    await get_school_for_actor(actor, school_id)
-
-    async def purge_school(session: AsyncClientSession) -> None:
-        school = await School.get_pymongo_collection().find_one(
-            {"_id": school_id},
-            session=session,
-        )
-        if school is None:
-            raise SchoolNotFoundError("School not found")
-
-        user_documents = (
-            await User.get_pymongo_collection()
-            .find(
-                {"school_id": school_id},
-                {"_id": 1},
-                session=session,
-            )
-            .to_list()
-        )
-        user_ids = [document["_id"] for document in user_documents]
-
-        if user_ids:
-            await RefreshSession.get_pymongo_collection().delete_many(
-                {"user_id": {"$in": user_ids}},
-                session=session,
-            )
-
-        await User.get_pymongo_collection().delete_many(
-            {"school_id": school_id},
-            session=session,
-        )
-        await MenuChangeRequest.get_pymongo_collection().delete_many(
-            {"school_id": school_id},
-            session=session,
-        )
-        await School.get_pymongo_collection().delete_one(
-            {"_id": school_id},
-            session=session,
-        )
-
-    async with get_mongo_client().start_session() as session:
-        await session.with_transaction(purge_school)
 
 
 async def list_school_groups(
