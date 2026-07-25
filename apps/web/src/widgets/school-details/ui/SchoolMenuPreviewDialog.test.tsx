@@ -65,6 +65,7 @@ const menu: WeeklyMenu = {
   revoke_reason: null,
   created_by: 'owner-1',
   updated_by: 'owner-1',
+  revision: 1,
   created_at: '2026-09-01T09:00:00Z',
   updated_at: '2026-09-01T10:00:00Z',
 };

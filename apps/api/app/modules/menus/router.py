@@ -14,7 +14,7 @@ from fastapi import (
 from fastapi.responses import StreamingResponse
 
 from app.api.deps import get_app_settings
-from app.api.errors import bad_request, forbidden, not_found
+from app.api.errors import bad_request, conflict, forbidden, not_found
 from app.api.responses import xlsx_response
 from app.core.config import Settings
 from app.modules.auth.dependencies import CsrfProtection, CurrentUser, require_permissions
@@ -41,6 +41,7 @@ from app.modules.menus.service import (
     MenuImportError,
     MenuNotFoundError,
     MenuValidationError,
+    MenuVersionConflictError,
 )
 from app.modules.menus.service import (
     archive_school_weekly_menu as archive_school_weekly_menu_record,
@@ -584,6 +585,8 @@ async def update_weekly_menu(
         raise not_found(exc) from exc
     except MenuAccessDeniedError as exc:
         raise forbidden(exc) from exc
+    except MenuVersionConflictError as exc:
+        raise conflict(exc) from exc
     except MenuValidationError as exc:
         raise bad_request(exc) from exc
 

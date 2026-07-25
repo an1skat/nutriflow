@@ -177,6 +177,7 @@ class WeeklyMenu(Document):
     revoke_reason: str | None = Field(default=None, max_length=80)
     created_by: PydanticObjectId | None = None
     updated_by: PydanticObjectId | None = None
+    revision: int = Field(default=1, ge=1)
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 

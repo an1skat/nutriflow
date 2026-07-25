@@ -163,7 +163,7 @@ def set_school_menu_counts(
 
     response = client.patch(
         f"/api/v1/menus/weekly/{menu['id']}",
-        json={"days": days},
+        json={"days": days, "revision": menu["revision"]},
         headers=csrf_headers(client),
     )
     assert response.status_code == 200
@@ -329,7 +329,7 @@ def test_report_marks_generated_day_stale_after_daily_menu_changes(
     menu["days"][0]["items"][0]["servings"][0]["children_count"] = 7
     stale_response = client.patch(
         f"/api/v1/menus/weekly/{menu['id']}",
-        json={"days": menu["days"]},
+        json={"days": menu["days"], "revision": menu["revision"]},
         headers=csrf_headers(client),
     )
     assert stale_response.status_code == 200

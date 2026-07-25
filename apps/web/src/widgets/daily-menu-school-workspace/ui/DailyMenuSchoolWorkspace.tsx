@@ -231,7 +231,7 @@ export function DailyMenuSchoolWorkspace() {
 
     try {
       const updatedMenu = await updateWeeklyMenu.mutateAsync(
-        buildDailyMenuUpdatePayload(days, menu.days)
+        { ...buildDailyMenuUpdatePayload(days, menu.days), revision: menu.revision }
       );
       clearDailyMenuDraft(menu.id);
       initializedMenuKey.current = `${updatedMenu.id}:${updatedMenu.updated_at}`;

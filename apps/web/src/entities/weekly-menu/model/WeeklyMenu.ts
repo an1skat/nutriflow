@@ -118,6 +118,7 @@ export const weeklyMenuSchema = z.object({
   revoke_reason: z.string().min(1).nullable(),
   created_by: z.string().min(1).nullable(),
   updated_by: z.string().min(1).nullable(),
+  revision: z.number().int().positive(),
   created_at: z.string().min(1),
   updated_at: z.string().min(1),
 });
@@ -210,7 +211,7 @@ export type WeeklyMenuPayload = {
   source_sheet_name?: string | null;
 };
 
-export type WeeklyMenuUpdatePayload = Partial<WeeklyMenuPayload>;
+export type WeeklyMenuUpdatePayload = Partial<WeeklyMenuPayload> & { revision: number };
 
 export type PublishWeeklyMenuPayload = {
   school_ids?: string[];

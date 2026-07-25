@@ -146,6 +146,7 @@ class CreateWeeklyMenuRequest(BaseModel):
 
 
 class UpdateWeeklyMenuRequest(BaseModel):
+    revision: int = Field(ge=1)
     title: str | None = Field(default=None, min_length=1, max_length=255)
     meal_type: MealType | None = None
     cycle_week: int | None = Field(default=None, ge=1, le=53)
@@ -164,7 +165,8 @@ class UpdateWeeklyMenuRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_patch(self) -> Self:
-        if not self.model_fields_set:
+        editable_fields = self.model_fields_set - {"revision"}
+        if not editable_fields:
             raise ValueError("At least one field must be provided")
         if "title" in self.model_fields_set and self.title is None:
             raise ValueError("Weekly menu title cannot be null")
@@ -268,6 +270,7 @@ class WeeklyMenuResponse(BaseModel):
     revoke_reason: str | None
     created_by: PydanticObjectId | None
     updated_by: PydanticObjectId | None
+    revision: int
     created_at: datetime
     updated_at: datetime
 
@@ -293,6 +296,7 @@ class WeeklyMenuResponse(BaseModel):
             revoke_reason=menu.revoke_reason,
             created_by=menu.created_by,
             updated_by=menu.updated_by,
+            revision=menu.revision,
             created_at=menu.created_at,
             updated_at=menu.updated_at,
         )

@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from beanie import BulkWriter, PydanticObjectId
+from beanie.odm.utils.dump import get_dict
 from fastapi import UploadFile
 from pymongo import ReturnDocument
 
@@ -29,6 +30,7 @@ from app.modules.menus.errors import (
     MenuImportError,
     MenuNotFoundError,
     MenuValidationError,
+    MenuVersionConflictError,
 )
 from app.modules.menus.import_references import hydrate_preview_references
 from app.modules.menus.models import (
@@ -195,13 +197,15 @@ async def update_weekly_menu(
     current_user: User,
 ) -> tuple[WeeklyMenu, PydanticObjectId | None]:
     menu = await get_weekly_menu(menu_id, current_user)
+    if menu.revision != data.revision:
+        raise MenuVersionConflictError("Weekly menu was changed by another user")
     previous_days = deepcopy(menu.days)
     converted_days: list[DailyMenu] | None = None
 
     if current_user.role == UserRole.SCHOOL_USER:
         if menu.status != WeeklyMenuStatus.PUBLISHED:
             raise MenuAccessDeniedError("Menu access denied")
-        if data.model_fields_set - {"days"}:
+        if data.model_fields_set - {"days", "revision"}:
             raise MenuAccessDeniedError("School users can only update daily menu data")
         if "days" in data.model_fields_set:
             _ensure_school_menu_shape_is_stable(menu, data.days or [])
@@ -245,13 +249,13 @@ async def update_weekly_menu(
         and menu.school_id is None
         and menu.source_menu_id is None
     ):
-        await _save_template_and_propagate(menu, current_user)
+        await _save_template_and_propagate(menu, current_user, data.revision)
     elif change_request is None:
-        await menu.save()
+        await _replace_weekly_menu_if_current(menu, data.revision)
     else:
 
         async def save_menu_and_request(session: Any) -> None:
-            await menu.save(session=session)
+            await _replace_weekly_menu_if_current(menu, data.revision, session=session)
             await change_request.insert(session=session)
 
         async with get_mongo_client().start_session() as session:
@@ -486,7 +490,11 @@ async def restore_school_weekly_menu(
     return menu
 
 
-async def _save_template_and_propagate(source: WeeklyMenu, actor: User) -> None:
+async def _save_template_and_propagate(
+    source: WeeklyMenu,
+    actor: User,
+    expected_revision: int,
+) -> None:
     if source.id is None:
         raise RuntimeError("Persisted weekly menu is required")
 
@@ -497,9 +505,10 @@ async def _save_template_and_propagate(source: WeeklyMenu, actor: User) -> None:
     now = datetime.now(UTC)
     for copy in copies:
         _apply_template_update_to_copy(source, copy, actor=actor, now=now)
+        copy.revision += 1
 
     async def save_source_and_copies(session: Any) -> None:
-        await source.save(session=session)
+        await _replace_weekly_menu_if_current(source, expected_revision, session=session)
         if not copies:
             return
         async with BulkWriter(session=session, ordered=False) as bulk_writer:
@@ -508,6 +517,32 @@ async def _save_template_and_propagate(source: WeeklyMenu, actor: User) -> None:
 
     async with get_mongo_client().start_session() as session:
         await session.with_transaction(save_source_and_copies)
+
+
+async def _replace_weekly_menu_if_current(
+    menu: WeeklyMenu,
+    expected_revision: int,
+    *,
+    session: Any = None,
+) -> None:
+    if menu.id is None:
+        raise RuntimeError("Persisted weekly menu is required")
+
+    revision_filter: dict[str, Any]
+    if expected_revision == 1:
+        revision_filter = {"$or": [{"revision": 1}, {"revision": {"$exists": False}}]}
+    else:
+        revision_filter = {"revision": expected_revision}
+
+    menu.revision = expected_revision + 1
+    result = await WeeklyMenu.get_pymongo_collection().find_one_and_replace(
+        {"_id": menu.id, **revision_filter},
+        get_dict(menu),
+        return_document=ReturnDocument.AFTER,
+        session=session,
+    )
+    if result is None:
+        raise MenuVersionConflictError("Weekly menu was changed by another user")
 
 
 def _apply_template_update_to_copy(

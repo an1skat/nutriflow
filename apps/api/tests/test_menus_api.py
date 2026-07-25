@@ -330,7 +330,7 @@ def test_template_update_propagates_to_existing_school_copy(seeded_client):
 
     update_response = client.patch(
         f"/api/v1/menus/weekly/{source_id}",
-        json={"title": "Оновлене меню"},
+        json={"title": "Оновлене меню", "revision": create_response.json()["revision"]},
         headers=csrf_headers(client),
     )
 
@@ -350,6 +350,39 @@ def test_template_update_propagates_to_existing_school_copy(seeded_client):
     assert repeated_publish_response.json()["skipped_existing_school_ids"] == [
         str(identities.own_school.id)
     ]
+
+
+def test_weekly_menu_update_rejects_stale_revision(seeded_client):
+    client, identities = seeded_client
+    login(client, identities.admin.username, identities.admin_password)
+
+    create_response = client.post(
+        "/api/v1/menus/weekly",
+        json=weekly_menu_payload(),
+        headers=csrf_headers(client),
+    )
+    assert create_response.status_code == 201
+    menu = create_response.json()
+
+    first_update = client.patch(
+        f"/api/v1/menus/weekly/{menu['id']}",
+        json={"title": "Перша правка", "revision": menu["revision"]},
+        headers=csrf_headers(client),
+    )
+    assert first_update.status_code == 200
+    assert first_update.json()["revision"] == menu["revision"] + 1
+
+    stale_update = client.patch(
+        f"/api/v1/menus/weekly/{menu['id']}",
+        json={"title": "Застаріла правка", "revision": menu["revision"]},
+        headers=csrf_headers(client),
+    )
+    assert stale_update.status_code == 409
+    assert stale_update.json()["detail"] == "Weekly menu was changed by another user"
+
+    current_menu = client.get(f"/api/v1/menus/weekly/{menu['id']}")
+    assert current_menu.status_code == 200
+    assert current_menu.json()["title"] == "Перша правка"
 
 
 def test_weekly_menu_get_does_not_auto_close_days(seeded_client):
@@ -687,7 +720,7 @@ def test_school_user_can_edit_content_but_not_change_daily_dish_count(seeded_cli
 
     edit_response = client.patch(
         f"/api/v1/menus/weekly/{menu['id']}",
-        json={"days": changed_days},
+        json={"days": changed_days, "revision": menu["revision"]},
         headers=csrf_headers(client),
     )
     assert edit_response.status_code == 200, edit_response.text
@@ -697,7 +730,7 @@ def test_school_user_can_edit_content_but_not_change_daily_dish_count(seeded_cli
     changed_days[0]["items"].append(product_item(position=2))
     forbidden_response = client.patch(
         f"/api/v1/menus/weekly/{menu['id']}",
-        json={"days": changed_days},
+        json={"days": changed_days, "revision": edit_response.json()["revision"]},
         headers=csrf_headers(client),
     )
     assert forbidden_response.status_code == 400

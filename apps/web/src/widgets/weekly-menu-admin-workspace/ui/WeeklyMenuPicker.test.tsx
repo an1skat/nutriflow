@@ -71,6 +71,7 @@ function createMenu(
     revoke_reason: null,
     created_by: null,
     updated_by: null,
+    revision: 1,
     created_at: '2026-07-07T10:00:00Z',
     updated_at: '2026-07-07T10:00:00Z',
   };

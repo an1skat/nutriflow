@@ -275,7 +275,10 @@ export function WeeklyMenuAdminWorkspace() {
     const payload = formValuesToWeeklyMenuPayload(values);
 
     if (selectedMenu) {
-      const updatedMenu = await updateWeeklyMenu.mutateAsync(payload);
+      const updatedMenu = await updateWeeklyMenu.mutateAsync({
+        ...payload,
+        revision: selectedMenu.revision,
+      });
       setMenuOverride(updatedMenu);
       toast.success('Тижневе меню збережено.');
       return;

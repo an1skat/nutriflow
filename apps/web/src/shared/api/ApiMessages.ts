@@ -16,6 +16,8 @@ export const detailTranslations: Record<string, string> = {
   'School user not found': 'Користувача школи не знайдено.',
   'School group not found': 'Групу школи не знайдено.',
   'Weekly menu not found': 'Тижневе меню не знайдено.',
+  'Weekly menu was changed by another user':
+    'Меню вже змінив інший користувач. Оновіть меню та перенесіть свої зміни.',
   'Menu access denied': 'Немає доступу до цього меню.',
   'Weekly menu end date cannot be before start date':
     'Дата завершення меню не може бути раніше дати початку.',

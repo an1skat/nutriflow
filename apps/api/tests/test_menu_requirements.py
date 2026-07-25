@@ -192,7 +192,7 @@ def prepare_school_menu_with_count(
     menu: dict,
     group_id: str,
     count: int,
-) -> None:
+) -> dict:
     days = menu["days"]
     days[0]["items"][0]["servings"] = [
         {
@@ -203,10 +203,11 @@ def prepare_school_menu_with_count(
     ]
     response = client.patch(
         f"/api/v1/menus/weekly/{menu['id']}",
-        json={"days": days},
+        json={"days": days, "revision": menu["revision"]},
         headers=csrf_headers(client),
     )
     assert response.status_code == 200
+    return response.json()
 
 
 def test_school_generates_and_regenerates_menu_requirement(seeded_client) -> None:
@@ -233,7 +234,7 @@ def test_school_generates_and_regenerates_menu_requirement(seeded_client) -> Non
 
     login(client, identities.school_user.username, identities.school_user_password)
     group_id = str(identities.own_school.groups[0].id)
-    prepare_school_menu_with_count(
+    menu = prepare_school_menu_with_count(
         client,
         menu=menu,
         group_id=group_id,
@@ -419,7 +420,7 @@ def test_school_closes_day_and_locks_saved_daily_menu(seeded_client) -> None:
 
     login(client, identities.school_user.username, identities.school_user_password)
     group_id = str(identities.own_school.groups[0].id)
-    prepare_school_menu_with_count(
+    menu = prepare_school_menu_with_count(
         client,
         menu=menu,
         group_id=group_id,
@@ -447,7 +448,7 @@ def test_school_closes_day_and_locks_saved_daily_menu(seeded_client) -> None:
     changed_days[0]["items"][0]["servings"][0]["children_count"] = 6
     edit_response = client.patch(
         f"/api/v1/menus/weekly/{menu['id']}",
-        json={"days": changed_days},
+        json={"days": changed_days, "revision": closed_menu["revision"]},
         headers=csrf_headers(client),
     )
     assert edit_response.status_code == 400
@@ -479,7 +480,7 @@ def test_school_closes_day_and_locks_saved_daily_menu(seeded_client) -> None:
     reopened_day["items"][0]["servings"][0]["children_count"] = 6
     reopened_edit_response = client.patch(
         f"/api/v1/menus/weekly/{menu['id']}",
-        json={"days": reopened_menu["days"]},
+        json={"days": reopened_menu["days"], "revision": reopened_menu["revision"]},
         headers=csrf_headers(client),
     )
     assert reopened_edit_response.status_code == 200

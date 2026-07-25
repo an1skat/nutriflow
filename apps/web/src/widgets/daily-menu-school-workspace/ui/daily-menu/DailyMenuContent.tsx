@@ -570,7 +570,7 @@ export function sortDays(days: DailyMenu[]): DailyMenu[] {
 export function buildDailyMenuUpdatePayload(
   days: DailyMenu[],
   serverDays: DailyMenu[] = []
-): WeeklyMenuUpdatePayload {
+): Omit<WeeklyMenuUpdatePayload, 'revision'> {
   const serverDayByWeekday = new Map(serverDays.map((day) => [day.weekday, day] as const));
 
   return {
