@@ -1,14 +1,19 @@
-import type { MenuRequirementReportRequest } from '@/entities/menu-requirement/model/MenuRequirement';
+import type {
+  MenuRequirementAmountBasis,
+  MenuRequirementReportRequest,
+} from '@/entities/menu-requirement/model/MenuRequirement';
 import { type DownloadedFile, downloadFile, triggerFileDownload } from '@/shared/api/Download';
 
 export type MenuRequirementExportTarget =
   | {
       kind: 'requirement';
       requirementId: string;
+      amountBasis?: MenuRequirementAmountBasis;
     }
   | {
       kind: 'report';
       request: Omit<MenuRequirementReportRequest, 'enabled'>;
+      amountBasis?: MenuRequirementAmountBasis;
     };
 
 type DownloadedWorkbook = DownloadedFile;
@@ -23,7 +28,10 @@ export async function exportMenuRequirementWorkbook(
   const fallbackFilename = 'menu-requirement.xlsx';
 
   return downloadFile(url, fallbackFilename, {
-    params: target.kind === 'report' ? target.request : undefined,
+    params: {
+      ...(target.kind === 'report' ? target.request : {}),
+      amount_basis: target.amountBasis ?? 'net',
+    },
   });
 }
 

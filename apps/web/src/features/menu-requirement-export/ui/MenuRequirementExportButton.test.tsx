@@ -20,6 +20,18 @@ vi.mock('sonner', () => ({
 }));
 
 describe('MenuRequirementExportButton', () => {
+  it.each([
+    ['overlay', () => fireEvent.mouseDown(screen.getByRole('presentation'))],
+    ['Escape', () => fireEvent.keyDown(window, { key: 'Escape' })],
+  ])('closes the amount-basis dialog on %s', (_, closeDialog) => {
+    render(<MenuRequirementExportButton target={{ kind: 'requirement', requirementId: 'id-1' }} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Експорт в Excel' }));
+    closeDialog();
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
   it('downloads the calendar report with its active filters', async () => {
     const workbook = {
       blob: new Blob(['xlsx']),
@@ -44,6 +56,8 @@ describe('MenuRequirementExportButton', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Експорт в Excel' }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Брутто' }));
 
     await waitFor(() =>
       expect(exportMenuRequirementWorkbook).toHaveBeenCalledWith({
@@ -56,6 +70,7 @@ describe('MenuRequirementExportButton', () => {
           meal_type: 'lunch',
           school_group_id: 'group-1',
         },
+        amountBasis: 'gross',
       })
     );
     expect(triggerMenuRequirementDownload).toHaveBeenCalledWith(workbook);

@@ -91,6 +91,7 @@ const navigation: NavigationItem[] = [
     href: '/menu-requirements',
     label: 'Меню-вимога',
     icon: FileSpreadsheet,
+    schoolOnly: true,
   },
   {
     href: '/menu-requirements/calendar',
@@ -147,7 +148,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           : 'Користувач школи';
 
   return (
-    <div className="min-h-screen bg-[var(--nf-canvas)]">
+    <div className="min-h-screen bg-background">
       <button
         type="button"
         onClick={() => setIsMenuOpen(true)}
@@ -168,11 +169,11 @@ export function AppShell({ children }: { children: ReactNode }) {
       ) : null}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-56 flex-col border-r border-[var(--nf-line-strong)] bg-[var(--nf-sidebar)] transition-transform md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-56 flex-col border-r border-(--nf-line-strong) bg-(--nf-sidebar) transition-transform md:translate-x-0 ${
           isMenuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="flex h-16 items-center justify-between border-b border-[var(--nf-line-strong)] bg-[var(--nf-brand)] px-4 text-white">
+        <div className="flex h-16 items-center justify-between border-b border-(--nf-line-strong) bg-(--nf-brand) px-4 text-white">
           <Link href="/" onClick={() => setIsMenuOpen(false)} className="font-bold tracking-wide">
             NutriFlow
           </Link>
@@ -186,7 +187,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </button>
         </div>
 
-        <div className="border-b border-[var(--nf-line)] px-4 py-3">
+        <div className="border-b border-(--nf-line) px-4 py-3">
           <p className="truncate text-sm font-bold text-slate-900">{user.username}</p>
           <p className="mt-0.5 text-xs text-slate-600">{roleLabel}</p>
         </div>
@@ -213,8 +214,8 @@ export function AppShell({ children }: { children: ReactNode }) {
                     aria-current={isActive ? 'page' : undefined}
                     className={`flex min-h-9 items-center gap-2 border px-2.5 text-sm ${
                       isActive
-                        ? 'border-[var(--nf-brand-dark)] bg-[var(--nf-brand)] font-bold text-white'
-                        : 'border-transparent text-slate-800 hover:border-[var(--nf-line)] hover:bg-white'
+                        ? 'border-(--nf-brand-dark) bg-(--nf-brand) font-bold text-white'
+                        : 'border-transparent text-slate-800 hover:border-(--nf-line) hover:bg-white'
                     }`}
                   >
                     <Icon className="size-4" aria-hidden />
@@ -226,12 +227,12 @@ export function AppShell({ children }: { children: ReactNode }) {
           </ul>
         </nav>
 
-        <div className="border-t border-[var(--nf-line-strong)] p-2">
+        <div className="border-t border-(--nf-line-strong) p-2">
           <button
             type="button"
             onClick={() => void handleLogout()}
             disabled={logout.isPending}
-            className="flex min-h-9 w-full items-center gap-2 border border-transparent px-2.5 text-left text-sm text-slate-700 hover:border-[var(--nf-line)] hover:bg-white disabled:opacity-50"
+            className="flex min-h-9 w-full items-center gap-2 border border-transparent px-2.5 text-left text-sm text-slate-700 hover:border-(--nf-line) hover:bg-white disabled:opacity-50"
           >
             <LogOut className="size-4" aria-hidden />
             {logout.isPending ? 'Виходимо…' : 'Вийти'}
@@ -241,7 +242,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="min-h-screen md:pl-56">
-        <div className="h-14 border-b border-[var(--nf-line)] bg-white md:hidden">
+        <div className="h-14 border-b border-(--nf-line) bg-white md:hidden">
           <div className="flex h-full items-center pl-14 text-sm font-bold text-slate-800">
             NutriFlow
           </div>

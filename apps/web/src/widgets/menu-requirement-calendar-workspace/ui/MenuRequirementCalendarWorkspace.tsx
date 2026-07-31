@@ -10,9 +10,12 @@ import { useSchoolGroups } from '@/entities/school-group/api/SchoolGroupQueries'
 import { useSchools } from '@/entities/school/api/SchoolQueries';
 import { useCurrentUser } from '@/entities/session/api/SessionQueries';
 import type { MealType } from '@/entities/weekly-menu/model/WeeklyMenu';
+import { addDaysToLocalIsoDate, toLocalIsoDate } from '@/shared/lib/LocalDate';
 import { RequestError } from '@/shared/ui/RequestError';
 
+import { formatFullDay } from './calendar/CalendarFormatting';
 import {
+  RequirementDayGrid,
   RequirementPeriodNavigator,
   RequirementReportDialog,
   buildNormComplianceHref,
@@ -25,6 +28,7 @@ import type {
 
 export {
   buildNormComplianceHref,
+  RequirementDayGrid,
   RequirementPeriodNavigator,
   RequirementReportDialog,
   RequirementReportTable,
@@ -36,14 +40,31 @@ const mealTypeOptions: Array<{ value: '' | MealType; label: string }> = [
   { value: 'lunch', label: 'Обід' },
 ];
 
-export function MenuRequirementCalendarWorkspace() {
-  const currentYear = new Date().getFullYear();
+export function getCurrentCalendarWeek(date = new Date()): SelectedWeekRange {
+  const monday = new Date(date);
+  monday.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+  const dateFrom = toLocalIsoDate(monday);
+
+  return { dateFrom, dateTo: addDaysToLocalIsoDate(dateFrom, 4) };
+}
+
+export function MenuRequirementCalendarWorkspace({
+  schoolWeekOnly = false,
+}: {
+  schoolWeekOnly?: boolean;
+}) {
+  const currentDate = new Date();
+  const currentYear = currentDate.getFullYear();
   const [selectedSchoolId, setSelectedSchoolId] = useState('');
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMealType, setSelectedMealType] = useState<'' | MealType>('');
   const [selectedGroupId, setSelectedGroupId] = useState('');
-  const [selectedMonthNumber, setSelectedMonthNumber] = useState<number | null>(null);
-  const [selectedWeekRange, setSelectedWeekRange] = useState<SelectedWeekRange | null>(null);
+  const [selectedMonthNumber, setSelectedMonthNumber] = useState<number | null>(() =>
+    schoolWeekOnly ? currentDate.getMonth() + 1 : null
+  );
+  const [selectedWeekRange, setSelectedWeekRange] = useState<SelectedWeekRange | null>(() =>
+    schoolWeekOnly ? getCurrentCalendarWeek(currentDate) : null
+  );
   const [reportRange, setReportRange] = useState<SelectedRange | null>(null);
   const [selectedCell, setSelectedCell] = useState<SelectedReportCell | null>(null);
 
@@ -55,7 +76,11 @@ export function MenuRequirementCalendarWorkspace() {
     ? ownSchoolId
     : selectedSchoolId || schools.data?.items[0]?.id || '';
   const groups = useSchoolGroups(
-    isSchoolUser ? { mode: 'own' } : { mode: 'admin', schoolId: effectiveSchoolId },
+    schoolWeekOnly
+      ? { mode: 'admin', schoolId: '' }
+      : isSchoolUser
+        ? { mode: 'own' }
+        : { mode: 'admin', schoolId: effectiveSchoolId },
     { offset: 0, limit: 100 }
   );
 
@@ -95,8 +120,10 @@ export function MenuRequirementCalendarWorkspace() {
   });
 
   const resetNavigation = () => {
-    setSelectedMonthNumber(null);
-    setSelectedWeekRange(null);
+    if (!schoolWeekOnly) {
+      setSelectedMonthNumber(null);
+      setSelectedWeekRange(null);
+    }
     setReportRange(null);
     setSelectedCell(null);
   };
@@ -115,23 +142,32 @@ export function MenuRequirementCalendarWorkspace() {
     <main className="nf-page nf-page-wide">
       <header className="nf-page-header">
         <p className="nf-eyebrow">Облік продуктів</p>
-        <h1 className="nf-title">Календар меню-вимог</h1>
+        <h1 className="nf-title">
+          {schoolWeekOnly ? 'Меню-вимоги за поточний тиждень' : 'Календар меню-вимог'}
+        </h1>
         <p className="nf-description">
-          Оберіть місяць, потім тиждень і день. Таблиця відкриється окремо й не перевантажуватиме
-          календар.
+          {schoolWeekOnly
+            ? 'Оберіть день, щоб переглянути меню-вимоги всіх груп окремо.'
+            : 'Оберіть місяць, потім тиждень і день. Таблиця відкриється окремо й не перевантажуватиме календар.'}
         </p>
       </header>
 
       <section className="nf-panel">
-        <div className="nf-panel-body grid gap-4 lg:grid-cols-[minmax(220px,1.2fr)_140px_minmax(260px,1fr)_minmax(220px,1fr)]">
-          {isSchoolUser ? (
+        <div
+          className={`nf-panel-body grid gap-4 ${
+            schoolWeekOnly
+              ? ''
+              : 'lg:grid-cols-[minmax(220px,1.2fr)_140px_minmax(260px,1fr)_minmax(220px,1fr)]'
+          }`}
+        >
+          {!schoolWeekOnly && isSchoolUser ? (
             <div className="grid gap-1">
               <span className="nf-label">Школа</span>
               <div className="nf-input flex items-center bg-slate-50 text-slate-700">
                 {calendar.data?.school_name ?? 'Ваша школа'}
               </div>
             </div>
-          ) : (
+          ) : !schoolWeekOnly ? (
             <label className="grid gap-1">
               <span className="nf-label">Школа</span>
               <select
@@ -152,22 +188,24 @@ export function MenuRequirementCalendarWorkspace() {
                 ))}
               </select>
             </label>
-          )}
+          ) : null}
 
-          <label className="grid gap-1">
-            <span className="nf-label">Рік</span>
-            <input
-              className="nf-input"
-              type="number"
-              min={2000}
-              max={2100}
-              value={selectedYear}
-              onChange={(event) => {
-                setSelectedYear(Number(event.target.value));
-                resetNavigation();
-              }}
-            />
-          </label>
+          {!schoolWeekOnly ? (
+            <label className="grid gap-1">
+              <span className="nf-label">Рік</span>
+              <input
+                className="nf-input"
+                type="number"
+                min={2000}
+                max={2100}
+                value={selectedYear}
+                onChange={(event) => {
+                  setSelectedYear(Number(event.target.value));
+                  resetNavigation();
+                }}
+              />
+            </label>
+          ) : null}
 
           <div className="grid gap-1">
             <span className="nf-label">Прийом їжі</span>
@@ -195,25 +233,27 @@ export function MenuRequirementCalendarWorkspace() {
             </div>
           </div>
 
-          <label className="grid gap-1">
-            <span className="nf-label">Група</span>
-            <select
-              className="nf-input"
-              value={selectedGroupId}
-              onChange={(event) => {
-                setSelectedGroupId(event.target.value);
-                resetNavigation();
-              }}
-              disabled={!effectiveSchoolId || groups.isPending || groups.isError}
-            >
-              <option value="">Усі групи</option>
-              {(groups.data?.items ?? []).map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          {!schoolWeekOnly ? (
+            <label className="grid gap-1">
+              <span className="nf-label">Група</span>
+              <select
+                className="nf-input"
+                value={selectedGroupId}
+                onChange={(event) => {
+                  setSelectedGroupId(event.target.value);
+                  resetNavigation();
+                }}
+                disabled={!effectiveSchoolId || groups.isPending || groups.isError}
+              >
+                <option value="">Усі групи</option>
+                {(groups.data?.items ?? []).map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
         </div>
       </section>
 
@@ -234,7 +274,37 @@ export function MenuRequirementCalendarWorkspace() {
           </div>
         ) : null}
 
-        {calendar.data ? (
+        {calendar.data && schoolWeekOnly && selectedWeek ? (
+          <>
+            <div className="nf-panel-header">
+              <div>
+                <h2 className="nf-panel-title">Поточний тиждень</h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  Відкрийте день, щоб побачити меню-вимоги всіх груп.
+                </p>
+              </div>
+            </div>
+            <div className="nf-panel-body">
+              <RequirementDayGrid
+                days={selectedWeek.days}
+                onOpenReport={(day) =>
+                  openReport({
+                    dateFrom: day.service_date,
+                    dateTo: day.service_date,
+                    granularity: 'day',
+                    label: formatFullDay(day.service_date),
+                  })
+                }
+              />
+            </div>
+          </>
+        ) : calendar.data && schoolWeekOnly ? (
+          <div className="nf-panel-body">
+            <div className="nf-empty">
+              <p>За поточний тиждень меню-вимог ще немає.</p>
+            </div>
+          </div>
+        ) : calendar.data ? (
           <RequirementPeriodNavigator
             months={calendar.data.months}
             selectedMonth={selectedMonth}

@@ -46,11 +46,15 @@ const requirement = {
         {
           menu_item_id: 'item-1',
           net_per_person_g: '20.25',
+          gross_per_person_g: '25',
         },
       ],
       per_person_total_g: '20.25',
       issue_total_raw_g: '60.75',
       issue_total_rounded_g: 61,
+      gross_per_person_total_g: '25',
+      gross_issue_total_raw_g: '75',
+      gross_issue_total_rounded_g: 75,
     },
   ],
   source_day_hash: 'a'.repeat(64),
@@ -66,8 +70,10 @@ describe('menu requirement contract', () => {
     const parsed = menuRequirementSchema.parse(requirement);
 
     expect(parsed.ingredient_rows[0].cells[0].net_per_person_g).toBe('20.25');
+    expect(parsed.ingredient_rows[0].cells[0].gross_per_person_g).toBe('25');
     expect(parsed.ingredient_rows[0].issue_total_raw_g).toBe('60.75');
     expect(parsed.ingredient_rows[0].issue_total_rounded_g).toBe(61);
+    expect(parsed.ingredient_rows[0].gross_issue_total_raw_g).toBe('75');
   });
 
   it('requires generated responses to contain at least one group', () => {
@@ -175,8 +181,11 @@ describe('menu requirement contract', () => {
                 {
                   dish_key: 'dish:soup',
                   net_per_person_g: '40.5',
+                  gross_per_person_g: '50',
                   issue_total_raw_g: '4500.25',
                   issue_total_rounded_g: 4504,
+                  gross_issue_total_raw_g: '5625',
+                  gross_issue_total_rounded_g: 5625,
                   breakdown: [
                     {
                       requirement_id: 'requirement-1',
@@ -185,9 +194,12 @@ describe('menu requirement contract', () => {
                       school_group_name: '6-11',
                       menu_title: 'Меню на тиждень',
                       net_per_person_g: '20.25',
+                      gross_per_person_g: '25',
                       children_count: 30,
                       issue_total_raw_g: '607.5',
                       issue_total_rounded_g: 608,
+                      gross_issue_total_raw_g: '750',
+                      gross_issue_total_rounded_g: 750,
                       status: 'complete',
                     },
                     {
@@ -197,9 +209,12 @@ describe('menu requirement contract', () => {
                       school_group_name: '6-11',
                       menu_title: 'Меню на тиждень',
                       net_per_person_g: null,
+                      gross_per_person_g: null,
                       children_count: null,
                       issue_total_raw_g: null,
                       issue_total_rounded_g: null,
+                      gross_issue_total_raw_g: null,
+                      gross_issue_total_rounded_g: null,
                       status: 'missing',
                     },
                   ],
@@ -208,6 +223,9 @@ describe('menu requirement contract', () => {
               per_person_total_g: '40.5',
               issue_total_raw_g: '4500.25',
               issue_total_rounded_g: 4504,
+              gross_per_person_total_g: '50',
+              gross_issue_total_raw_g: '5625',
+              gross_issue_total_rounded_g: 5625,
             },
           ],
         },
@@ -215,5 +233,6 @@ describe('menu requirement contract', () => {
     });
 
     expect(parsed.groups[0].ingredient_rows[0].cells[0].breakdown[1].status).toBe('missing');
+    expect(parsed.groups[0].ingredient_rows[0].cells[0].gross_per_person_g).toBe('50');
   });
 });

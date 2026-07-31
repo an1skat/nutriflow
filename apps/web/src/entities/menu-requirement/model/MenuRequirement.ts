@@ -26,6 +26,7 @@ export const menuRequirementDishSchema = z.object({
 export const menuRequirementCellSchema = z.object({
   menu_item_id: z.string().min(1),
   net_per_person_g: decimalStringSchema,
+  gross_per_person_g: decimalStringSchema.nullable().default(null),
 });
 
 export const menuRequirementIngredientRowSchema = z.object({
@@ -36,6 +37,9 @@ export const menuRequirementIngredientRowSchema = z.object({
   per_person_total_g: decimalStringSchema,
   issue_total_raw_g: decimalStringSchema,
   issue_total_rounded_g: z.number().int().nonnegative(),
+  gross_per_person_total_g: decimalStringSchema.nullable().default(null),
+  gross_issue_total_raw_g: decimalStringSchema.nullable().default(null),
+  gross_issue_total_rounded_g: z.number().int().nonnegative().nullable().default(null),
 });
 
 export const menuRequirementSchema = z.object({
@@ -142,17 +146,23 @@ export const menuRequirementReportBreakdownItemSchema = z.object({
   school_group_name: z.string().min(1),
   menu_title: z.string().nullable(),
   net_per_person_g: decimalStringSchema.nullable(),
+  gross_per_person_g: decimalStringSchema.nullable().default(null),
   children_count: z.number().int().nonnegative().nullable(),
   issue_total_raw_g: decimalStringSchema.nullable(),
   issue_total_rounded_g: z.number().int().nonnegative().nullable(),
+  gross_issue_total_raw_g: decimalStringSchema.nullable().default(null),
+  gross_issue_total_rounded_g: z.number().int().nonnegative().nullable().default(null),
   status: menuRequirementAggregateStatusSchema,
 });
 
 export const menuRequirementReportCellSchema = z.object({
   dish_key: z.string().min(1),
   net_per_person_g: decimalStringSchema,
+  gross_per_person_g: decimalStringSchema.nullable().default(null),
   issue_total_raw_g: decimalStringSchema,
   issue_total_rounded_g: z.number().int().nonnegative(),
+  gross_issue_total_raw_g: decimalStringSchema.nullable().default(null),
+  gross_issue_total_rounded_g: z.number().int().nonnegative().nullable().default(null),
   breakdown: z.array(menuRequirementReportBreakdownItemSchema),
 });
 
@@ -164,6 +174,9 @@ export const menuRequirementReportIngredientRowSchema = z.object({
   per_person_total_g: decimalStringSchema,
   issue_total_raw_g: decimalStringSchema,
   issue_total_rounded_g: z.number().int().nonnegative(),
+  gross_per_person_total_g: decimalStringSchema.nullable().default(null),
+  gross_issue_total_raw_g: decimalStringSchema.nullable().default(null),
+  gross_issue_total_rounded_g: z.number().int().nonnegative().nullable().default(null),
 });
 
 export const menuRequirementReportGroupSchema = z.object({
@@ -197,6 +210,7 @@ export const updateMenuRequirementPayloadSchema = z.object({
         z.object({
           menu_item_id: z.string().min(1),
           net_per_person_g: decimalStringSchema,
+          gross_per_person_g: decimalStringSchema.nullable(),
         })
       ),
     })
@@ -206,6 +220,7 @@ export const updateMenuRequirementPayloadSchema = z.object({
 export type MenuRequirementDish = z.infer<typeof menuRequirementDishSchema>;
 export type MenuRequirementCell = z.infer<typeof menuRequirementCellSchema>;
 export type MenuRequirementIngredientRow = z.infer<typeof menuRequirementIngredientRowSchema>;
+export type MenuRequirementAmountBasis = 'gross' | 'net';
 export type MenuRequirement = z.infer<typeof menuRequirementSchema>;
 export type MenuRequirementList = z.infer<typeof menuRequirementListSchema>;
 export type GenerateMenuRequirementsResponse = z.infer<
@@ -260,3 +275,7 @@ export type MenuRequirementReportRequest = {
   school_group_id?: string;
   enabled?: boolean;
 };
+
+export function hasMenuRequirementAmount(value: string | null): value is string {
+  return value !== null && Number(value) > 0;
+}

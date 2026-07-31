@@ -362,7 +362,7 @@ function RequirementWeekGrid({
   );
 }
 
-function RequirementDayGrid({
+export function RequirementDayGrid({
   days,
   onOpenReport,
 }: {

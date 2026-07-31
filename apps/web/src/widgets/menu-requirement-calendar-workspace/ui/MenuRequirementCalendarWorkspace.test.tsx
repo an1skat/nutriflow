@@ -18,6 +18,7 @@ import {
   RequirementReportDialog,
   RequirementReportTable,
   buildNormComplianceHref,
+  getCurrentCalendarWeek,
 } from './MenuRequirementCalendarWorkspace';
 
 vi.mock('next/link', () => ({
@@ -77,8 +78,11 @@ const report: MenuRequirementReport = {
             {
               dish_key: 'dish:soup',
               net_per_person_g: '60.75',
+              gross_per_person_g: '75',
               issue_total_raw_g: '1822.5',
               issue_total_rounded_g: 1824,
+              gross_issue_total_raw_g: '2250',
+              gross_issue_total_rounded_g: 2250,
               breakdown: [
                 {
                   requirement_id: 'requirement-1',
@@ -87,9 +91,12 @@ const report: MenuRequirementReport = {
                   school_group_name: '6-11',
                   menu_title: 'Меню на тиждень',
                   net_per_person_g: '20.25',
+                  gross_per_person_g: '25',
                   children_count: 30,
                   issue_total_raw_g: '607.5',
                   issue_total_rounded_g: 608,
+                  gross_issue_total_raw_g: '750',
+                  gross_issue_total_rounded_g: 750,
                   status: 'complete',
                 },
                 {
@@ -99,9 +106,12 @@ const report: MenuRequirementReport = {
                   school_group_name: '6-11',
                   menu_title: 'Меню на тиждень',
                   net_per_person_g: null,
+                  gross_per_person_g: null,
                   children_count: null,
                   issue_total_raw_g: null,
                   issue_total_rounded_g: null,
+                  gross_issue_total_raw_g: null,
+                  gross_issue_total_rounded_g: null,
                   status: 'missing',
                 },
                 {
@@ -111,9 +121,12 @@ const report: MenuRequirementReport = {
                   school_group_name: '6-11',
                   menu_title: 'Меню на тиждень',
                   net_per_person_g: '40.5',
+                  gross_per_person_g: '50',
                   children_count: 30,
                   issue_total_raw_g: '1215',
                   issue_total_rounded_g: 1216,
+                  gross_issue_total_raw_g: '1500',
+                  gross_issue_total_rounded_g: 1500,
                   status: 'stale',
                 },
               ],
@@ -122,6 +135,9 @@ const report: MenuRequirementReport = {
           per_person_total_g: '60.75',
           issue_total_raw_g: '1822.5',
           issue_total_rounded_g: 1824,
+          gross_per_person_total_g: '75',
+          gross_issue_total_raw_g: '2250',
+          gross_issue_total_rounded_g: 2250,
         },
       ],
     },
@@ -191,7 +207,42 @@ const completeCalendarMonth: MenuRequirementCalendarMonth = {
   weeks: [completeCalendarWeek],
 };
 
+describe('getCurrentCalendarWeek', () => {
+  it.each([
+    ['2026-07-27', { dateFrom: '2026-07-27', dateTo: '2026-07-31' }],
+    ['2026-08-02', { dateFrom: '2026-07-27', dateTo: '2026-07-31' }],
+  ])('uses the same Monday-to-Friday range on %s', (date, expected) => {
+    expect(getCurrentCalendarWeek(new Date(`${date}T12:00:00`))).toEqual(expected);
+  });
+});
+
 describe('RequirementReportTable', () => {
+  it('shows one group table at a time', () => {
+    const secondGroup = {
+      ...report.groups[0],
+      school_group_id: 'group-2',
+      school_group_name: '12-17',
+      age_group: '14-18' as const,
+    };
+
+    render(
+      <RequirementReportTable
+        report={{ ...report, groups: [report.groups[0], secondGroup] }}
+        rangeLabel="липень 2026"
+        selectedCell={null}
+        onSelectCell={() => undefined}
+      />
+    );
+
+    expect(screen.getByRole('heading', { name: '6-11' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '12-17' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '12-17' }));
+
+    expect(screen.getByRole('heading', { name: '12-17' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '6-11' })).not.toBeInTheDocument();
+  });
+
   it('emits the selected aggregated cell', () => {
     const onSelectCell = vi.fn();
 
@@ -212,6 +263,22 @@ describe('RequirementReportTable', () => {
         cell: expect.objectContaining({ dish_key: 'dish:soup' }),
       })
     );
+  });
+
+  it('switches the calendar report to gross values without another request', () => {
+    render(
+      <RequirementReportTable
+        report={report}
+        rangeLabel="липень 2026"
+        selectedCell={null}
+        onSelectCell={() => undefined}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Брутто' }));
+
+    expect(screen.getByRole('button', { name: /2\s250/ })).toHaveTextContent('брутто 75');
+    expect(screen.queryByText('1 824')).not.toBeInTheDocument();
   });
 
   it('renders complete, missing, and stale rows when a cell is selected', () => {
@@ -508,7 +575,14 @@ describe('RequirementReportDialog', () => {
       />
     );
 
+    fireEvent.click(screen.getByRole('button', { name: 'Брутто' }));
     fireEvent.click(screen.getByRole('button', { name: 'Експорт в Excel' }));
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'Оберіть тип ваги для експорту' })).getByRole(
+        'button',
+        { name: 'Брутто' }
+      )
+    );
 
     await waitFor(() =>
       expect(exportMenuRequirementWorkbook).toHaveBeenCalledWith({
@@ -520,6 +594,7 @@ describe('RequirementReportDialog', () => {
           granularity: 'month',
           meal_type: 'lunch',
         },
+        amountBasis: 'gross',
       })
     );
     expect(triggerMenuRequirementDownload).toHaveBeenCalled();

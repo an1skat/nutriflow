@@ -17,6 +17,7 @@ import {
 } from '@/features/menu-requirement-edit/model/UseMenuRequirementMutations';
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
 import { RequestError } from '@/shared/ui/RequestError';
+import { MenuRequirementCalendarWorkspace } from '@/widgets/menu-requirement-calendar-workspace/ui/MenuRequirementCalendarWorkspace';
 
 import {
   MenuRequirementTable,
@@ -29,6 +30,20 @@ export {
   MenuRequirementTable,
   RequirementNavigator,
 } from './requirement/RequirementContent';
+
+export function MenuRequirementWorkspace() {
+  const currentUser = useCurrentUser();
+
+  if (!currentUser.data) {
+    return null;
+  }
+
+  return currentUser.data.role === 'SCHOOL_USER' ? (
+    <MenuRequirementCalendarWorkspace schoolWeekOnly />
+  ) : (
+    <MenuRequirementSchoolWorkspace />
+  );
+}
 
 export function MenuRequirementSchoolWorkspace() {
   const searchParams = useSearchParams();

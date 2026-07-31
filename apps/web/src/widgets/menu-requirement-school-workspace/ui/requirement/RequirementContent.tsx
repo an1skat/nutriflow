@@ -5,12 +5,15 @@ import { useMemo, useState } from 'react';
 import { Building2, Pencil, Save, Trash2, UserRound, X } from 'lucide-react';
 import { toast } from 'sonner';
 
-import type {
-  MenuRequirement,
-  MenuRequirementCell,
-  MenuRequirementIngredientRow,
-  UpdateMenuRequirementPayload,
+import {
+  hasMenuRequirementAmount,
+  type MenuRequirement,
+  type MenuRequirementAmountBasis,
+  type MenuRequirementCell,
+  type MenuRequirementIngredientRow,
+  type UpdateMenuRequirementPayload,
 } from '@/entities/menu-requirement/model/MenuRequirement';
+import { MenuRequirementAmountToggle } from '@/entities/menu-requirement/ui/MenuRequirementAmountToggle';
 import type { AuthUser, UserRole } from '@/entities/session/model/Session';
 import { AGE_GROUP_LABELS } from '@/entities/weekly-menu/model/WeeklyMenu';
 import { MenuRequirementExportButton } from '@/features/menu-requirement-export/ui/MenuRequirementExportButton';
@@ -195,8 +198,12 @@ export function MenuRequirementTable({
   const [draftRows, setDraftRows] = useState<EditableRequirementRow[]>(() =>
     createEditableRows(requirement)
   );
+  const [amountBasis, setAmountBasis] = useState<MenuRequirementAmountBasis>('net');
   const canSubmit = editable && Boolean(onSave);
   const canDelete = deletable && Boolean(onDelete);
+  const visibleRows = requirement.ingredient_rows.filter((row) =>
+    row.cells.some((cell) => hasMenuRequirementAmount(getCellAmount(cell, amountBasis)))
+  );
 
   const handleCancel = () => {
     setDraftRows(createEditableRows(requirement));
@@ -258,6 +265,9 @@ export function MenuRequirementTable({
           ) : null}
         </div>
         <div className="text-right text-xs text-slate-600">
+          <div className="mb-3 flex justify-end">
+            <MenuRequirementAmountToggle value={amountBasis} onChange={setAmountBasis} />
+          </div>
           <p>Версія {requirement.revision}</p>
           <p className="mt-1">Сформовано {formatDate(requirement.generated_at)}</p>
           <div className="mt-3 flex flex-wrap justify-end gap-2">
@@ -265,6 +275,7 @@ export function MenuRequirementTable({
               target={{
                 kind: 'requirement',
                 requirementId: requirement.id,
+                amountBasis,
               }}
               label="Експорт меню-вимоги"
               disabled={isSaving || isDeleting}
@@ -326,7 +337,7 @@ export function MenuRequirementTable({
             <tr className="bg-slate-100 text-slate-800">
               <th
                 scope="col"
-                className="w-52 min-w-52 max-w-52 whitespace-normal break-words border-b border-r border-slate-300 bg-slate-100 px-2 py-2 text-left"
+                className="w-52 min-w-52 max-w-52 whitespace-normal wrap-break-word border-b border-r border-slate-300 bg-slate-100 px-2 py-2 text-left"
               >
                 Інгредієнт
               </th>
@@ -334,7 +345,7 @@ export function MenuRequirementTable({
                 <th
                   key={dish.menu_item_id}
                   scope="col"
-                  className="w-32 min-w-32 max-w-32 whitespace-normal break-words border-b border-r border-slate-300 px-2 py-2 text-center align-top"
+                  className="w-32 min-w-32 max-w-32 whitespace-normal wrap-break-word border-b border-r border-slate-300 px-2 py-2 text-center align-top"
                 >
                   <span className="block font-bold">{dish.name}</span>
                   <span className="mt-1 block text-xs font-normal text-slate-600">
@@ -349,7 +360,7 @@ export function MenuRequirementTable({
                 scope="col"
                 className="w-28 min-w-28 max-w-28 border-b border-r border-slate-300 bg-emerald-50 px-2 py-2 text-right align-top"
               >
-                Разом на одну особу, г
+                Разом {amountBasis === 'gross' ? 'брутто' : 'нетто'}, г
               </th>
               <th
                 scope="col"
@@ -360,7 +371,7 @@ export function MenuRequirementTable({
             </tr>
           </thead>
           <tbody>
-            {requirement.ingredient_rows.map((row) => (
+            {visibleRows.map((row) => (
               <IngredientRow
                 key={row.key}
                 row={row}
@@ -368,15 +379,28 @@ export function MenuRequirementTable({
                   isEditing ? draftRows.find((draftRow) => draftRow.key === row.key) : undefined
                 }
                 dishIds={requirement.dishes.map((dish) => dish.menu_item_id)}
+                amountBasis={amountBasis}
                 isEditing={isEditing}
                 onIngredientChange={(value) =>
                   setDraftRows((current) => updateDraftIngredientName(current, row.key, value))
                 }
                 onCellChange={(dishId, value) =>
-                  setDraftRows((current) => updateDraftCell(current, row.key, dishId, value))
+                  setDraftRows((current) =>
+                    updateDraftCell(current, row.key, dishId, amountBasis, value)
+                  )
                 }
               />
             ))}
+            {visibleRows.length === 0 ? (
+              <tr>
+                <td
+                  className="px-4 py-8 text-center text-sm text-slate-500"
+                  colSpan={requirement.dishes.length + 3}
+                >
+                  Немає інгредієнтів зі значеннями {amountBasis === 'gross' ? 'брутто' : 'нетто'}.
+                </td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
       </div>
@@ -393,6 +417,7 @@ function IngredientRow({
   row,
   draftRow,
   dishIds,
+  amountBasis,
   isEditing,
   onIngredientChange,
   onCellChange,
@@ -400,6 +425,7 @@ function IngredientRow({
   row: MenuRequirementIngredientRow;
   draftRow?: EditableRequirementRow;
   dishIds: string[];
+  amountBasis: MenuRequirementAmountBasis;
   isEditing: boolean;
   onIngredientChange: (value: string) => void;
   onCellChange: (dishId: string, value: string) => void;
@@ -409,8 +435,7 @@ function IngredientRow({
     [row.cells]
   );
   const draftCells = useMemo(
-    () =>
-      new Map((draftRow?.cells ?? []).map((cell) => [cell.menu_item_id, cell.net_per_person_g])),
+    () => new Map((draftRow?.cells ?? []).map((cell) => [cell.menu_item_id, cell])),
     [draftRow?.cells]
   );
 
@@ -418,7 +443,7 @@ function IngredientRow({
     <tr className="border-b border-slate-200 last:border-b-0 hover:bg-slate-50">
       <th
         scope="row"
-        className="w-52 min-w-52 max-w-52 whitespace-normal break-words border-r border-slate-300 bg-white px-2 py-1.5 text-left font-medium text-slate-900"
+        className="w-52 min-w-52 max-w-52 whitespace-normal wrap-break-word border-r border-slate-300 bg-white px-2 py-1.5 text-left font-medium text-slate-900"
       >
         {isEditing ? (
           <textarea
@@ -433,6 +458,8 @@ function IngredientRow({
       </th>
       {dishIds.map((dishId) => {
         const cell = cells.get(dishId);
+        const draftCell = draftCells.get(dishId);
+        const amount = cell ? getCellAmount(cell, amountBasis) : null;
 
         return (
           <td
@@ -443,12 +470,12 @@ function IngredientRow({
               <input
                 className="h-8 w-full border border-slate-300 bg-white px-1.5 text-right text-xs tabular-nums focus:border-emerald-700 focus:outline-none"
                 inputMode="decimal"
-                value={draftCells.get(dishId) ?? ''}
+                value={draftCell ? (getCellAmount(draftCell, amountBasis) ?? '') : ''}
                 onChange={(event) => onCellChange(dishId, event.target.value)}
-                aria-label={`${row.ingredient_name}, грамів`}
+                aria-label={`${row.ingredient_name}, ${amountBasis === 'gross' ? 'брутто' : 'нетто'}, грамів`}
               />
-            ) : cell ? (
-              formatGrams(cell.net_per_person_g)
+            ) : hasMenuRequirementAmount(amount) ? (
+              formatGrams(amount)
             ) : (
               '—'
             )}
@@ -456,28 +483,31 @@ function IngredientRow({
         );
       })}
       <td className="w-28 min-w-28 max-w-28 border-r border-slate-300 bg-emerald-50/50 px-2 py-1.5 text-right font-bold tabular-nums text-slate-900">
-        {formatGrams(row.per_person_total_g)}
+        {formatOptionalGrams(getRowPerPersonTotal(row, amountBasis))}
       </td>
       <td className="w-24 min-w-24 max-w-24 bg-emerald-100/60 px-2 py-1.5 text-right font-bold tabular-nums text-emerald-950">
-        {formatInteger(row.issue_total_rounded_g)}
+        {formatOptionalInteger(getRowIssueTotal(row, amountBasis))}
       </td>
     </tr>
   );
 }
 
 function createEditableRows(requirement: MenuRequirement): EditableRequirementRow[] {
-  return requirement.ingredient_rows.map((row) => {
-    const cells = new Map(row.cells.map((cell) => [cell.menu_item_id, cell.net_per_person_g]));
+  return requirement.ingredient_rows
+    .filter((row) => row.cells.length > 0)
+    .map((row) => {
+      const cells = new Map(row.cells.map((cell) => [cell.menu_item_id, cell]));
 
-    return {
-      key: row.key,
-      ingredient_name: row.ingredient_name,
-      cells: requirement.dishes.map((dish) => ({
-        menu_item_id: dish.menu_item_id,
-        net_per_person_g: cells.get(dish.menu_item_id) ?? '0',
-      })),
-    };
-  });
+      return {
+        key: row.key,
+        ingredient_name: row.ingredient_name,
+        cells: requirement.dishes.map((dish) => ({
+          menu_item_id: dish.menu_item_id,
+          net_per_person_g: cells.get(dish.menu_item_id)?.net_per_person_g ?? '0',
+          gross_per_person_g: cells.get(dish.menu_item_id)?.gross_per_person_g ?? null,
+        })),
+      };
+    });
 }
 
 function updateDraftIngredientName(
@@ -492,14 +522,17 @@ function updateDraftCell(
   rows: EditableRequirementRow[],
   rowKey: string,
   dishId: string,
+  amountBasis: MenuRequirementAmountBasis,
   value: string
 ): EditableRequirementRow[] {
+  const field = amountBasis === 'gross' ? 'gross_per_person_g' : 'net_per_person_g';
+
   return rows.map((row) =>
     row.key === rowKey
       ? {
           ...row,
           cells: row.cells.map((cell) =>
-            cell.menu_item_id === dishId ? { ...cell, net_per_person_g: value } : cell
+            cell.menu_item_id === dishId ? { ...cell, [field]: value } : cell
           ),
         }
       : row
@@ -518,13 +551,21 @@ function buildUpdatePayload(rows: EditableRequirementRow[]): UpdateMenuRequireme
     const cells: UpdateMenuRequirementPayload['ingredient_rows'][number]['cells'] = [];
     for (const cell of row.cells) {
       const normalizedAmount = normalizeDecimalDraft(cell.net_per_person_g);
-      if (normalizedAmount === null) {
+      const normalizedGrossAmount =
+        cell.gross_per_person_g === null
+          ? null
+          : normalizeDecimalDraft(cell.gross_per_person_g);
+      if (
+        normalizedAmount === null ||
+        (cell.gross_per_person_g !== null && normalizedGrossAmount === null)
+      ) {
         return null;
       }
 
       cells.push({
         menu_item_id: cell.menu_item_id,
         net_per_person_g: normalizedAmount,
+        gross_per_person_g: normalizedGrossAmount,
       });
     }
 
@@ -676,6 +717,35 @@ function formatGrams(value: string): string {
   return new Intl.NumberFormat('uk-UA', {
     maximumFractionDigits: 6,
   }).format(parsed);
+}
+
+function getCellAmount(
+  cell: MenuRequirementCell,
+  amountBasis: MenuRequirementAmountBasis
+): string | null {
+  return amountBasis === 'gross' ? cell.gross_per_person_g : cell.net_per_person_g;
+}
+
+function getRowPerPersonTotal(
+  row: MenuRequirementIngredientRow,
+  amountBasis: MenuRequirementAmountBasis
+): string | null {
+  return amountBasis === 'gross' ? row.gross_per_person_total_g : row.per_person_total_g;
+}
+
+function getRowIssueTotal(
+  row: MenuRequirementIngredientRow,
+  amountBasis: MenuRequirementAmountBasis
+): number | null {
+  return amountBasis === 'gross' ? row.gross_issue_total_rounded_g : row.issue_total_rounded_g;
+}
+
+function formatOptionalGrams(value: string | null): string {
+  return value === null ? '—' : formatGrams(value);
+}
+
+function formatOptionalInteger(value: number | null): string {
+  return value === null ? '—' : formatInteger(value);
 }
 
 function formatInteger(value: number): string {

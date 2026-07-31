@@ -1,4 +1,8 @@
-export { buildNormComplianceHref, RequirementPeriodNavigator } from './RequirementPeriodNavigator';
+export {
+  buildNormComplianceHref,
+  RequirementDayGrid,
+  RequirementPeriodNavigator,
+} from './RequirementPeriodNavigator';
 export { RequirementReportDialog, RequirementReportTable } from './RequirementReport';
 export type {
   SelectedRange,

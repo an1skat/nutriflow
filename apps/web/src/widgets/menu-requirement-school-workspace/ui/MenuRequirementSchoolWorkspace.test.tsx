@@ -62,12 +62,15 @@ const requirement: MenuRequirement = {
       ingredient_id: 'salt',
       ingredient_name: 'Сіль',
       cells: [
-        { menu_item_id: 'item-1', net_per_person_g: '3.2' },
-        { menu_item_id: 'item-2', net_per_person_g: '5.1' },
+        { menu_item_id: 'item-1', net_per_person_g: '3.2', gross_per_person_g: '4' },
+        { menu_item_id: 'item-2', net_per_person_g: '5.1', gross_per_person_g: '6' },
       ],
       per_person_total_g: '8.3',
       issue_total_raw_g: '19.8',
       issue_total_rounded_g: 20,
+      gross_per_person_total_g: '10',
+      gross_issue_total_raw_g: '24',
+      gross_issue_total_rounded_g: 24,
     },
     {
       key: 'ingredient:sugar',
@@ -77,6 +80,9 @@ const requirement: MenuRequirement = {
       per_person_total_g: '0',
       issue_total_raw_g: '0',
       issue_total_rounded_g: 0,
+      gross_per_person_total_g: '0',
+      gross_issue_total_raw_g: '0',
+      gross_issue_total_rounded_g: 0,
     },
   ],
   source_day_hash: 'a'.repeat(64),
@@ -123,7 +129,7 @@ function renderWithConfirm(ui: ReactElement) {
 }
 
 describe('MenuRequirementTable', () => {
-  it('renders dish cells, totals, and missing ingredient markers', () => {
+  it('switches between net and gross values and hides empty ingredients', () => {
     renderWithConfirm(<MenuRequirementTable requirement={requirement} />);
 
     expect(screen.getByRole('columnheader', { name: /Суп/ })).toHaveTextContent('Дітей: 3');
@@ -135,8 +141,14 @@ describe('MenuRequirementTable', () => {
     expect(within(saltRow).getByText('8,3')).toBeInTheDocument();
     expect(within(saltRow).getByText('20')).toBeInTheDocument();
 
-    const sugarRow = screen.getByRole('row', { name: /Цукор/ });
-    expect(within(sugarRow).getAllByText('—')).toHaveLength(2);
+    expect(screen.queryByRole('row', { name: /Цукор/ })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Брутто' }));
+
+    expect(within(saltRow).getByText('4')).toBeInTheDocument();
+    expect(within(saltRow).getByText('6')).toBeInTheDocument();
+    expect(within(saltRow).getByText('10')).toBeInTheDocument();
+    expect(within(saltRow).getByText('24')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Експорт меню-вимоги' })).toBeInTheDocument();
   });
 
@@ -146,6 +158,38 @@ describe('MenuRequirementTable', () => {
     expect(screen.queryByText('Ліцей №1')).not.toBeInTheDocument();
     expect(screen.queryByText(/Адміністратор:/)).not.toBeInTheDocument();
     expect(screen.getByText('1-А')).toBeInTheDocument();
+  });
+
+  it('edits the selected gross value without losing the loaded net value', async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    renderWithConfirm(
+      <MenuRequirementTable requirement={requirement} editable onSave={onSave} />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Брутто' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Редагувати' }));
+    fireEvent.change(screen.getAllByLabelText(/Сіль, брутто, грамів/)[0], {
+      target: { value: '4,5' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Зберегти' }));
+
+    await waitFor(() =>
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ingredient_rows: expect.arrayContaining([
+            expect.objectContaining({
+              cells: expect.arrayContaining([
+                expect.objectContaining({
+                  menu_item_id: 'item-1',
+                  net_per_person_g: '3.2',
+                  gross_per_person_g: '4.5',
+                }),
+              ]),
+            }),
+          ]),
+        })
+      )
+    );
   });
 
   it('confirms and calls delete for users with delete access', async () => {
