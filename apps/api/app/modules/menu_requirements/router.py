@@ -12,6 +12,7 @@ from app.modules.identity.models import User, UserRole
 from app.modules.menu_requirements.schemas import (
     GenerateMenuRequirementsRequest,
     GenerateMenuRequirementsResponse,
+    MenuRequirementAmountBasis,
     MenuRequirementCalendarResponse,
     MenuRequirementListResponse,
     MenuRequirementReportGranularity,
@@ -172,6 +173,7 @@ async def export_report(
     date_from: Date,
     date_to: Date,
     granularity: MenuRequirementReportGranularity,
+    amount_basis: MenuRequirementAmountBasis = MenuRequirementAmountBasis.NET,
     meal_type: MealType | None = None,
     school_group_id: PydanticObjectId | None = None,
 ) -> StreamingResponse:
@@ -182,6 +184,7 @@ async def export_report(
             date_to,
             granularity,
             current_user,
+            amount_basis=amount_basis,
             meal_type=meal_type,
             school_group_id=school_group_id,
         )
@@ -217,11 +220,13 @@ async def get_requirement(
 async def export_requirement(
     requirement_id: PydanticObjectId,
     current_user: CurrentUser,
+    amount_basis: MenuRequirementAmountBasis = MenuRequirementAmountBasis.NET,
 ) -> StreamingResponse:
     try:
         filename, content = await export_menu_requirement_workbook(
             requirement_id,
             current_user,
+            amount_basis=amount_basis,
         )
     except MenuRequirementNotFoundError as exc:
         raise not_found(exc) from exc

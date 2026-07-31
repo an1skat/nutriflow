@@ -30,6 +30,7 @@ class MenuRequirementDish(BaseModel):
 class MenuRequirementCell(BaseModel):
     menu_item_id: PydanticObjectId
     net_per_person_g: AmountDecimal = Field(ge=Decimal("0"))
+    gross_per_person_g: AmountDecimal | None = Field(default=None, ge=Decimal("0"))
 
 
 class MenuRequirementIngredientRow(BaseModel):
@@ -40,6 +41,19 @@ class MenuRequirementIngredientRow(BaseModel):
     per_person_total_g: AmountDecimal = Field(ge=Decimal("0"))
     issue_total_raw_g: AmountDecimal = Field(ge=Decimal("0"))
     issue_total_rounded_g: int = Field(ge=0)
+    gross_per_person_total_g: AmountDecimal | None = Field(default=None, ge=Decimal("0"))
+    gross_issue_total_raw_g: AmountDecimal | None = Field(default=None, ge=Decimal("0"))
+    gross_issue_total_rounded_g: int | None = Field(default=None, ge=0)
+
+    def has_values(self) -> bool:
+        return any(
+            cell.net_per_person_g != Decimal("0")
+            or (
+                cell.gross_per_person_g is not None
+                and cell.gross_per_person_g != Decimal("0")
+            )
+            for cell in self.cells
+        )
 
 
 class MenuRequirement(Document):

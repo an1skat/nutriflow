@@ -32,6 +32,7 @@ class IngredientLine:
     ingredient_id: PydanticObjectId | None
     name: str
     net_per_person_g: Decimal
+    gross_per_person_g: Decimal | None = None
 
 
 def ingredient_contribution_snapshots(

@@ -52,6 +52,7 @@ class MenuRequirementDishResponse(BaseModel):
 class MenuRequirementCellResponse(BaseModel):
     menu_item_id: PydanticObjectId
     net_per_person_g: AmountDecimal
+    gross_per_person_g: AmountDecimal | None = None
 
     @classmethod
     def from_cell(cls, cell: MenuRequirementCell) -> "MenuRequirementCellResponse":
@@ -66,6 +67,9 @@ class MenuRequirementIngredientRowResponse(BaseModel):
     per_person_total_g: AmountDecimal
     issue_total_raw_g: AmountDecimal
     issue_total_rounded_g: int
+    gross_per_person_total_g: AmountDecimal | None = None
+    gross_issue_total_raw_g: AmountDecimal | None = None
+    gross_issue_total_rounded_g: int | None = None
 
     @classmethod
     def from_row(
@@ -80,12 +84,16 @@ class MenuRequirementIngredientRowResponse(BaseModel):
             per_person_total_g=row.per_person_total_g,
             issue_total_raw_g=row.issue_total_raw_g,
             issue_total_rounded_g=row.issue_total_rounded_g,
+            gross_per_person_total_g=row.gross_per_person_total_g,
+            gross_issue_total_raw_g=row.gross_issue_total_raw_g,
+            gross_issue_total_rounded_g=row.gross_issue_total_rounded_g,
         )
 
 
 class UpdateMenuRequirementCellRequest(BaseModel):
     menu_item_id: PydanticObjectId
     net_per_person_g: AmountDecimal = Field(ge=0)
+    gross_per_person_g: AmountDecimal | None = Field(default=None, ge=0)
 
 
 class UpdateMenuRequirementIngredientRowRequest(BaseModel):
@@ -152,6 +160,7 @@ class MenuRequirementResponse(BaseModel):
             ingredient_rows=[
                 MenuRequirementIngredientRowResponse.from_row(row)
                 for row in requirement.ingredient_rows
+                if row.has_values()
             ],
             source_day_hash=requirement.source_day_hash,
             revision=requirement.revision,
@@ -168,6 +177,11 @@ class MenuRequirementListResponse(PaginatedResponse[MenuRequirementResponse]):
 
 class GenerateMenuRequirementsResponse(BaseModel):
     items: list[MenuRequirementResponse]
+
+
+class MenuRequirementAmountBasis(StrEnum):
+    GROSS = "gross"
+    NET = "net"
 
 
 class MenuRequirementReportGranularity(StrEnum):
@@ -245,17 +259,23 @@ class MenuRequirementReportBreakdownItemResponse(BaseModel):
     school_group_name: str
     menu_title: str | None
     net_per_person_g: AmountDecimal | None
+    gross_per_person_g: AmountDecimal | None = None
     children_count: int | None
     issue_total_raw_g: AmountDecimal | None
     issue_total_rounded_g: int | None
+    gross_issue_total_raw_g: AmountDecimal | None = None
+    gross_issue_total_rounded_g: int | None = None
     status: MenuRequirementAggregateStatus
 
 
 class MenuRequirementReportCellResponse(BaseModel):
     dish_key: str
     net_per_person_g: AmountDecimal
+    gross_per_person_g: AmountDecimal | None = None
     issue_total_raw_g: AmountDecimal
     issue_total_rounded_g: int
+    gross_issue_total_raw_g: AmountDecimal | None = None
+    gross_issue_total_rounded_g: int | None = None
     breakdown: list[MenuRequirementReportBreakdownItemResponse]
 
 
@@ -267,6 +287,9 @@ class MenuRequirementReportIngredientRowResponse(BaseModel):
     per_person_total_g: AmountDecimal
     issue_total_raw_g: AmountDecimal
     issue_total_rounded_g: int
+    gross_per_person_total_g: AmountDecimal | None = None
+    gross_issue_total_raw_g: AmountDecimal | None = None
+    gross_issue_total_rounded_g: int | None = None
 
 
 class MenuRequirementReportGroupResponse(BaseModel):

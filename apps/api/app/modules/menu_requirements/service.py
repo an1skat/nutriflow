@@ -37,6 +37,7 @@ from app.modules.menu_requirements.reporting import (
     get_menu_requirement_report as get_menu_requirement_report,
 )
 from app.modules.menu_requirements.schemas import (
+    MenuRequirementAmountBasis,
     MenuRequirementReportGranularity,
 )
 from app.modules.menu_requirements.utils import (
@@ -142,14 +143,6 @@ async def generate_menu_requirements(
         )
 
     catalog = await Ingredient.find({"is_active": True}).sort("+normalized_name").to_list()
-    catalog_entries = [
-        IngredientCatalogEntry(
-            key=ingredient_key(ingredient.id, ingredient.name),
-            ingredient_id=ingredient.id,
-            name=ingredient.name,
-        )
-        for ingredient in catalog
-    ]
     catalog_by_id = {ingredient.id: ingredient for ingredient in catalog}
     catalog_by_name = _catalog_by_normalized_name(catalog)
     source_day_hash = hash_daily_menu(day)
@@ -170,7 +163,7 @@ async def generate_menu_requirements(
             (
                 group,
                 [calculation.dish for calculation in calculations],
-                build_ingredient_rows(catalog_entries, calculations),
+                build_ingredient_rows(calculations),
             )
         )
 
@@ -324,12 +317,15 @@ async def delete_menu_requirement(
 async def export_menu_requirement_workbook(
     requirement_id: PydanticObjectId,
     current_user: User,
+    *,
+    amount_basis: MenuRequirementAmountBasis = MenuRequirementAmountBasis.NET,
 ) -> tuple[str, bytes]:
     record = await get_menu_requirement(requirement_id, current_user)
     content = await asyncio.to_thread(
         build_menu_requirement_workbook,
         record.requirement,
         school_name=record.school_name,
+        amount_basis=amount_basis,
     )
     requirement = record.requirement
     filename = _xlsx_filename(
@@ -347,6 +343,7 @@ async def export_menu_requirement_report_workbook(
     granularity: MenuRequirementReportGranularity,
     current_user: User,
     *,
+    amount_basis: MenuRequirementAmountBasis = MenuRequirementAmountBasis.NET,
     meal_type: MealType | None = None,
     school_group_id: PydanticObjectId | None = None,
 ) -> tuple[str, bytes]:
@@ -359,7 +356,11 @@ async def export_menu_requirement_report_workbook(
         meal_type=meal_type,
         school_group_id=school_group_id,
     )
-    content = await asyncio.to_thread(build_menu_requirement_report_workbook, report)
+    content = await asyncio.to_thread(
+        build_menu_requirement_report_workbook,
+        report,
+        amount_basis=amount_basis,
+    )
     filename = _xlsx_filename(
         "menu-requirement",
         report.school_name,
@@ -370,11 +371,13 @@ async def export_menu_requirement_report_workbook(
 
 
 def build_ingredient_rows(
-    catalog: list[IngredientCatalogEntry],
     calculations: list[DishCalculation],
 ) -> list[MenuRequirementIngredientRow]:
-    rows: dict[str, IngredientCatalogEntry] = {entry.key: entry for entry in catalog}
-    amounts_by_row: dict[str, dict[PydanticObjectId, Decimal]] = defaultdict(
+    rows: dict[str, IngredientCatalogEntry] = {}
+    net_amounts_by_row: dict[str, dict[PydanticObjectId, Decimal]] = defaultdict(
+        lambda: defaultdict(lambda: Decimal("0"))
+    )
+    gross_amounts_by_row: dict[str, dict[PydanticObjectId, Decimal]] = defaultdict(
         lambda: defaultdict(lambda: Decimal("0"))
     )
     children_by_dish = {
@@ -392,39 +395,41 @@ def build_ingredient_rows(
                     name=line.name,
                 ),
             )
-            amounts_by_row[line.key][calculation.dish.menu_item_id] += line.net_per_person_g
+            net_amounts_by_row[line.key][
+                calculation.dish.menu_item_id
+            ] += line.net_per_person_g
+            if line.gross_per_person_g is not None:
+                gross_amounts_by_row[line.key][
+                    calculation.dish.menu_item_id
+                ] += line.gross_per_person_g
 
     result: list[MenuRequirementIngredientRow] = []
     for entry in sorted(rows.values(), key=lambda item: (item.name.casefold(), item.key)):
         cells = [
             MenuRequirementCell(
                 menu_item_id=calculation.dish.menu_item_id,
-                net_per_person_g=amounts_by_row[entry.key][calculation.dish.menu_item_id],
-            )
-            for calculation in calculations
-            if calculation.dish.menu_item_id in amounts_by_row[entry.key]
-        ]
-        per_person_total = sum(
-            (cell.net_per_person_g for cell in cells),
-            start=Decimal("0"),
-        )
-        issue_total_raw = sum(
-            (cell.net_per_person_g * children_by_dish[cell.menu_item_id] for cell in cells),
-            start=Decimal("0"),
-        )
-        result.append(
-            MenuRequirementIngredientRow(
-                key=entry.key,
-                ingredient_id=entry.ingredient_id,
-                ingredient_name=entry.name,
-                cells=cells,
-                per_person_total_g=per_person_total,
-                issue_total_raw_g=issue_total_raw,
-                issue_total_rounded_g=int(
-                    issue_total_raw.to_integral_value(rounding=ROUND_CEILING)
+                net_per_person_g=net_amounts_by_row[entry.key][calculation.dish.menu_item_id],
+                gross_per_person_g=(
+                    gross_amounts_by_row[entry.key][calculation.dish.menu_item_id]
+                    if calculation.dish.menu_item_id in gross_amounts_by_row[entry.key]
+                    else None
                 ),
             )
+            for calculation in calculations
+            if (
+                calculation.dish.menu_item_id in net_amounts_by_row[entry.key]
+                or calculation.dish.menu_item_id in gross_amounts_by_row[entry.key]
+            )
+        ]
+        row = _build_ingredient_row(
+            key=entry.key,
+            ingredient_id=entry.ingredient_id,
+            ingredient_name=entry.name,
+            cells=cells,
+            children_by_dish=children_by_dish,
         )
+        if row.has_values():
+            result.append(row)
     return result
 
 
@@ -459,7 +464,9 @@ def _build_updated_ingredient_rows(
     requirement: MenuRequirement,
     row_updates: list[Any],
 ) -> list[MenuRequirementIngredientRow]:
-    rows_by_key = {row.key: row for row in requirement.ingredient_rows}
+    rows_by_key = {
+        row.key: row for row in requirement.ingredient_rows if row.has_values()
+    }
     row_keys = set(rows_by_key)
     update_keys = [row.key for row in row_updates]
     if _duplicates(update_keys):
@@ -473,6 +480,7 @@ def _build_updated_ingredient_rows(
     updated_rows: list[MenuRequirementIngredientRow] = []
     for row_update in row_updates:
         original = rows_by_key[row_update.key]
+        original_cells = {cell.menu_item_id: cell for cell in original.cells}
         cell_ids = [cell.menu_item_id for cell in row_update.cells]
         if _duplicates(cell_ids):
             raise MenuRequirementValidationError("Ingredient row contains duplicate dish cells")
@@ -483,33 +491,93 @@ def _build_updated_ingredient_rows(
             MenuRequirementCell(
                 menu_item_id=cell.menu_item_id,
                 net_per_person_g=cell.net_per_person_g,
-            )
-            for cell in row_update.cells
-            if cell.net_per_person_g != Decimal("0")
-        ]
-        per_person_total = sum(
-            (cell.net_per_person_g for cell in cells),
-            start=Decimal("0"),
-        )
-        issue_total_raw = sum(
-            (cell.net_per_person_g * children_by_dish[cell.menu_item_id] for cell in cells),
-            start=Decimal("0"),
-        )
-        updated_rows.append(
-            MenuRequirementIngredientRow(
-                key=original.key,
-                ingredient_id=original.ingredient_id,
-                ingredient_name=row_update.ingredient_name,
-                cells=cells,
-                per_person_total_g=per_person_total,
-                issue_total_raw_g=issue_total_raw,
-                issue_total_rounded_g=int(
-                    issue_total_raw.to_integral_value(rounding=ROUND_CEILING)
+                gross_per_person_g=(
+                    cell.gross_per_person_g
+                    if cell.gross_per_person_g is not None
+                    else (
+                        original_cells[cell.menu_item_id].gross_per_person_g
+                        if cell.menu_item_id in original_cells
+                        else None
+                    )
                 ),
             )
+            for cell in row_update.cells
+        ]
+        row = _build_ingredient_row(
+            key=original.key,
+            ingredient_id=original.ingredient_id,
+            ingredient_name=row_update.ingredient_name,
+            cells=cells,
+            children_by_dish=children_by_dish,
         )
+        if row.has_values():
+            updated_rows.append(row)
 
     return updated_rows
+
+
+def _build_ingredient_row(
+    *,
+    key: str,
+    ingredient_id: PydanticObjectId | None,
+    ingredient_name: str,
+    cells: list[MenuRequirementCell],
+    children_by_dish: dict[PydanticObjectId, int],
+) -> MenuRequirementIngredientRow:
+    cells = [
+        cell
+        for cell in cells
+        if cell.net_per_person_g != Decimal("0")
+        or (
+            cell.gross_per_person_g is not None
+            and cell.gross_per_person_g != Decimal("0")
+        )
+    ]
+    per_person_total = sum(
+        (cell.net_per_person_g for cell in cells),
+        start=Decimal("0"),
+    )
+    issue_total_raw = sum(
+        (cell.net_per_person_g * children_by_dish[cell.menu_item_id] for cell in cells),
+        start=Decimal("0"),
+    )
+    gross_available = all(cell.gross_per_person_g is not None for cell in cells)
+    gross_per_person_total = (
+        sum(
+            (cell.gross_per_person_g for cell in cells if cell.gross_per_person_g is not None),
+            start=Decimal("0"),
+        )
+        if gross_available
+        else None
+    )
+    gross_issue_total_raw = (
+        sum(
+            (
+                cell.gross_per_person_g * children_by_dish[cell.menu_item_id]
+                for cell in cells
+                if cell.gross_per_person_g is not None
+            ),
+            start=Decimal("0"),
+        )
+        if gross_available
+        else None
+    )
+    return MenuRequirementIngredientRow(
+        key=key,
+        ingredient_id=ingredient_id,
+        ingredient_name=ingredient_name,
+        cells=cells,
+        per_person_total_g=per_person_total,
+        issue_total_raw_g=issue_total_raw,
+        issue_total_rounded_g=int(issue_total_raw.to_integral_value(rounding=ROUND_CEILING)),
+        gross_per_person_total_g=gross_per_person_total,
+        gross_issue_total_raw_g=gross_issue_total_raw,
+        gross_issue_total_rounded_g=(
+            int(gross_issue_total_raw.to_integral_value(rounding=ROUND_CEILING))
+            if gross_issue_total_raw is not None
+            else None
+        ),
+    )
 
 
 def _duplicates(values: list[Any]) -> set[Any]:
@@ -792,6 +860,7 @@ async def _product_ingredient_lines(
             ingredient_id=ingredient_id,
             name=name,
             net_per_person_g=amount,
+            gross_per_person_g=amount,
         )
     ]
     explicit = _menu_portion_contribution_snapshots(portion, item)
@@ -966,6 +1035,7 @@ def _ingredient_line(
         ingredient_id=ingredient_id,
         name=name,
         net_per_person_g=convert_to_grams(amount.net_amount, amount.unit) * factor,
+        gross_per_person_g=convert_to_grams(amount.gross_amount, amount.unit) * factor,
     )
 
 

@@ -278,9 +278,13 @@ def test_school_generates_and_regenerates_menu_requirement(seeded_client) -> Non
         row for row in requirement["ingredient_rows"] if row["ingredient_id"] == ingredient_id
     )
     assert carrot["cells"][0]["net_per_person_g"] == "20.25"
+    assert carrot["cells"][0]["gross_per_person_g"] == "25"
     assert carrot["per_person_total_g"] == "20.25"
     assert carrot["issue_total_raw_g"] == "60.75"
     assert carrot["issue_total_rounded_g"] == 61
+    assert carrot["gross_per_person_total_g"] == "25"
+    assert carrot["gross_issue_total_raw_g"] == "75"
+    assert carrot["gross_issue_total_rounded_g"] == 75
 
     school_export_response = client.get(
         f"/api/v1/menu-requirements/{requirement['id']}/export.xlsx"
@@ -294,6 +298,18 @@ def test_school_generates_and_regenerates_menu_requirement(seeded_client) -> Non
     assert exported_sheet["A1"].value == "МЕНЮ-ВИМОГА"
     assert exported_sheet["B2"].value == identities.own_school.name
     assert any(cell.value == "Морква" for row in exported_sheet.iter_rows() for cell in row)
+
+    gross_export_response = client.get(
+        f"/api/v1/menu-requirements/{requirement['id']}/export.xlsx",
+        params={"amount_basis": "gross"},
+    )
+    assert gross_export_response.status_code == 200
+    gross_sheet = openpyxl.load_workbook(BytesIO(gross_export_response.content)).active
+    gross_carrot_row = next(
+        row for row in gross_sheet.iter_rows() if row[0].value == "Морква"
+    )
+    assert gross_carrot_row[1].value == 25
+    assert gross_carrot_row[-1].value == 75
 
     regenerate_response = client.post(
         "/api/v1/menu-requirements/generate",
@@ -348,6 +364,9 @@ def test_school_generates_and_regenerates_menu_requirement(seeded_client) -> Non
     assert updated_carrot["per_person_total_g"] == "21.5"
     assert updated_carrot["issue_total_raw_g"] == "64.5"
     assert updated_carrot["issue_total_rounded_g"] == 65
+    assert updated_carrot["gross_per_person_total_g"] == "25"
+    assert updated_carrot["gross_issue_total_raw_g"] == "75"
+    assert updated_carrot["gross_issue_total_rounded_g"] == 75
 
     owner_export_response = client.get(f"/api/v1/menu-requirements/{requirement['id']}/export.xlsx")
     assert owner_export_response.status_code == 200

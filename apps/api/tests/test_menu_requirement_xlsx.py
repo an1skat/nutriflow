@@ -13,7 +13,10 @@ from app.modules.menu_requirements.models import (
     MenuRequirementDish,
     MenuRequirementIngredientRow,
 )
-from app.modules.menu_requirements.schemas import MenuRequirementReportResponse
+from app.modules.menu_requirements.schemas import (
+    MenuRequirementAmountBasis,
+    MenuRequirementReportResponse,
+)
 from app.modules.menu_requirements.xlsx import (
     build_menu_requirement_report_workbook,
     build_menu_requirement_workbook,
@@ -54,12 +57,24 @@ def test_builds_daily_menu_requirement_workbook() -> None:
                     MenuRequirementCell(
                         menu_item_id=dish_id,
                         net_per_person_g=Decimal("20.25"),
+                        gross_per_person_g=Decimal("25"),
                     )
                 ],
                 per_person_total_g=Decimal("20.25"),
                 issue_total_raw_g=Decimal("60.75"),
                 issue_total_rounded_g=61,
-            )
+                gross_per_person_total_g=Decimal("25"),
+                gross_issue_total_raw_g=Decimal("75"),
+                gross_issue_total_rounded_g=75,
+            ),
+            MenuRequirementIngredientRow(
+                key="ingredient:sugar",
+                ingredient_name="Цукор",
+                cells=[],
+                per_person_total_g=Decimal("0"),
+                issue_total_raw_g=Decimal("0"),
+                issue_total_rounded_g=0,
+            ),
         ],
         source_day_hash="a" * 64,
         generated_by=PydanticObjectId(),
@@ -86,6 +101,24 @@ def test_builds_daily_menu_requirement_workbook() -> None:
     ingredient_row = next(row for row in sheet.iter_rows() if row[0].value == "Морква")
     assert ingredient_row[1].value == 20.25
     assert ingredient_row[-1].value == 61
+    assert not any(cell.value == "Цукор" for row in sheet.iter_rows() for cell in row)
+
+    gross_workbook = openpyxl.load_workbook(
+        BytesIO(
+            build_menu_requirement_workbook(
+                requirement,
+                school_name="Ліцей №1",
+                amount_basis=MenuRequirementAmountBasis.GROSS,
+            )
+        )
+    )
+    gross_sheet = gross_workbook.active
+    gross_ingredient_row = next(
+        row for row in gross_sheet.iter_rows() if row[0].value == "Морква"
+    )
+    assert gross_sheet["B8"].value == "Брутто"
+    assert gross_ingredient_row[1].value == 25
+    assert gross_ingredient_row[-1].value == 75
 
 
 def test_builds_one_report_sheet_per_school_group() -> None:

@@ -7,7 +7,6 @@ from beanie import PydanticObjectId
 from app.modules.menu_requirements.models import MenuRequirementDish
 from app.modules.menu_requirements.service import (
     DishCalculation,
-    IngredientCatalogEntry,
     MenuRequirementValidationError,
     _resolve_requirement_portion_variant,
     build_ingredient_rows,
@@ -45,23 +44,10 @@ def make_dish(
 
 def test_builds_matrix_totals_with_per_dish_children_counts() -> None:
     salt_id = PydanticObjectId()
-    unused_id = PydanticObjectId()
     first_dish = make_dish(position=1, name="Перша страва", children_count=10)
     second_dish = make_dish(position=2, name="Друга страва", children_count=7)
 
     rows = build_ingredient_rows(
-        [
-            IngredientCatalogEntry(
-                key=f"ingredient:{salt_id}",
-                ingredient_id=salt_id,
-                name="Сіль",
-            ),
-            IngredientCatalogEntry(
-                key=f"ingredient:{unused_id}",
-                ingredient_id=unused_id,
-                name="Цукор",
-            ),
-        ],
         [
             DishCalculation(
                 dish=first_dish,
@@ -71,6 +57,7 @@ def test_builds_matrix_totals_with_per_dish_children_counts() -> None:
                         ingredient_id=salt_id,
                         name="Сіль",
                         net_per_person_g=Decimal("3.2"),
+                        gross_per_person_g=Decimal("4"),
                     )
                 ],
             ),
@@ -82,6 +69,7 @@ def test_builds_matrix_totals_with_per_dish_children_counts() -> None:
                         ingredient_id=salt_id,
                         name="Сіль",
                         net_per_person_g=Decimal("5.1"),
+                        gross_per_person_g=Decimal("6"),
                     )
                 ],
             ),
@@ -89,18 +77,22 @@ def test_builds_matrix_totals_with_per_dish_children_counts() -> None:
     )
 
     salt = next(row for row in rows if row.ingredient_id == salt_id)
-    unused = next(row for row in rows if row.ingredient_id == unused_id)
 
     assert [cell.net_per_person_g for cell in salt.cells] == [
         Decimal("3.2"),
         Decimal("5.1"),
     ]
+    assert [cell.gross_per_person_g for cell in salt.cells] == [
+        Decimal("4"),
+        Decimal("6"),
+    ]
     assert salt.per_person_total_g == Decimal("8.3")
     assert salt.issue_total_raw_g == Decimal("67.7")
     assert salt.issue_total_rounded_g == 68
-    assert unused.cells == []
-    assert unused.per_person_total_g == Decimal("0")
-    assert unused.issue_total_rounded_g == 0
+    assert salt.gross_per_person_total_g == Decimal("10")
+    assert salt.gross_issue_total_raw_g == Decimal("82")
+    assert salt.gross_issue_total_rounded_g == 82
+    assert len(rows) == 1
 
 
 def test_sums_duplicate_ingredient_lines_inside_one_dish() -> None:
@@ -108,7 +100,6 @@ def test_sums_duplicate_ingredient_lines_inside_one_dish() -> None:
     dish = make_dish(position=1, name="Страва", children_count=2)
 
     rows = build_ingredient_rows(
-        [],
         [
             DishCalculation(
                 dish=dish,
@@ -118,12 +109,14 @@ def test_sums_duplicate_ingredient_lines_inside_one_dish() -> None:
                         ingredient_id=ingredient_id,
                         name="Морква",
                         net_per_person_g=Decimal("10.25"),
+                        gross_per_person_g=Decimal("12.5"),
                     ),
                     IngredientLine(
                         key=f"ingredient:{ingredient_id}",
                         ingredient_id=ingredient_id,
                         name="Морква",
                         net_per_person_g=Decimal("2.75"),
+                        gross_per_person_g=Decimal("3.5"),
                     ),
                 ],
             )
@@ -135,6 +128,10 @@ def test_sums_duplicate_ingredient_lines_inside_one_dish() -> None:
     assert rows[0].per_person_total_g == Decimal("13.00")
     assert rows[0].issue_total_raw_g == Decimal("26.00")
     assert rows[0].issue_total_rounded_g == 26
+    assert rows[0].cells[0].gross_per_person_g == Decimal("16.0")
+    assert rows[0].gross_per_person_total_g == Decimal("16.0")
+    assert rows[0].gross_issue_total_raw_g == Decimal("32.0")
+    assert rows[0].gross_issue_total_rounded_g == 32
 
 
 @pytest.mark.parametrize(

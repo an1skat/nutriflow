@@ -627,7 +627,7 @@ def _build_report_groups(
             MenuRequirementAggregateStatus.COMPLETE,
         )
         for row in requirement.ingredient_rows:
-            if not row.cells:
+            if not row.has_values():
                 continue
             row_state = group_state["rows"].setdefault(
                 row.key,
@@ -638,12 +638,23 @@ def _build_report_groups(
                     "cells": {},
                     "issue_total_raw_g": Decimal("0"),
                     "issue_total_rounded_g": 0,
+                    "gross_issue_total_raw_g": Decimal("0"),
+                    "gross_issue_total_rounded_g": 0,
+                    "gross_available": True,
                 },
             )
             if row_state["ingredient_id"] is None and row.ingredient_id is not None:
                 row_state["ingredient_id"] = row.ingredient_id
             row_state["issue_total_raw_g"] += row.issue_total_raw_g
             row_state["issue_total_rounded_g"] += row.issue_total_rounded_g
+            if (
+                row.gross_issue_total_raw_g is None
+                or row.gross_issue_total_rounded_g is None
+            ):
+                row_state["gross_available"] = False
+            else:
+                row_state["gross_issue_total_raw_g"] += row.gross_issue_total_raw_g
+                row_state["gross_issue_total_rounded_g"] += row.gross_issue_total_rounded_g
 
             for cell in row.cells:
                 dish = dishes_by_item_id.get(cell.menu_item_id)
@@ -653,19 +664,43 @@ def _build_report_groups(
 
                 issue_total_raw = cell.net_per_person_g * dish.children_count
                 issue_total_rounded = _ceil_decimal(issue_total_raw)
+                gross_issue_total_raw = (
+                    cell.gross_per_person_g * dish.children_count
+                    if cell.gross_per_person_g is not None
+                    else None
+                )
+                gross_issue_total_rounded = (
+                    _ceil_decimal(gross_issue_total_raw)
+                    if gross_issue_total_raw is not None
+                    else None
+                )
                 cell_state = row_state["cells"].setdefault(
                     dish_key,
                     {
                         "dish_key": dish_key,
                         "net_per_person_g": Decimal("0"),
+                        "gross_per_person_g": Decimal("0"),
                         "issue_total_raw_g": Decimal("0"),
                         "issue_total_rounded_g": 0,
+                        "gross_issue_total_raw_g": Decimal("0"),
+                        "gross_issue_total_rounded_g": 0,
+                        "gross_available": True,
                         "breakdown": [],
                     },
                 )
                 cell_state["net_per_person_g"] += cell.net_per_person_g
                 cell_state["issue_total_raw_g"] += issue_total_raw
                 cell_state["issue_total_rounded_g"] += issue_total_rounded
+                if (
+                    cell.gross_per_person_g is None
+                    or gross_issue_total_raw is None
+                    or gross_issue_total_rounded is None
+                ):
+                    cell_state["gross_available"] = False
+                else:
+                    cell_state["gross_per_person_g"] += cell.gross_per_person_g
+                    cell_state["gross_issue_total_raw_g"] += gross_issue_total_raw
+                    cell_state["gross_issue_total_rounded_g"] += gross_issue_total_rounded
                 cell_state["breakdown"].append(
                     MenuRequirementReportBreakdownItemResponse(
                         requirement_id=requirement.id,
@@ -674,9 +709,12 @@ def _build_report_groups(
                         school_group_name=requirement.school_group_name,
                         menu_title=requirement.menu_title,
                         net_per_person_g=cell.net_per_person_g,
+                        gross_per_person_g=cell.gross_per_person_g,
                         children_count=dish.children_count,
                         issue_total_raw_g=issue_total_raw,
                         issue_total_rounded_g=issue_total_rounded,
+                        gross_issue_total_raw_g=gross_issue_total_raw,
+                        gross_issue_total_rounded_g=gross_issue_total_rounded,
                         status=requirement_status,
                     )
                 )
@@ -729,8 +767,23 @@ def _report_group_from_state(group_state: dict[str, Any]) -> MenuRequirementRepo
             MenuRequirementReportCellResponse(
                 dish_key=cell_state["dish_key"],
                 net_per_person_g=cell_state["net_per_person_g"],
+                gross_per_person_g=(
+                    cell_state["gross_per_person_g"]
+                    if cell_state["gross_available"]
+                    else None
+                ),
                 issue_total_raw_g=cell_state["issue_total_raw_g"],
                 issue_total_rounded_g=cell_state["issue_total_rounded_g"],
+                gross_issue_total_raw_g=(
+                    cell_state["gross_issue_total_raw_g"]
+                    if cell_state["gross_available"]
+                    else None
+                ),
+                gross_issue_total_rounded_g=(
+                    cell_state["gross_issue_total_rounded_g"]
+                    if cell_state["gross_available"]
+                    else None
+                ),
                 breakdown=sorted(
                     cell_state["breakdown"],
                     key=lambda item: (
@@ -748,6 +801,18 @@ def _report_group_from_state(group_state: dict[str, Any]) -> MenuRequirementRepo
             (cell.net_per_person_g for cell in cells),
             start=Decimal("0"),
         )
+        gross_per_person_total = (
+            sum(
+                (
+                    cell.gross_per_person_g
+                    for cell in cells
+                    if cell.gross_per_person_g is not None
+                ),
+                start=Decimal("0"),
+            )
+            if all(cell.gross_per_person_g is not None for cell in cells)
+            else None
+        )
         rows.append(
             MenuRequirementReportIngredientRowResponse(
                 key=row_state["key"],
@@ -757,6 +822,17 @@ def _report_group_from_state(group_state: dict[str, Any]) -> MenuRequirementRepo
                 per_person_total_g=per_person_total,
                 issue_total_raw_g=row_state["issue_total_raw_g"],
                 issue_total_rounded_g=row_state["issue_total_rounded_g"],
+                gross_per_person_total_g=gross_per_person_total,
+                gross_issue_total_raw_g=(
+                    row_state["gross_issue_total_raw_g"]
+                    if row_state["gross_available"]
+                    else None
+                ),
+                gross_issue_total_rounded_g=(
+                    row_state["gross_issue_total_rounded_g"]
+                    if row_state["gross_available"]
+                    else None
+                ),
             )
         )
 
@@ -806,9 +882,12 @@ def _append_missing_breakdowns(
                 school_group_name=school_group.name,
                 menu_title=expected_day.menu_title,
                 net_per_person_g=None,
+                gross_per_person_g=None,
                 children_count=None,
                 issue_total_raw_g=None,
                 issue_total_rounded_g=None,
+                gross_issue_total_raw_g=None,
+                gross_issue_total_rounded_g=None,
                 status=MenuRequirementAggregateStatus.MISSING,
             )
         )

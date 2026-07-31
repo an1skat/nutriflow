@@ -255,10 +255,16 @@ def test_week_report_aggregates_daily_requirements_with_cell_breakdown(
     carrot = next(row for row in group["ingredient_rows"] if row["ingredient_id"] == ingredient_id)
     cell = carrot["cells"][0]
     assert Decimal(cell["net_per_person_g"]) == Decimal("40.50")
+    assert Decimal(cell["gross_per_person_g"]) == Decimal("50")
     assert Decimal(cell["issue_total_raw_g"]) == Decimal("101.25")
     assert cell["issue_total_rounded_g"] == 102
+    assert Decimal(cell["gross_issue_total_raw_g"]) == Decimal("125")
+    assert cell["gross_issue_total_rounded_g"] == 125
     assert Decimal(carrot["issue_total_raw_g"]) == Decimal("101.25")
     assert carrot["issue_total_rounded_g"] == 102
+    assert Decimal(carrot["gross_per_person_total_g"]) == Decimal("50")
+    assert Decimal(carrot["gross_issue_total_raw_g"]) == Decimal("125")
+    assert carrot["gross_issue_total_rounded_g"] == 125
 
     breakdown = cell["breakdown"]
     assert [item["service_date"] for item in breakdown] == [
@@ -269,9 +275,13 @@ def test_week_report_aggregates_daily_requirements_with_cell_breakdown(
     assert breakdown[0]["status"] == "complete"
     assert breakdown[0]["children_count"] == 3
     assert Decimal(breakdown[0]["issue_total_raw_g"]) == Decimal("60.75")
+    assert Decimal(breakdown[0]["gross_per_person_g"]) == Decimal("25")
+    assert Decimal(breakdown[0]["gross_issue_total_raw_g"]) == Decimal("75")
+    assert breakdown[0]["gross_issue_total_rounded_g"] == 75
     assert breakdown[1]["status"] == "missing"
     assert breakdown[1]["requirement_id"] is None
     assert breakdown[1]["net_per_person_g"] is None
+    assert breakdown[1]["gross_per_person_g"] is None
     assert breakdown[2]["status"] == "complete"
     assert breakdown[2]["children_count"] == 2
 

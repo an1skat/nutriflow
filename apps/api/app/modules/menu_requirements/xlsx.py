@@ -8,6 +8,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 from app.modules.menu_requirements.models import MenuRequirement
 from app.modules.menu_requirements.schemas import (
+    MenuRequirementAmountBasis,
     MenuRequirementReportGroupResponse,
     MenuRequirementReportResponse,
 )
@@ -19,12 +20,14 @@ THIN_GRAY = Side(style="thin", color="CBD5E1")
 TABLE_BORDER = Border(left=THIN_GRAY, right=THIN_GRAY, top=THIN_GRAY, bottom=THIN_GRAY)
 MEAL_TYPE_LABELS = {"breakfast": "Сніданок", "lunch": "Обід"}
 GRANULARITY_LABELS = {"day": "день", "week": "тиждень", "month": "місяць"}
+AMOUNT_BASIS_LABELS = {"gross": "Брутто", "net": "Нетто"}
 
 
 def build_menu_requirement_workbook(
     requirement: MenuRequirement,
     *,
     school_name: str,
+    amount_basis: MenuRequirementAmountBasis = MenuRequirementAmountBasis.NET,
 ) -> bytes:
     workbook = Workbook()
     sheet = workbook.active
@@ -37,6 +40,7 @@ def build_menu_requirement_workbook(
         ("Прийом їжі", MEAL_TYPE_LABELS[requirement.meal_type.value]),
         ("Меню", requirement.menu_title),
         ("Версія", requirement.revision),
+        ("Тип ваги", AMOUNT_BASIS_LABELS[amount_basis.value]),
     ]
     table_row = _write_sheet_heading(sheet, "МЕНЮ-ВИМОГА", metadata)
     headers = [
@@ -51,22 +55,52 @@ def build_menu_requirement_workbook(
     _write_table_header(sheet, table_row, headers)
 
     dish_ids = [dish.menu_item_id for dish in requirement.dishes]
+    ingredient_rows = [
+        row
+        for row in requirement.ingredient_rows
+        if any(
+            (
+                cell.gross_per_person_g
+                if amount_basis == MenuRequirementAmountBasis.GROSS
+                else cell.net_per_person_g
+            )
+            not in {None, 0}
+            for cell in row.cells
+        )
+    ]
     for row_number, ingredient in enumerate(
-        requirement.ingredient_rows,
+        ingredient_rows,
         start=table_row + 1,
     ):
         cells_by_dish = {cell.menu_item_id: cell for cell in ingredient.cells}
         values: list[Any] = [ingredient.ingredient_name]
         values.extend(
-            _excel_number(cells_by_dish[dish_id].net_per_person_g)
+            _excel_number(
+                cells_by_dish[dish_id].gross_per_person_g
+                if amount_basis == MenuRequirementAmountBasis.GROSS
+                else cells_by_dish[dish_id].net_per_person_g
+            )
             if dish_id in cells_by_dish
+            and (
+                amount_basis == MenuRequirementAmountBasis.NET
+                or cells_by_dish[dish_id].gross_per_person_g is not None
+            )
             else None
             for dish_id in dish_ids
         )
+        per_person_total = (
+            ingredient.gross_per_person_total_g
+            if amount_basis == MenuRequirementAmountBasis.GROSS
+            else ingredient.per_person_total_g
+        )
         values.extend(
             [
-                _excel_number(ingredient.per_person_total_g),
-                ingredient.issue_total_rounded_g,
+                _excel_number(per_person_total) if per_person_total is not None else None,
+                (
+                    ingredient.gross_issue_total_rounded_g
+                    if amount_basis == MenuRequirementAmountBasis.GROSS
+                    else ingredient.issue_total_rounded_g
+                ),
             ]
         )
         _write_table_row(sheet, row_number, values, total_columns=2)
@@ -74,7 +108,7 @@ def build_menu_requirement_workbook(
     _finish_table_sheet(
         sheet,
         header_row=table_row,
-        last_row=table_row + len(requirement.ingredient_rows),
+        last_row=table_row + len(ingredient_rows),
         column_count=len(headers),
     )
     return _workbook_bytes(workbook)
@@ -82,13 +116,18 @@ def build_menu_requirement_workbook(
 
 def build_menu_requirement_report_workbook(
     report: MenuRequirementReportResponse,
+    *,
+    amount_basis: MenuRequirementAmountBasis = MenuRequirementAmountBasis.NET,
 ) -> bytes:
     workbook = Workbook()
     workbook.remove(workbook.active)
 
     if not report.groups:
         sheet = workbook.create_sheet("Меню-вимога")
-        metadata = _report_metadata(report)
+        metadata = [
+            *_report_metadata(report),
+            ("Тип ваги", AMOUNT_BASIS_LABELS[amount_basis.value]),
+        ]
         message_row = _write_sheet_heading(sheet, "МЕНЮ-ВИМОГА", metadata)
         sheet.cell(message_row, 1, "Немає даних меню-вимог за обраний період.")
         sheet.column_dimensions["A"].width = 48
@@ -97,7 +136,7 @@ def build_menu_requirement_report_workbook(
         for group in report.groups:
             title = _unique_sheet_title(group.school_group_name, used_titles)
             sheet = workbook.create_sheet(title)
-            _write_report_group(sheet, report, group)
+            _write_report_group(sheet, report, group, amount_basis=amount_basis)
 
     return _workbook_bytes(workbook)
 
@@ -106,10 +145,13 @@ def _write_report_group(
     sheet: Worksheet,
     report: MenuRequirementReportResponse,
     group: MenuRequirementReportGroupResponse,
+    *,
+    amount_basis: MenuRequirementAmountBasis,
 ) -> None:
     metadata = [
         *_report_metadata(report),
         ("Вікова група", group.age_group.value),
+        ("Тип ваги", AMOUNT_BASIS_LABELS[amount_basis.value]),
     ]
     table_row = _write_sheet_heading(sheet, "МЕНЮ-ВИМОГА", metadata)
     headers = [
@@ -118,23 +160,51 @@ def _write_report_group(
             (f"{dish.name}\nВихід: {dish.yield_amount} г\nДітей: {dish.children_count_total}")
             for dish in group.dishes
         ],
-        "Разом нетто, г",
+        f"Разом {AMOUNT_BASIS_LABELS[amount_basis.value].casefold()}, г",
         "До видачі, г",
     ]
     _write_table_header(sheet, table_row, headers)
 
     dish_keys = [dish.aggregate_key for dish in group.dishes]
-    for row_number, ingredient in enumerate(group.ingredient_rows, start=table_row + 1):
+    ingredient_rows = [
+        ingredient
+        for ingredient in group.ingredient_rows
+        if any(
+            (
+                cell.gross_per_person_g
+                if amount_basis == MenuRequirementAmountBasis.GROSS
+                else cell.net_per_person_g
+            )
+            not in {None, 0}
+            for cell in ingredient.cells
+        )
+    ]
+    for row_number, ingredient in enumerate(ingredient_rows, start=table_row + 1):
         cells_by_dish = {cell.dish_key: cell for cell in ingredient.cells}
         values: list[Any] = [ingredient.ingredient_name]
         values.extend(
-            cells_by_dish[dish_key].issue_total_rounded_g if dish_key in cells_by_dish else None
+            (
+                cells_by_dish[dish_key].gross_issue_total_rounded_g
+                if amount_basis == MenuRequirementAmountBasis.GROSS
+                else cells_by_dish[dish_key].issue_total_rounded_g
+            )
+            if dish_key in cells_by_dish
+            else None
             for dish_key in dish_keys
+        )
+        per_person_total = (
+            ingredient.gross_per_person_total_g
+            if amount_basis == MenuRequirementAmountBasis.GROSS
+            else ingredient.per_person_total_g
         )
         values.extend(
             [
-                _excel_number(ingredient.per_person_total_g),
-                ingredient.issue_total_rounded_g,
+                _excel_number(per_person_total) if per_person_total is not None else None,
+                (
+                    ingredient.gross_issue_total_rounded_g
+                    if amount_basis == MenuRequirementAmountBasis.GROSS
+                    else ingredient.issue_total_rounded_g
+                ),
             ]
         )
         _write_table_row(sheet, row_number, values, total_columns=2)
@@ -142,7 +212,7 @@ def _write_report_group(
     _finish_table_sheet(
         sheet,
         header_row=table_row,
-        last_row=table_row + len(group.ingredient_rows),
+        last_row=table_row + len(ingredient_rows),
         column_count=len(headers),
     )
 
