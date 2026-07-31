@@ -259,7 +259,7 @@ function WeeklyMenuArchiveItem({
     <article
       className={`border p-4 shadow-[inset_0_1px_0_rgb(255_255_255/55%)] transition-colors ${
         selected
-          ? 'border-[var(--nf-brand-dark)] bg-emerald-50 ring-1 ring-[var(--nf-brand)]'
+          ? 'border-(--nf-brand-dark) bg-emerald-50 ring-1 ring-(--nf-brand)'
           : 'border-slate-300 bg-slate-100'
       }`}
     >
@@ -276,7 +276,7 @@ function WeeklyMenuArchiveItem({
             <span
               className={`inline-flex size-6 items-center justify-center border ${
                 selected
-                  ? 'border-[var(--nf-brand-dark)] bg-[var(--nf-brand)] text-white'
+                  ? 'border-(--nf-brand-dark) bg-(--nf-brand) text-white'
                   : 'border-slate-400 bg-white text-transparent'
               }`}
               aria-hidden

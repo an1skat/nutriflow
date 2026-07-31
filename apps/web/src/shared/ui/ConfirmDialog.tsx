@@ -95,17 +95,17 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
           <section
             aria-modal="true"
             aria-labelledby="confirm-dialog-title"
-            className="w-full max-w-md border border-[var(--nf-line-strong)] bg-white shadow-xl"
+            className="w-full max-w-md border border-(--nf-line-strong) bg-white shadow-xl"
             role="dialog"
             onMouseDown={(event) => event.stopPropagation()}
           >
-            <div className="flex items-start justify-between gap-4 border-b border-[var(--nf-line)] bg-[var(--nf-panel-head)] px-4 py-3">
+            <div className="flex items-start justify-between gap-4 border-b border-(--nf-line) bg-(--nf-panel-head) px-4 py-3">
               <div className="flex min-w-0 items-start gap-3">
                 <span
                   className={`mt-0.5 inline-flex size-8 shrink-0 items-center justify-center border ${
                     pendingConfirm.variant === 'danger'
-                      ? 'border-red-200 bg-red-50 text-[var(--nf-danger)]'
-                      : 'border-amber-200 bg-amber-50 text-[var(--nf-warning)]'
+                      ? 'border-red-200 bg-red-50 text-(--nf-danger)'
+                      : 'border-amber-200 bg-amber-50 text-(--nf-warning)'
                   }`}
                 >
                   <AlertTriangle className="size-4" aria-hidden />

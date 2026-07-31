@@ -211,7 +211,7 @@ function IngredientsTab({
             <div className="nf-empty">Інгредієнтів не знайдено.</div>
           ) : null}
           {ingredients.data?.items.length ? (
-            <ul className="divide-y divide-[var(--nf-line)]">
+            <ul className="divide-y divide-(--nf-line)">
               {ingredients.data.items.map((item) => (
                 <li key={item.id} className="py-2">
                   {canManage && editingId === item.id ? (
@@ -323,7 +323,7 @@ function AllergensTab({
             <div className="nf-empty">Алергенів немає.</div>
           ) : null}
           {allergens.data?.items.length ? (
-            <ul className="divide-y divide-[var(--nf-line)]">
+            <ul className="divide-y divide-(--nf-line)">
               {allergens.data.items.map((item) => (
                 <li key={item.id} className="py-2">
                   {canManage && editingId === item.id ? (

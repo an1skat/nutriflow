@@ -23,7 +23,7 @@ export function PaginationControls({
   return (
     <nav
       aria-label="Пагінація"
-      className="mt-3 flex items-center justify-between gap-4 border-t border-[var(--nf-line)] pt-3"
+      className="mt-3 flex items-center justify-between gap-4 border-t border-(--nf-line) pt-3"
     >
       <button
         type="button"

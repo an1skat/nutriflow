@@ -363,7 +363,7 @@ export function NormComplianceReportView({
             <p className="text-xs text-slate-600">Натисніть рядок для деталізації</p>
           </div>
           <div className="overflow-x-auto">
-            <table className="nf-table min-w-[1120px]">
+            <table className="nf-table min-w-280">
               <thead>
                 <tr>
                   <th>Група продуктів</th>
@@ -403,11 +403,11 @@ export function NormComplianceReportView({
                           >
                             {row.normative_group_name}
                           </button>
-                          <p className="mt-0.5 max-w-[260px] text-[11px] text-slate-500">
+                          <p className="mt-0.5 max-w-65 text-[11px] text-slate-500">
                             Додаток {row.source_appendix}
                           </p>
                         </td>
-                        <td className="max-w-[260px] text-xs text-slate-700">{row.frequency}</td>
+                        <td className="max-w-65 text-xs text-slate-700">{row.frequency}</td>
                         <NumberCell value={row.required_portions} />
                         <NumberCell value={row.actual_portions} />
                         <AmountCell value={row.required_amount} unit={row.unit} />

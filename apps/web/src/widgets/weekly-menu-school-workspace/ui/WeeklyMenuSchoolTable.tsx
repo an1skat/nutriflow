@@ -39,7 +39,7 @@ export function WeeklyMenuSchoolTable({ menu }: { menu: WeeklyMenu }) {
       </div>
 
       {menu.notes ? (
-        <div className="border-b border-[var(--nf-line)] bg-slate-50 px-5 py-3 text-sm text-slate-700">
+        <div className="border-b border-(--nf-line) bg-slate-50 px-5 py-3 text-sm text-slate-700">
           {menu.notes}
         </div>
       ) : null}

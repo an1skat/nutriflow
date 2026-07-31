@@ -65,7 +65,7 @@ export function SchoolGroupsPanel(props: SchoolGroupsPanelProps) {
             {isEditable ? (
               <div className="grid gap-4">
                 {groupsQuery.data.items.map((group) => (
-                  <div key={group.id} className="border border-[var(--nf-line)] bg-white p-4">
+                  <div key={group.id} className="border border-(--nf-line) bg-white p-4">
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <h3 className="text-sm font-bold text-slate-900">{group.name}</h3>
@@ -109,7 +109,7 @@ export function SchoolGroupsPanel(props: SchoolGroupsPanelProps) {
       </div>
 
       {isEditable && groupsQuery.data ? (
-        <div className="border-t border-[var(--nf-line)] p-4">
+        <div className="border-t border-(--nf-line) p-4">
           <h3 className="text-sm font-bold text-slate-900">Додати групу</h3>
           <p className="mt-1 text-xs leading-5 text-slate-600">
             Для MVP школа має стандартні вікові групи. Якщо групу деактивували, її можна повернути

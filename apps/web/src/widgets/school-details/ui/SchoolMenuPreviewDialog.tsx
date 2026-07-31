@@ -53,7 +53,7 @@ export function SchoolMenuPreviewDialog({ menu, onClose }: SchoolMenuPreviewDial
         role="dialog"
         aria-modal="true"
         aria-labelledby="school-menu-preview-title"
-        className="flex max-h-[90vh] w-full max-w-[1220px] flex-col overflow-hidden rounded-lg border border-slate-300 bg-white shadow-2xl"
+        className="flex max-h-[90vh] w-full max-w-305 flex-col overflow-hidden rounded-lg border border-slate-300 bg-white shadow-2xl"
       >
         <header className="flex items-start justify-between gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4">
           <div className="min-w-0">

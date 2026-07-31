@@ -82,7 +82,7 @@ export function WeeklyMenuImportPreviewDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="weekly-menu-preview-title"
-        className="flex max-h-[90vh] w-full max-w-[1220px] flex-col overflow-hidden rounded-lg border border-slate-300 bg-white shadow-2xl"
+        className="flex max-h-[90vh] w-full max-w-305 flex-col overflow-hidden rounded-lg border border-slate-300 bg-white shadow-2xl"
       >
         <header className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4">
           <div className="min-w-0">
@@ -171,7 +171,7 @@ export function WeeklyMenuImportPreviewDialog({
                         type="button"
                         className={`w-full border px-3 py-2 text-left text-sm transition ${
                           isActive
-                            ? 'border-[var(--nf-brand-dark)] bg-[var(--nf-brand)] text-white'
+                            ? 'border-(--nf-brand-dark) bg-(--nf-brand) text-white'
                             : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                         }`}
                         onClick={() => onActiveSheetChange(index)}

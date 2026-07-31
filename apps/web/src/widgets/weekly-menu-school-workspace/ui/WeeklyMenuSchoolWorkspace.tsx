@@ -101,8 +101,8 @@ export function WeeklyMenuSchoolWorkspace() {
                     onClick={() => setSelectedMenuId(menu.id)}
                     className={`w-full border p-3 text-left ${
                       isActive
-                        ? 'border-[var(--nf-brand-dark)] bg-[var(--nf-panel-head)]'
-                        : 'border-[var(--nf-line)] bg-white hover:bg-slate-50'
+                        ? 'border-(--nf-brand-dark) bg-(--nf-panel-head)'
+                        : 'border-(--nf-line) bg-white hover:bg-slate-50'
                     }`}
                   >
                     <p className="font-bold text-slate-900">{menu.title}</p>
@@ -229,7 +229,7 @@ function ArchivedSchoolMenuItem({
   };
 
   return (
-    <div className="border border-[var(--nf-line)] bg-white p-3">
+    <div className="border border-(--nf-line) bg-white p-3">
       <p className="font-bold text-slate-900">{menu.title}</p>
       <p className="mt-1 text-xs text-slate-600">
         {menu.meal_type === 'lunch' ? 'Обід' : 'Сніданок'}

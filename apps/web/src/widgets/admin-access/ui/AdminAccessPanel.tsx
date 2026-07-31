@@ -156,7 +156,7 @@ function AdminUserAccessRow({ admin }: { admin: AdminUser }) {
   };
 
   return (
-    <article className="border border-[var(--nf-line)] bg-white p-4">
+    <article className="border border-(--nf-line) bg-white p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-base font-bold text-slate-900">{admin.username}</h3>
@@ -227,7 +227,7 @@ function AdminUserAccessRow({ admin }: { admin: AdminUser }) {
         {adminPermissionOptions.map((permission) => (
           <label
             key={permission.value}
-            className="flex min-h-11 items-center gap-2 border border-[var(--nf-line)] px-3 text-sm"
+            className="flex min-h-11 items-center gap-2 border border-(--nf-line) px-3 text-sm"
           >
             <input
               type="checkbox"

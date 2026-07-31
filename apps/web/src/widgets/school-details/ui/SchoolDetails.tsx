@@ -79,7 +79,7 @@ export function SchoolDetails({ schoolId }: { schoolId: string }) {
       </section>
 
       <details className="mt-5">
-        <summary className="cursor-pointer border border-[var(--nf-line-strong)] bg-[var(--nf-panel-head)] px-4 py-3 text-sm font-bold text-slate-900">
+        <summary className="cursor-pointer border border-(--nf-line-strong) bg-(--nf-panel-head) px-4 py-3 text-sm font-bold text-slate-900">
           Групи школи
         </summary>
         <SchoolGroupsPanel mode="admin" schoolId={schoolId} />

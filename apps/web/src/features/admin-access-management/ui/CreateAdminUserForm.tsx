@@ -134,7 +134,7 @@ export function CreateAdminUserForm() {
             {adminPermissionOptions.map((permission) => (
               <label
                 key={permission.value}
-                className="flex min-h-16 gap-3 border border-[var(--nf-line)] bg-white p-3 text-sm"
+                className="flex min-h-16 gap-3 border border-(--nf-line) bg-white p-3 text-sm"
               >
                 <input
                   type="checkbox"

@@ -48,7 +48,7 @@ export function WeeklyMenuNutritionTable({
   return (
     <div className={`${maxHeightClass} overflow-auto bg-slate-50`}>
       <div
-        className="sticky top-0 z-20 grid min-w-[1080px] border-b border-slate-300 bg-slate-100 text-xs font-bold uppercase text-slate-600 shadow-sm"
+        className="sticky top-0 z-20 grid min-w-270 border-b border-slate-300 bg-slate-100 text-xs font-bold uppercase text-slate-600 shadow-sm"
         style={MENU_GRID_STYLE}
       >
         <TableCell className="py-2">№</TableCell>
@@ -61,7 +61,7 @@ export function WeeklyMenuNutritionTable({
         ))}
       </div>
 
-      <div className="min-w-[1080px] bg-white">
+      <div className="min-w-270 bg-white">
         {days.map((day) => (
           <DaySection key={day.weekday} day={day} />
         ))}

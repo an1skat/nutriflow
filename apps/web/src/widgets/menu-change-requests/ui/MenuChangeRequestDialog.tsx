@@ -229,7 +229,7 @@ function ComparisonTable({
         {isBefore ? 'Було' : 'Стало'}
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[420px] border-collapse text-sm">
+        <table className="w-full min-w-105 border-collapse text-sm">
           <thead>
             <tr className="bg-slate-50 text-left text-[11px] uppercase tracking-wide text-slate-600">
               <th className="w-40 border-b border-slate-200 px-3 py-2">Поле</th>
@@ -288,7 +288,7 @@ function ValuePreview({ field, value }: { field: string; value: unknown }) {
   if (typeof value === 'object') {
     return 'Дані оновлено';
   }
-  return <span className="break-words text-slate-800">{String(value)}</span>;
+  return <span className="wrap-break-word text-slate-800">{String(value)}</span>;
 }
 
 function PortionsPreview({ portions }: { portions: unknown[] }) {
