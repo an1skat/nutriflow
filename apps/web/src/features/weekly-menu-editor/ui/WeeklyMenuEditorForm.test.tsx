@@ -318,7 +318,7 @@ describe('WeeklyMenuEditorForm', () => {
     fireEvent.click(screen.getByRole('button', { name: /Позиція 1/i }));
 
     expect(screen.getByText('Промисловий виріб обрано')).toBeInTheDocument();
-    expect(screen.getByText('Сік пастеризований')).toBeInTheDocument();
+    expect(screen.getAllByText('Сік пастеризований')).toHaveLength(2);
     expect(
       screen.queryByPlaceholderText('Пошук інгредієнта або готового виробу')
     ).not.toBeInTheDocument();
