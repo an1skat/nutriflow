@@ -7,6 +7,7 @@ import { useForm } from 'react-hook-form';
 
 import type { SchoolGroup } from '@/entities/school-group/model/SchoolGroup';
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 
 import {
   type EditSchoolGroupFormValues,
@@ -91,7 +92,11 @@ export function EditSchoolGroupForm({ schoolId, group }: EditSchoolGroupFormProp
         disabled={form.formState.isSubmitting}
         className="nf-button nf-button-primary"
       >
-        {form.formState.isSubmitting ? 'Зберігаємо…' : 'Зберегти групу'}
+        {form.formState.isSubmitting ? (
+          <LoadingSpinner size="sm" label="Зберігаємо…" />
+        ) : (
+          'Зберегти групу'
+        )}
       </button>
     </form>
   );

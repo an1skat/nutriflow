@@ -10,7 +10,13 @@ import { toast } from 'sonner';
 import { allergensQueryOptions } from '@/entities/recipe/api/RecipeQueries';
 import { WEEKDAY_LABELS, WEEKDAY_ORDER } from '@/entities/weekly-menu/model/WeeklyMenu';
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 
+import {
+  clearWeeklyMenuDraft,
+  loadWeeklyMenuDraft,
+  saveWeeklyMenuDraft,
+} from '../model/WeeklyMenuDraftStorage';
 import {
   type WeeklyMenuFormValues,
   createBlankDay,
@@ -19,11 +25,6 @@ import {
   resolveEffectiveStartDate,
   weeklyMenuFormSchema,
 } from '../model/WeeklyMenuFormSchema';
-import {
-  clearWeeklyMenuDraft,
-  loadWeeklyMenuDraft,
-  saveWeeklyMenuDraft,
-} from '../model/WeeklyMenuDraftStorage';
 import { DailyMenuDayEditor } from './editor/WeeklyMenuDayEditor';
 import { ReadonlyFieldValue } from './editor/WeeklyMenuItemFields';
 
@@ -462,7 +463,7 @@ export function WeeklyMenuEditorForm({
             </button>
           ) : null}
           <button type="submit" disabled={saving} className="nf-button nf-button-primary">
-            {saving ? 'Зберігаємо…' : submitLabel}
+            {saving ? <LoadingSpinner size="sm" label="Зберігаємо…" /> : submitLabel}
           </button>
           {form.formState.isDirty ? (
             <p className="text-xs text-slate-600">Є незбережені зміни у поточній формі.</p>

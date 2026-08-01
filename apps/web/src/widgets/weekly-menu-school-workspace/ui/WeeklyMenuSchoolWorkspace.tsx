@@ -14,6 +14,7 @@ import {
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
 import { formatDate } from '@/shared/lib/FormatDate';
 import { useConfirm } from '@/shared/ui/ConfirmDialog';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 import { RequestError } from '@/shared/ui/RequestError';
 
 import { WeeklyMenuSchoolTable } from './WeeklyMenuSchoolTable';
@@ -77,11 +78,7 @@ export function WeeklyMenuSchoolWorkspace() {
               <h2 className="nf-panel-title">Доступні меню</h2>
             </div>
             <div className="nf-panel-body space-y-3">
-              {menus.isPending ? (
-                <p role="status" className="text-sm text-slate-600">
-                  Завантажуємо меню…
-                </p>
-              ) : null}
+              {menus.isPending ? <LoadingSpinner label="Завантажуємо меню…" /> : null}
 
               {menus.isError ? (
                 <RequestError error={menus.error} onRetry={() => void menus.refetch()} />
@@ -125,11 +122,7 @@ export function WeeklyMenuSchoolWorkspace() {
               <h2 className="nf-panel-title">Архів школи</h2>
             </div>
             <div className="nf-panel-body space-y-3">
-              {archivedMenus.isPending ? (
-                <p role="status" className="text-sm text-slate-600">
-                  Завантажуємо архів…
-                </p>
-              ) : null}
+              {archivedMenus.isPending ? <LoadingSpinner label="Завантажуємо архів…" /> : null}
 
               {archivedMenus.isError ? (
                 <RequestError
@@ -166,8 +159,14 @@ export function WeeklyMenuSchoolWorkspace() {
                   disabled={archiveSelectedMenu.isPending}
                   onClick={() => void handleArchiveSelectedMenu()}
                 >
-                  <Archive className="size-4" aria-hidden />
-                  {archiveSelectedMenu.isPending ? 'Архівуємо…' : 'Архівувати у школі'}
+                  {archiveSelectedMenu.isPending ? (
+                    <LoadingSpinner size="sm" label="Архівуємо…" />
+                  ) : (
+                    <>
+                      <Archive className="size-4" aria-hidden />
+                      Архівувати у школі
+                    </>
+                  )}
                 </button>
               </div>
             </section>
@@ -178,9 +177,7 @@ export function WeeklyMenuSchoolWorkspace() {
           {selectedMenu.isPending && effectiveSelectedMenuId ? (
             <section className="nf-panel">
               <div className="nf-panel-body">
-                <p role="status" className="text-sm text-slate-600">
-                  Завантажуємо вибране меню…
-                </p>
+                <LoadingSpinner label="Завантажуємо вибране меню…" />
               </div>
             </section>
           ) : null}
@@ -242,8 +239,14 @@ function ArchivedSchoolMenuItem({
         disabled={restoreMenu.isPending}
         onClick={() => void handleRestore()}
       >
-        <RotateCcw className="size-4" aria-hidden />
-        {restoreMenu.isPending ? 'Повертаємо…' : 'Повернути'}
+        {restoreMenu.isPending ? (
+          <LoadingSpinner size="sm" label="Повертаємо…" />
+        ) : (
+          <>
+            <RotateCcw className="size-4" aria-hidden />
+            Повернути
+          </>
+        )}
       </button>
     </div>
   );

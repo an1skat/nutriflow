@@ -32,6 +32,7 @@ import { WeeklyMenuExcelTools } from '@/features/weekly-menu-excel/ui/WeeklyMenu
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
 import { formatDate } from '@/shared/lib/FormatDate';
 import { useConfirm } from '@/shared/ui/ConfirmDialog';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 import { RequestError } from '@/shared/ui/RequestError';
 
 import { WeeklyMenuPicker } from './WeeklyMenuPicker';
@@ -522,9 +523,7 @@ export function WeeklyMenuAdminWorkspace() {
                     </div>
 
                     {schools.isPending || (user.role === 'OWNER' && adminUsers.isPending) ? (
-                      <p role="status" className="text-sm text-slate-600">
-                        Завантажуємо школи для розсилки…
-                      </p>
+                      <LoadingSpinner label="Завантажуємо школи для розсилки…" />
                     ) : null}
 
                     {schools.isError ? (
@@ -601,7 +600,11 @@ export function WeeklyMenuAdminWorkspace() {
                   className="nf-button nf-button-primary w-full sm:w-auto"
                   onClick={() => void handlePublish()}
                 >
-                  {publishWeeklyMenu.isPending ? 'Розсилаємо…' : 'Розіслати школам'}
+                  {publishWeeklyMenu.isPending ? (
+                    <LoadingSpinner size="sm" label="Розсилаємо…" />
+                  ) : (
+                    'Розіслати школам'
+                  )}
                 </button>
               </div>
             </section>
@@ -633,9 +636,7 @@ export function WeeklyMenuAdminWorkspace() {
                 </div>
 
                 {revokeCopiesLoading ? (
-                  <p role="status" className="text-sm text-slate-600">
-                    Завантажуємо школи з цим меню…
-                  </p>
+                  <LoadingSpinner label="Завантажуємо школи з цим меню…" />
                 ) : null}
 
                 {revokeCopiesError ? (
@@ -693,7 +694,11 @@ export function WeeklyMenuAdminWorkspace() {
                   className="nf-button nf-button-danger w-full sm:w-auto"
                   onClick={() => void handleRevokeSelectedCopies()}
                 >
-                  {revokeWeeklyMenus.isPending ? 'Відкликаємо…' : 'Відкликати у вибраних школах'}
+                  {revokeWeeklyMenus.isPending ? (
+                    <LoadingSpinner size="sm" label="Відкликаємо…" />
+                  ) : (
+                    'Відкликати у вибраних школах'
+                  )}
                 </button>
               </div>
             </section>

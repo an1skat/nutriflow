@@ -7,6 +7,7 @@ import { useForm } from 'react-hook-form';
 
 import type { Ingredient } from '@/entities/recipe/model/Recipe';
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 
 import {
   type IngredientEditFormValues,
@@ -121,7 +122,11 @@ export function EditIngredientForm({ ingredient, onSaved }: EditIngredientFormPr
         disabled={form.formState.isSubmitting}
         className="nf-button nf-button-primary"
       >
-        {form.formState.isSubmitting ? 'Зберігаємо…' : 'Зберегти зміни'}
+        {form.formState.isSubmitting ? (
+          <LoadingSpinner size="sm" label="Зберігаємо…" />
+        ) : (
+          'Зберегти зміни'
+        )}
       </button>
     </form>
   );

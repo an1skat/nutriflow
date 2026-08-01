@@ -13,6 +13,7 @@ import { type LoginInput, loginSchema } from '@/entities/session/model/Session';
 import { getPostLoginPath } from '@/features/access/model/AccessPolicy';
 import { useLogin } from '@/features/auth/model/UseSession';
 import { getApiErrorMessage, isHttpStatus } from '@/shared/api/HttpClient';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 
 export function LoginForm({ returnTo }: { returnTo: string }) {
   const router = useRouter();
@@ -42,11 +43,7 @@ export function LoginForm({ returnTo }: { returnTo: string }) {
   }, [currentUser.data, returnTo, router]);
 
   if (currentUser.isPending || currentUser.data) {
-    return (
-      <p role="status" className="text-sm text-slate-600">
-        Перевіряємо поточну сесію…
-      </p>
-    );
+    return <LoadingSpinner label="Перевіряємо поточну сесію…" />;
   }
 
   if (currentUser.isError) {
@@ -61,7 +58,11 @@ export function LoginForm({ returnTo }: { returnTo: string }) {
           disabled={currentUser.isFetching}
           className="nf-button nf-button-primary mt-4"
         >
-          Повторити перевірку
+          {currentUser.isFetching ? (
+            <LoadingSpinner size="sm" label="Перевіряємо…" />
+          ) : (
+            'Повторити перевірку'
+          )}
         </button>
       </div>
     );
@@ -132,7 +133,7 @@ export function LoginForm({ returnTo }: { returnTo: string }) {
       ) : null}
 
       <button type="submit" disabled={submitting} className="nf-button nf-button-primary w-full">
-        {submitting ? 'Входимо…' : 'Увійти'}
+        {submitting ? <LoadingSpinner size="sm" label="Входимо…" /> : 'Увійти'}
       </button>
     </form>
   );

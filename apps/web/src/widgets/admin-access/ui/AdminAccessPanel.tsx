@@ -20,6 +20,7 @@ import { CreateAdminUserForm } from '@/features/admin-access-management/ui/Creat
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
 import { formatDate } from '@/shared/lib/FormatDate';
 import { useConfirm } from '@/shared/ui/ConfirmDialog';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 import { PaginationControls } from '@/shared/ui/PaginationControls';
 import { RequestError } from '@/shared/ui/RequestError';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
@@ -67,11 +68,7 @@ export function AdminAccessPanel() {
         </div>
 
         <div className="nf-panel-body">
-          {admins.isPending ? (
-            <p role="status" className="text-sm text-slate-600">
-              Завантажуємо адміністраторів…
-            </p>
-          ) : null}
+          {admins.isPending ? <LoadingSpinner label="Завантажуємо адміністраторів…" /> : null}
 
           {admins.isError ? (
             <RequestError error={admins.error} onRetry={() => void admins.refetch()} />
@@ -175,7 +172,13 @@ function AdminUserAccessRow({ admin }: { admin: AdminUser }) {
             disabled={updateAdmin.isPending}
             className="nf-button nf-button-secondary"
           >
-            {admin.is_active ? 'Деактивувати' : 'Активувати'}
+            {updateAdmin.isPending ? (
+              <LoadingSpinner size="sm" label="Зберігаємо…" />
+            ) : admin.is_active ? (
+              'Деактивувати'
+            ) : (
+              'Активувати'
+            )}
           </button>
           <button
             type="button"
@@ -184,7 +187,11 @@ function AdminUserAccessRow({ admin }: { admin: AdminUser }) {
             className="flex size-9 items-center justify-center border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
             aria-label={`Видалити ${admin.username}`}
           >
-            <Trash2 className="size-4" aria-hidden />
+            {deleteAdmin.isPending ? (
+              <LoadingSpinner size="sm" label="Видаляємо…" visuallyHiddenLabel />
+            ) : (
+              <Trash2 className="size-4" aria-hidden />
+            )}
           </button>
         </div>
       </div>

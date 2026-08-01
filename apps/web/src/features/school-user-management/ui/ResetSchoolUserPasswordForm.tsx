@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 
 import {
   type ResetSchoolUserPasswordFormValues,
@@ -98,7 +99,11 @@ export function ResetSchoolUserPasswordForm({
       ) : null}
 
       <button type="submit" disabled={form.formState.isSubmitting} className="nf-button">
-        {form.formState.isSubmitting ? 'Змінюємо…' : 'Змінити пароль'}
+        {form.formState.isSubmitting ? (
+          <LoadingSpinner size="sm" label="Змінюємо…" />
+        ) : (
+          'Змінити пароль'
+        )}
       </button>
     </form>
   );

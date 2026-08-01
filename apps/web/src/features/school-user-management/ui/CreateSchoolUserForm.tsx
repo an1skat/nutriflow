@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 
 import {
   type CreateSchoolUserFormValues,
@@ -109,7 +110,11 @@ export function CreateSchoolUserForm({ schoolId }: { schoolId: string }) {
         disabled={form.formState.isSubmitting}
         className="nf-button nf-button-primary"
       >
-        {form.formState.isSubmitting ? 'Створюємо…' : 'Створити користувача'}
+        {form.formState.isSubmitting ? (
+          <LoadingSpinner size="sm" label="Створюємо…" />
+        ) : (
+          'Створити користувача'
+        )}
       </button>
     </form>
   );

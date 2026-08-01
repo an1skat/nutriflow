@@ -31,6 +31,7 @@ import {
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
 import { formatDate } from '@/shared/lib/FormatDate';
 import { useConfirm } from '@/shared/ui/ConfirmDialog';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 import { RequestError } from '@/shared/ui/RequestError';
 
 import {
@@ -202,12 +203,7 @@ export function DailyMenuSchoolWorkspace() {
     }
 
     setDays((currentDays) =>
-      updateDailyMenuGroupChildrenCount(
-        currentDays,
-        activeDay.weekday,
-        group.id,
-        childrenCount
-      )
+      updateDailyMenuGroupChildrenCount(currentDays, activeDay.weekday, group.id, childrenCount)
     );
     setIsDirty(true);
   };
@@ -222,9 +218,10 @@ export function DailyMenuSchoolWorkspace() {
     const localSavedAt = saveDailyMenuDraft(menu.id, menu.updated_at, days);
 
     try {
-      const updatedMenu = await updateWeeklyMenu.mutateAsync(
-        { ...buildDailyMenuUpdatePayload(days, menu.days), revision: menu.revision }
-      );
+      const updatedMenu = await updateWeeklyMenu.mutateAsync({
+        ...buildDailyMenuUpdatePayload(days, menu.days),
+        revision: menu.revision,
+      });
       clearDailyMenuDraft(menu.id);
       initializedMenuKey.current = `${updatedMenu.id}:${updatedMenu.updated_at}`;
       setDays(prepareDailyMenuDays(sortDays(updatedMenu.days), activeGroups));
@@ -411,8 +408,14 @@ export function DailyMenuSchoolWorkspace() {
                 generateMenuRequirements.isPending
               }
             >
-              <Save className="size-4" aria-hidden />
-              {updateWeeklyMenu.isPending ? 'Зберігаємо…' : 'Зберегти зміни'}
+              {updateWeeklyMenu.isPending ? (
+                <LoadingSpinner size="sm" label="Зберігаємо…" />
+              ) : (
+                <>
+                  <Save className="size-4" aria-hidden />
+                  Зберегти зміни
+                </>
+              )}
             </button>
             <button
               type="button"
@@ -434,8 +437,14 @@ export function DailyMenuSchoolWorkspace() {
                   : 'Вкажіть кількість дітей більше нуля хоча б для однієї страви'
               }
             >
-              <Lock className="size-4" aria-hidden />
-              {closeWeeklyMenuDay.isPending ? 'Закриваємо…' : 'Закрити день'}
+              {closeWeeklyMenuDay.isPending ? (
+                <LoadingSpinner size="sm" label="Закриваємо…" />
+              ) : (
+                <>
+                  <Lock className="size-4" aria-hidden />
+                  Закрити день
+                </>
+              )}
             </button>
             {showDevReopen && isActiveDayClosed ? (
               <button
@@ -452,8 +461,14 @@ export function DailyMenuSchoolWorkspace() {
                 }
                 title="Dev-only: зняти блокування з дня для тестування"
               >
-                <Unlock className="size-4" aria-hidden />
-                {devReopenWeeklyMenuDay.isPending ? 'Відкриваємо…' : 'Відкрити день (dev)'}
+                {devReopenWeeklyMenuDay.isPending ? (
+                  <LoadingSpinner size="sm" label="Відкриваємо…" />
+                ) : (
+                  <>
+                    <Unlock className="size-4" aria-hidden />
+                    Відкрити день (dev)
+                  </>
+                )}
               </button>
             ) : null}
             <button
@@ -476,8 +491,14 @@ export function DailyMenuSchoolWorkspace() {
                   : 'Вкажіть кількість дітей більше нуля хоча б для однієї страви'
               }
             >
-              <FileSpreadsheet className="size-4" aria-hidden />
-              {generateMenuRequirements.isPending ? 'Формуємо…' : 'Сформувати меню-вимогу'}
+              {generateMenuRequirements.isPending ? (
+                <LoadingSpinner size="sm" label="Формуємо…" />
+              ) : (
+                <>
+                  <FileSpreadsheet className="size-4" aria-hidden />
+                  Сформувати меню-вимогу
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -495,9 +516,7 @@ export function DailyMenuSchoolWorkspace() {
       {menus.isPending || (effectiveMenuId && selectedMenu.isPending) ? (
         <section className="nf-panel">
           <div className="nf-panel-body">
-            <p role="status" className="text-sm text-slate-600">
-              Завантажуємо денне меню…
-            </p>
+            <LoadingSpinner label="Завантажуємо денне меню…" />
           </div>
         </section>
       ) : null}

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 
 import { useCurrentUser } from '@/entities/session/api/SessionQueries';
 import { hasPermission } from '@/features/access/model/AccessPolicy';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -37,9 +38,7 @@ export default function AdminPage() {
 
   return (
     <main className="flex min-h-[50vh] items-center justify-center p-6">
-      <p role="status" className="text-sm text-slate-600">
-        Переспрямовуємо…
-      </p>
+      <LoadingSpinner label="Переспрямовуємо…" />
     </main>
   );
 }

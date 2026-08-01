@@ -7,6 +7,7 @@ import { useForm } from 'react-hook-form';
 
 import type { Allergen } from '@/entities/recipe/model/Recipe';
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 
 import { type AllergenFormValues, allergenFormSchema } from '../model/RecipeManagementSchemas';
 import { useUpdateAllergen } from '../model/UseRecipeMutations';
@@ -100,7 +101,11 @@ export function EditAllergenForm({ allergen, onSaved }: EditAllergenFormProps) {
         disabled={form.formState.isSubmitting}
         className="nf-button nf-button-primary"
       >
-        {form.formState.isSubmitting ? 'Зберігаємо…' : 'Зберегти зміни'}
+        {form.formState.isSubmitting ? (
+          <LoadingSpinner size="sm" label="Зберігаємо…" />
+        ) : (
+          'Зберегти зміни'
+        )}
       </button>
     </form>
   );

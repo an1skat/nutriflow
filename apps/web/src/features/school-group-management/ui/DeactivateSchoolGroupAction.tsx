@@ -3,6 +3,7 @@
 import { useState } from 'react';
 
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 
 import { useDeactivateSchoolGroup } from '../model/UseSchoolGroupMutations';
 
@@ -54,7 +55,11 @@ export function DeactivateSchoolGroupAction({
           disabled={deactivateGroup.isPending}
           className="nf-button border-red-800 bg-red-700 text-white hover:bg-red-800"
         >
-          {deactivateGroup.isPending ? 'Деактивуємо…' : 'Підтвердити деактивацію'}
+          {deactivateGroup.isPending ? (
+            <LoadingSpinner size="sm" label="Деактивуємо…" />
+          ) : (
+            'Підтвердити деактивацію'
+          )}
         </button>
         <button
           type="button"

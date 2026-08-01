@@ -6,6 +6,7 @@ import { Archive, ChevronDown, Plus, Search } from 'lucide-react';
 
 import type { WeeklyMenu } from '@/entities/weekly-menu/model/WeeklyMenu';
 import { formatDate } from '@/shared/lib/FormatDate';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 import { RequestError } from '@/shared/ui/RequestError';
 
 type WeeklyMenuPickerProps = {
@@ -151,9 +152,7 @@ export function WeeklyMenuPicker({
 
               <div className="max-h-96 overflow-y-auto p-2">
                 {loading ? (
-                  <p role="status" className="px-2 py-3 text-sm text-slate-600">
-                    Завантажуємо меню…
-                  </p>
+                  <LoadingSpinner className="px-2 py-3" label="Завантажуємо меню…" />
                 ) : null}
 
                 {error ? (
@@ -230,8 +229,14 @@ export function WeeklyMenuPicker({
             setSearch('');
           }}
         >
-          <Archive className="size-4" aria-hidden />
-          {archiving ? 'Архівуємо…' : 'Архівувати'}
+          {archiving ? (
+            <LoadingSpinner size="sm" label="Архівуємо…" />
+          ) : (
+            <>
+              <Archive className="size-4" aria-hidden />
+              Архівувати
+            </>
+          )}
         </button>
       </div>
     </section>

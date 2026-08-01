@@ -26,6 +26,7 @@ import type { AdminPermission, UserRole } from '@/entities/session/model/Session
 import { hasPermission, isBackofficeUser } from '@/features/access/model/AccessPolicy';
 import { useLogout } from '@/features/auth/model/UseSession';
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 
 type NavigationItem = {
   href: string;
@@ -234,8 +235,14 @@ export function AppShell({ children }: { children: ReactNode }) {
             disabled={logout.isPending}
             className="flex min-h-9 w-full items-center gap-2 border border-transparent px-2.5 text-left text-sm text-slate-700 hover:border-(--nf-line) hover:bg-white disabled:opacity-50"
           >
-            <LogOut className="size-4" aria-hidden />
-            {logout.isPending ? 'Виходимо…' : 'Вийти'}
+            {logout.isPending ? (
+              <LoadingSpinner size="sm" label="Виходимо…" />
+            ) : (
+              <>
+                <LogOut className="size-4" aria-hidden />
+                Вийти
+              </>
+            )}
           </button>
           <p className="px-2.5 pt-2 text-[10px] text-slate-500">NutriFlow · етап 1</p>
         </div>

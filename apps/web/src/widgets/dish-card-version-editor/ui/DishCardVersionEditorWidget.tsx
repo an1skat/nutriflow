@@ -4,6 +4,7 @@ import Link from 'next/link';
 
 import { useDishCard, useDishCardVersion } from '@/entities/recipe/api/RecipeQueries';
 import { DishCardVersionForm } from '@/features/recipe-management/ui/DishCardVersionForm';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 import { RequestError } from '@/shared/ui/RequestError';
 
 type Props = {
@@ -22,7 +23,7 @@ export function DishCardVersionEditorWidget({ dishCardId, versionId, mode }: Pro
     if (versionQuery.isPending) {
       return (
         <main className="nf-page">
-          <p className="text-sm text-slate-600">Завантажуємо версію…</p>
+          <LoadingSpinner label="Завантажуємо версію…" />
         </main>
       );
     }
@@ -42,7 +43,7 @@ export function DishCardVersionEditorWidget({ dishCardId, versionId, mode }: Pro
     if (dishCardQuery.isPending || (sourceVersionId && sourceVersionQuery.isPending)) {
       return (
         <main className="nf-page">
-          <p className="text-sm text-slate-600">Завантажуємо поточну версію…</p>
+          <LoadingSpinner label="Завантажуємо поточну версію…" />
         </main>
       );
     }

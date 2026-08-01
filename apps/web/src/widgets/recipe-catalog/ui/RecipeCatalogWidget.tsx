@@ -11,6 +11,7 @@ import { CreateAllergenForm } from '@/features/recipe-management/ui/CreateAllerg
 import { CreateIngredientForm } from '@/features/recipe-management/ui/CreateIngredientForm';
 import { EditAllergenForm } from '@/features/recipe-management/ui/EditAllergenForm';
 import { EditIngredientForm } from '@/features/recipe-management/ui/EditIngredientForm';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 import { RequestError } from '@/shared/ui/RequestError';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
 
@@ -121,7 +122,7 @@ function DishCardsTab({ initialQuery = '' }: { initialQuery?: string }) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        {dishCards.isPending ? <p className="text-sm text-slate-600">Завантажуємо…</p> : null}
+        {dishCards.isPending ? <LoadingSpinner label="Завантажуємо техкарти…" /> : null}
         {dishCards.isError ? (
           <RequestError error={dishCards.error} onRetry={() => void dishCards.refetch()} />
         ) : null}
@@ -203,7 +204,7 @@ function IngredientsTab({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          {ingredients.isPending ? <p className="text-sm text-slate-600">Завантажуємо…</p> : null}
+          {ingredients.isPending ? <LoadingSpinner label="Завантажуємо інгредієнти…" /> : null}
           {ingredients.isError ? (
             <RequestError error={ingredients.error} onRetry={() => void ingredients.refetch()} />
           ) : null}
@@ -315,7 +316,7 @@ function AllergensTab({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          {allergens.isPending ? <p className="text-sm text-slate-600">Завантажуємо…</p> : null}
+          {allergens.isPending ? <LoadingSpinner label="Завантажуємо алергени…" /> : null}
           {allergens.isError ? (
             <RequestError error={allergens.error} onRetry={() => void allergens.refetch()} />
           ) : null}

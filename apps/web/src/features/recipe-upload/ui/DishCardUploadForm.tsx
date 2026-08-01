@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { useAllergens, useDishCards } from '@/entities/recipe/api/RecipeQueries';
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
 import { FormField as Field, FormSection as Section } from '@/shared/ui/FormLayout';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 
 import { type RecipeUploadFormValues, recipeUploadSchema } from '../model/RecipeUploadSchema';
 import { type UploadProgress, useUploadDishCard } from '../model/UseRecipeUpload';
@@ -221,7 +222,7 @@ export function DishCardUploadForm() {
           error={form.formState.errors.selected_allergen_ids?.message}
         >
           {allergenQuery.isLoading ? (
-            <p className="text-sm text-slate-500">Завантажуємо алергени…</p>
+            <LoadingSpinner label="Завантажуємо алергени…" />
           ) : allergens.length === 0 ? (
             <p className="text-sm text-slate-500">Алергени відсутні у довіднику.</p>
           ) : (
@@ -428,12 +429,14 @@ export function DishCardUploadForm() {
 
       <div className="flex items-center gap-3">
         <button type="submit" disabled={isBusy} className="nf-button nf-button-primary">
-          {isBusy ? 'Зберігаємо…' : 'Зберегти та підтвердити техкарту'}
+          {isBusy ? (
+            <LoadingSpinner size="sm" label="Зберігаємо…" />
+          ) : (
+            'Зберегти та підтвердити техкарту'
+          )}
         </button>
         {progress ? (
-          <span role="status" className="text-sm text-slate-600">
-            {PROGRESS_LABELS[progress.step] ?? progress.message}
-          </span>
+          <LoadingSpinner label={PROGRESS_LABELS[progress.step] ?? progress.message} />
         ) : null}
       </div>
     </form>

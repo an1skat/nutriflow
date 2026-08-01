@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo } from 'react';
 
-import { AlertTriangle, CheckCircle2, FileSpreadsheet, LoaderCircle, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, FileSpreadsheet, X } from 'lucide-react';
+
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 
 import { type WeeklyMenuImportPreview, getImportPreviewSummary } from '../model/WeeklyMenuExcel';
 import { WeeklyMenuImportPreviewTable } from './WeeklyMenuImportPreviewTable';
@@ -110,11 +112,13 @@ export function WeeklyMenuImportPreviewDialog({
               onClick={onCommit}
             >
               {commitPending ? (
-                <LoaderCircle size={15} className="animate-spin" />
+                <LoadingSpinner size="sm" label="Імпортуємо…" />
               ) : (
-                <CheckCircle2 size={15} />
+                <>
+                  <CheckCircle2 size={15} />
+                  Імпортувати {previewSummary?.menus ?? 0} тиж.
+                </>
               )}
-              Імпортувати {previewSummary?.menus ?? 0} тиж.
             </button>
             <button
               type="button"

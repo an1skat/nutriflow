@@ -10,6 +10,7 @@ import type {
 } from '@/entities/menu-change-request/model/MenuChangeRequest';
 import { AGE_GROUP_LABELS, WEEKDAY_LABELS } from '@/entities/weekly-menu/model/WeeklyMenu';
 import { formatDate } from '@/shared/lib/FormatDate';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 import { RequestError } from '@/shared/ui/RequestError';
 
 const FIELD_LABELS: Record<string, string> = {
@@ -98,7 +99,7 @@ export function MenuChangeRequestDialog({
           <div className="min-w-0">
             <p className="nf-eyebrow">{request?.school_name ?? 'Зміни меню'}</p>
             <h2 id="menu-change-dialog-title" className="nf-panel-title mt-1">
-              {request?.menu_title ?? 'Завантажуємо деталі…'}
+              {request?.menu_title ?? 'Деталі зміни'}
             </h2>
             {request ? (
               <p className="mt-1 text-xs text-slate-600">
@@ -122,11 +123,7 @@ export function MenuChangeRequestDialog({
         </header>
 
         <div className="min-h-0 overflow-y-auto p-5">
-          {loading ? (
-            <p role="status" className="text-sm text-slate-600">
-              Завантажуємо зміни…
-            </p>
-          ) : null}
+          {loading ? <LoadingSpinner label="Завантажуємо зміни…" /> : null}
 
           {error ? <RequestError error={error} onRetry={onRetry} /> : null}
 

@@ -27,6 +27,7 @@ import {
 } from '@/entities/weekly-menu/model/WeeklyMenu';
 import { resolveEffectiveDayDate } from '@/features/weekly-menu-editor/model/WeeklyMenuFormSchema';
 import { normalizeGramAmount } from '@/shared/lib/Portion';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 
 export type CatalogFilter = 'dish_cards' | 'products' | 'all';
 
@@ -212,7 +213,8 @@ function ChildrenCountInput({
 function getGroupChildrenCount(day: DailyMenu, schoolGroupId: string): number | null {
   const counts = day.items.map(
     (item) =>
-      item.servings.find((serving) => serving.school_group_id === schoolGroupId)?.children_count ?? 0
+      item.servings.find((serving) => serving.school_group_id === schoolGroupId)?.children_count ??
+      0
   );
 
   return counts.every((count) => count === counts[0]) ? (counts[0] ?? 0) : null;
@@ -319,7 +321,9 @@ function DishPicker({
           </div>
           <div className="max-h-64 overflow-y-auto py-1" role="listbox">
             {isPending ? (
-              <p className="px-3 py-5 text-center text-sm text-slate-500">Завантажуємо каталог…</p>
+              <div className="px-3 py-5 text-center">
+                <LoadingSpinner label="Завантажуємо каталог…" />
+              </div>
             ) : null}
             {hasError ? (
               <p className="px-3 py-5 text-center text-sm text-red-700">

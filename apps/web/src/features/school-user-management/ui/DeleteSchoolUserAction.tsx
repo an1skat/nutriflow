@@ -3,6 +3,7 @@
 import { useState } from 'react';
 
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 
 import { useDeleteSchoolUser } from '../model/UseSchoolUserMutations';
 
@@ -53,7 +54,11 @@ export function DeleteSchoolUserAction({
           disabled={deleteUser.isPending}
           className="nf-button border-red-800 bg-red-700 text-white hover:bg-red-800"
         >
-          {deleteUser.isPending ? 'Видаляємо…' : 'Підтвердити видалення'}
+          {deleteUser.isPending ? (
+            <LoadingSpinner size="sm" label="Видаляємо…" />
+          ) : (
+            'Підтвердити видалення'
+          )}
         </button>
         <button
           type="button"

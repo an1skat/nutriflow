@@ -16,6 +16,7 @@ import { useRevokeWeeklyMenu } from '@/features/weekly-menu-editor/model/UseWeek
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
 import { formatDate } from '@/shared/lib/FormatDate';
 import { useConfirm } from '@/shared/ui/ConfirmDialog';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 import { PaginationControls } from '@/shared/ui/PaginationControls';
 import { RequestError } from '@/shared/ui/RequestError';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
@@ -36,9 +37,7 @@ export function SchoolDetails({ schoolId }: { schoolId: string }) {
   if (school.isPending) {
     return (
       <main className="nf-page">
-        <p role="status" className="text-sm text-slate-600">
-          Завантажуємо школу…
-        </p>
+        <LoadingSpinner label="Завантажуємо школу…" />
       </main>
     );
   }
@@ -113,11 +112,7 @@ export function SchoolDetails({ schoolId }: { schoolId: string }) {
         </div>
 
         <div className="nf-panel-body">
-          {users.isPending ? (
-            <p role="status" className="text-sm text-slate-600">
-              Завантажуємо користувачів…
-            </p>
-          ) : null}
+          {users.isPending ? <LoadingSpinner label="Завантажуємо користувачів…" /> : null}
           {users.isError ? (
             <RequestError error={users.error} onRetry={() => void users.refetch()} />
           ) : null}
@@ -222,11 +217,7 @@ function SchoolMenusPanel({ schoolId }: { schoolId: string }) {
         </div>
       </div>
       <div className="nf-panel-body">
-        {isPending ? (
-          <p role="status" className="text-sm text-slate-600">
-            Завантажуємо меню школи…
-          </p>
-        ) : null}
+        {isPending ? <LoadingSpinner label="Завантажуємо меню школи…" /> : null}
 
         {errors.map((error, index) => (
           <RequestError
@@ -317,7 +308,11 @@ function SchoolMenuRow({ menu, onPreview }: { menu: WeeklyMenu; onPreview: () =>
               disabled={revokeMenu.isPending}
               onClick={() => void handleRevoke()}
             >
-              {revokeMenu.isPending ? 'Відкликаємо…' : 'Відкликати'}
+              {revokeMenu.isPending ? (
+                <LoadingSpinner size="sm" label="Відкликаємо…" />
+              ) : (
+                'Відкликати'
+              )}
             </button>
           )}
         </div>

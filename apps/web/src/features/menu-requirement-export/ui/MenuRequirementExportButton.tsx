@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from 'react';
 
-import { FileSpreadsheet, LoaderCircle } from 'lucide-react';
+import { FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
 
 import type { MenuRequirementAmountBasis } from '@/entities/menu-requirement/model/MenuRequirement';
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 
 import {
   type MenuRequirementExportTarget,
@@ -63,11 +64,13 @@ export function MenuRequirementExportButton({
         onClick={() => setIsChoosingAmountBasis(true)}
       >
         {isPending ? (
-          <LoaderCircle className="size-4 animate-spin" aria-hidden />
+          <LoadingSpinner size="sm" label="Експортуємо…" />
         ) : (
-          <FileSpreadsheet className="size-4" aria-hidden />
+          <>
+            <FileSpreadsheet className="size-4" aria-hidden />
+            {label}
+          </>
         )}
-        {isPending ? 'Експортуємо…' : label}
       </button>
       {isChoosingAmountBasis ? (
         <div
@@ -91,9 +94,7 @@ export function MenuRequirementExportButton({
             >
               Оберіть тип ваги для експорту
             </h2>
-            <p className="mt-2 text-sm text-slate-600">
-              У якому вигляді сформувати меню-вимогу?
-            </p>
+            <p className="mt-2 text-sm text-slate-600">У якому вигляді сформувати меню-вимогу?</p>
             <div className="mt-5 flex flex-wrap justify-end gap-2">
               <button
                 type="button"

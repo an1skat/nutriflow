@@ -6,12 +6,12 @@ import { Building2, Pencil, Save, Trash2, UserRound, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import {
-  hasMenuRequirementAmount,
   type MenuRequirement,
   type MenuRequirementAmountBasis,
   type MenuRequirementCell,
   type MenuRequirementIngredientRow,
   type UpdateMenuRequirementPayload,
+  hasMenuRequirementAmount,
 } from '@/entities/menu-requirement/model/MenuRequirement';
 import { MenuRequirementAmountToggle } from '@/entities/menu-requirement/ui/MenuRequirementAmountToggle';
 import type { AuthUser, UserRole } from '@/entities/session/model/Session';
@@ -19,6 +19,7 @@ import { AGE_GROUP_LABELS } from '@/entities/weekly-menu/model/WeeklyMenu';
 import { MenuRequirementExportButton } from '@/features/menu-requirement-export/ui/MenuRequirementExportButton';
 import { formatDate } from '@/shared/lib/FormatDate';
 import { useConfirm } from '@/shared/ui/ConfirmDialog';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 
 type RequirementSchoolGroup = {
   schoolId: string;
@@ -299,8 +300,14 @@ export function MenuRequirementTable({
                       onClick={() => void handleSave()}
                       disabled={isSaving || isDeleting}
                     >
-                      <Save className="size-4" aria-hidden />
-                      {isSaving ? 'Зберігаємо…' : 'Зберегти'}
+                      {isSaving ? (
+                        <LoadingSpinner size="sm" label="Зберігаємо…" />
+                      ) : (
+                        <>
+                          <Save className="size-4" aria-hidden />
+                          Зберегти
+                        </>
+                      )}
                     </button>
                   </>
                 ) : (
@@ -321,8 +328,14 @@ export function MenuRequirementTable({
                     onClick={() => void handleDelete()}
                     disabled={isSaving || isDeleting}
                   >
-                    <Trash2 className="size-4" aria-hidden />
-                    {isDeleting ? 'Видаляємо…' : 'Видалити'}
+                    {isDeleting ? (
+                      <LoadingSpinner size="sm" label="Видаляємо…" />
+                    ) : (
+                      <>
+                        <Trash2 className="size-4" aria-hidden />
+                        Видалити
+                      </>
+                    )}
                   </button>
                 ) : null}
               </>
@@ -552,9 +565,7 @@ function buildUpdatePayload(rows: EditableRequirementRow[]): UpdateMenuRequireme
     for (const cell of row.cells) {
       const normalizedAmount = normalizeDecimalDraft(cell.net_per_person_g);
       const normalizedGrossAmount =
-        cell.gross_per_person_g === null
-          ? null
-          : normalizeDecimalDraft(cell.gross_per_person_g);
+        cell.gross_per_person_g === null ? null : normalizeDecimalDraft(cell.gross_per_person_g);
       if (
         normalizedAmount === null ||
         (cell.gross_per_person_g !== null && normalizedGrossAmount === null)

@@ -7,6 +7,7 @@ import { useForm } from 'react-hook-form';
 
 import type { School } from '@/entities/school/model/School';
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 
 import { type EditSchoolFormValues, editSchoolFormSchema } from '../model/SchoolFormSchema';
 import { useUpdateSchool } from '../model/UseSchoolMutations';
@@ -101,7 +102,11 @@ export function EditSchoolForm({ school }: EditSchoolFormProps) {
         disabled={form.formState.isSubmitting}
         className="nf-button nf-button-primary"
       >
-        {form.formState.isSubmitting ? 'Зберігаємо…' : 'Зберегти зміни'}
+        {form.formState.isSubmitting ? (
+          <LoadingSpinner size="sm" label="Зберігаємо…" />
+        ) : (
+          'Зберегти зміни'
+        )}
       </button>
     </form>
   );

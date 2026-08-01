@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useSchools } from '@/entities/school/api/SchoolQueries';
 import { CreateSchoolForm } from '@/features/school-management/ui/CreateSchoolForm';
 import { formatDate } from '@/shared/lib/FormatDate';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 import { PaginationControls } from '@/shared/ui/PaginationControls';
 import { RequestError } from '@/shared/ui/RequestError';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
@@ -52,11 +53,7 @@ export function SchoolsOverview() {
         </div>
 
         <div className="nf-panel-body">
-          {schools.isPending ? (
-            <p role="status" className="text-sm text-slate-600">
-              Завантажуємо школи…
-            </p>
-          ) : null}
+          {schools.isPending ? <LoadingSpinner label="Завантажуємо школи…" /> : null}
 
           {schools.isError ? (
             <RequestError error={schools.error} onRetry={() => void schools.refetch()} />

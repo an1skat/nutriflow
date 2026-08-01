@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useWatch } from 'react-hook-form';
 
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 
 import {
   type CreateAdminUserFormValues,
@@ -171,11 +172,13 @@ export function CreateAdminUserForm() {
           disabled={form.formState.isSubmitting}
           className="nf-button nf-button-primary"
         >
-          {form.formState.isSubmitting
-            ? 'Створюємо…'
-            : role === 'TECHNOLOGIST'
-              ? 'Створити технолога'
-              : 'Створити адміністратора'}
+          {form.formState.isSubmitting ? (
+            <LoadingSpinner size="sm" label="Створюємо…" />
+          ) : role === 'TECHNOLOGIST' ? (
+            'Створити технолога'
+          ) : (
+            'Створити адміністратора'
+          )}
         </button>
       </div>
 

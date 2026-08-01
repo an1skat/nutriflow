@@ -19,6 +19,7 @@ import type {
 } from '@/entities/menu-change-request/model/MenuChangeRequest';
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
 import { formatDate } from '@/shared/lib/FormatDate';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 import { RequestError } from '@/shared/ui/RequestError';
 
 import { MenuChangeRequestDialog } from './MenuChangeRequestDialog';
@@ -111,20 +112,24 @@ export function MenuChangeRequestsWorkspace({ initialRequestId }: { initialReque
             <label className="nf-label" htmlFor="reviewed-school">
               Школа
             </label>
-            <select
-              id="reviewed-school"
-              className="nf-input mt-2 max-w-md"
-              value={selectedSchoolId}
-              disabled={schools.isPending || schools.isError}
-              onChange={(event) => setSelectedSchoolId(event.target.value)}
-            >
-              <option value="">Оберіть школу</option>
-              {schools.data?.map((school) => (
-                <option key={school.id} value={school.id}>
-                  {school.name}
-                </option>
-              ))}
-            </select>
+            {schools.isPending ? (
+              <LoadingSpinner className="mt-2" size="sm" label="Завантажуємо школи…" />
+            ) : (
+              <select
+                id="reviewed-school"
+                className="nf-input mt-2 max-w-md"
+                value={selectedSchoolId}
+                disabled={schools.isError}
+                onChange={(event) => setSelectedSchoolId(event.target.value)}
+              >
+                <option value="">Оберіть школу</option>
+                {schools.data?.map((school) => (
+                  <option key={school.id} value={school.id}>
+                    {school.name}
+                  </option>
+                ))}
+              </select>
+            )}
             {schools.isError ? (
               <div className="mt-3">
                 <RequestError error={schools.error} onRetry={() => void schools.refetch()} />
@@ -141,9 +146,7 @@ export function MenuChangeRequestsWorkspace({ initialRequestId }: { initialReque
       {shouldLoadList && requests.isPending ? (
         <section className="nf-panel">
           <div className="nf-panel-body">
-            <p role="status" className="text-sm text-slate-600">
-              Завантажуємо зміни…
-            </p>
+            <LoadingSpinner label="Завантажуємо зміни…" />
           </div>
         </section>
       ) : null}

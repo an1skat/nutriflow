@@ -7,15 +7,16 @@ import Link from 'next/link';
 import { ExternalLink, FileSpreadsheet, X } from 'lucide-react';
 
 import {
-  hasMenuRequirementAmount,
   type MenuRequirementAmountBasis,
   type MenuRequirementReport,
   type MenuRequirementReportBreakdownItem,
   type MenuRequirementReportCell,
   type MenuRequirementReportGroup,
+  hasMenuRequirementAmount,
 } from '@/entities/menu-requirement/model/MenuRequirement';
 import { MenuRequirementAmountToggle } from '@/entities/menu-requirement/ui/MenuRequirementAmountToggle';
 import { MenuRequirementExportButton } from '@/features/menu-requirement-export/ui/MenuRequirementExportButton';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 import { RequestError } from '@/shared/ui/RequestError';
 
 import { formatDay, formatGrams, formatInteger } from './CalendarFormatting';
@@ -127,9 +128,7 @@ export function RequirementReportDialog({
         <div className="min-h-0 flex-1 overflow-y-auto p-3 pb-5 pr-4 scrollbar-gutter-stable sm:p-4 sm:pb-6 sm:pr-5">
           {isPending ? (
             <div className="nf-panel-body bg-white">
-              <p role="status" className="text-sm text-slate-600">
-                Завантажуємо меню-вимогу…
-              </p>
+              <LoadingSpinner label="Завантажуємо меню-вимогу…" />
             </div>
           ) : null}
 
@@ -168,9 +167,10 @@ export function RequirementReportTable({
   onAmountBasisChange?: (amountBasis: MenuRequirementAmountBasis) => void;
   compactHeader?: boolean;
 }) {
-  const [internalAmountBasis, setInternalAmountBasis] =
-    useState<MenuRequirementAmountBasis>('net');
-  const [selectedGroupId, setSelectedGroupId] = useState(() => report.groups[0]?.school_group_id ?? '');
+  const [internalAmountBasis, setInternalAmountBasis] = useState<MenuRequirementAmountBasis>('net');
+  const [selectedGroupId, setSelectedGroupId] = useState(
+    () => report.groups[0]?.school_group_id ?? ''
+  );
   const amountBasis = amountBasisProp ?? internalAmountBasis;
   const handleAmountBasisChange = onAmountBasisChange ?? setInternalAmountBasis;
   const selectedGroup =
@@ -357,9 +357,7 @@ function ReportGroupTable({
                         key={dish.aggregate_key}
                         className="w-28 min-w-28 max-w-28 border-r border-slate-200 p-0 text-right tabular-nums"
                       >
-                        {cell &&
-                        hasMenuRequirementAmount(amount) &&
-                        issueTotal !== null ? (
+                        {cell && hasMenuRequirementAmount(amount) && issueTotal !== null ? (
                           <button
                             type="button"
                             className={`min-h-11 w-full px-1.5 py-1 text-right transition-colors ${
@@ -483,14 +481,11 @@ function BreakdownRow({
   item: MenuRequirementReportBreakdownItem;
   amountBasis: MenuRequirementAmountBasis;
 }) {
-  const amount =
-    amountBasis === 'gross' ? item.gross_per_person_g : item.net_per_person_g;
+  const amount = amountBasis === 'gross' ? item.gross_per_person_g : item.net_per_person_g;
   const issueTotalRaw =
     amountBasis === 'gross' ? item.gross_issue_total_raw_g : item.issue_total_raw_g;
   const issueTotalRounded =
-    amountBasis === 'gross'
-      ? item.gross_issue_total_rounded_g
-      : item.issue_total_rounded_g;
+    amountBasis === 'gross' ? item.gross_issue_total_rounded_g : item.issue_total_rounded_g;
 
   return (
     <tr className="border-b border-slate-200 last:border-b-0">
@@ -541,9 +536,7 @@ function getReportCellIssueTotal(
   cell: MenuRequirementReportCell,
   amountBasis: MenuRequirementAmountBasis
 ): number | null {
-  return amountBasis === 'gross'
-    ? cell.gross_issue_total_rounded_g
-    : cell.issue_total_rounded_g;
+  return amountBasis === 'gross' ? cell.gross_issue_total_rounded_g : cell.issue_total_rounded_g;
 }
 
 function formatOptionalGrams(value: string | null): string {

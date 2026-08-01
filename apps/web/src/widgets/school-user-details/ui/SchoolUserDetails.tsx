@@ -9,6 +9,7 @@ import { DeleteSchoolUserAction } from '@/features/school-user-management/ui/Del
 import { EditSchoolUserForm } from '@/features/school-user-management/ui/EditSchoolUserForm';
 import { ResetSchoolUserPasswordForm } from '@/features/school-user-management/ui/ResetSchoolUserPasswordForm';
 import { formatDate } from '@/shared/lib/FormatDate';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 import { RequestError } from '@/shared/ui/RequestError';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
 
@@ -25,9 +26,7 @@ export function SchoolUserDetails({ schoolId, userId }: SchoolUserDetailsProps) 
   if (school.isPending || user.isPending) {
     return (
       <main className="nf-page">
-        <p role="status" className="text-sm text-slate-600">
-          Завантажуємо користувача…
-        </p>
+        <LoadingSpinner label="Завантажуємо користувача…" />
       </main>
     );
   }

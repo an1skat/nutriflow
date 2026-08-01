@@ -12,6 +12,7 @@ import {
   ageGroupOptions,
 } from '@/entities/school-group/model/SchoolGroup';
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 
 import { type SchoolGroupFormValues, schoolGroupFormSchema } from '../model/SchoolGroupFormSchemas';
 import { useRestoreSchoolGroup } from '../model/UseSchoolGroupMutations';
@@ -139,7 +140,11 @@ export function CreateSchoolGroupForm({ schoolId, groups }: CreateSchoolGroupFor
         disabled={form.formState.isSubmitting}
         className="nf-button nf-button-primary"
       >
-        {form.formState.isSubmitting ? 'Додаємо…' : 'Додати групу'}
+        {form.formState.isSubmitting ? (
+          <LoadingSpinner size="sm" label="Додаємо…" />
+        ) : (
+          'Додати групу'
+        )}
       </button>
     </form>
   );

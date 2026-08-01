@@ -14,6 +14,7 @@ import type {
 import { useCurrentUser } from '@/entities/session/api/SessionQueries';
 import { hasPermission } from '@/features/access/model/AccessPolicy';
 import { formatDate } from '@/shared/lib/FormatDate';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 import { RequestError } from '@/shared/ui/RequestError';
 
 const STATUS_LABELS: Record<DishCardVersion['status'], string> = {
@@ -56,7 +57,7 @@ export function DishCardVersionDetailsWidget({ dishCardId, versionId }: Props) {
   if (dishCard.isPending || version.isPending) {
     return (
       <main className="nf-page">
-        <p className="text-sm text-slate-600">Завантажуємо техкарту…</p>
+        <LoadingSpinner label="Завантажуємо техкарту…" />
       </main>
     );
   }

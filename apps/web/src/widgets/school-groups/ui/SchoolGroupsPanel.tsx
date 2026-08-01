@@ -8,6 +8,7 @@ import { CreateSchoolGroupForm } from '@/features/school-group-management/ui/Cre
 import { DeactivateSchoolGroupAction } from '@/features/school-group-management/ui/DeactivateSchoolGroupAction';
 import { EditSchoolGroupForm } from '@/features/school-group-management/ui/EditSchoolGroupForm';
 import { formatDate } from '@/shared/lib/FormatDate';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 import { PaginationControls } from '@/shared/ui/PaginationControls';
 import { RequestError } from '@/shared/ui/RequestError';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
@@ -48,11 +49,7 @@ export function SchoolGroupsPanel(props: SchoolGroupsPanelProps) {
       </div>
 
       <div className="nf-panel-body">
-        {groupsQuery.isPending ? (
-          <p role="status" className="text-sm text-slate-600">
-            Завантажуємо групи…
-          </p>
-        ) : null}
+        {groupsQuery.isPending ? <LoadingSpinner label="Завантажуємо групи…" /> : null}
         {groupsQuery.isError ? (
           <RequestError error={groupsQuery.error} onRetry={() => void groupsQuery.refetch()} />
         ) : null}

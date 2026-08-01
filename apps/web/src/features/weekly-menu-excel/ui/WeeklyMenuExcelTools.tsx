@@ -8,7 +8,6 @@ import {
   Download,
   Eye,
   FileSpreadsheet,
-  LoaderCircle,
   UploadCloud,
   X,
 } from 'lucide-react';
@@ -16,6 +15,7 @@ import { toast } from 'sonner';
 
 import type { MealType, WeeklyMenu } from '@/entities/weekly-menu/model/WeeklyMenu';
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 
 import { triggerWorkbookDownload } from '../api/WeeklyMenuExcelApi';
 import {
@@ -224,11 +224,13 @@ export function WeeklyMenuExcelTools({
               onClick={() => void handleTemplateDownload()}
             >
               {templateDownload.isPending ? (
-                <LoaderCircle size={15} className="animate-spin" />
+                <LoadingSpinner size="sm" label="Завантажуємо шаблон…" />
               ) : (
-                <Download size={15} />
+                <>
+                  <Download size={15} />
+                  Порожній шаблон
+                </>
               )}
-              Порожній шаблон
             </button>
             <button
               type="button"
@@ -237,11 +239,13 @@ export function WeeklyMenuExcelTools({
               onClick={() => void handleExport()}
             >
               {menuExport.isPending ? (
-                <LoaderCircle size={15} className="animate-spin" />
+                <LoadingSpinner size="sm" label="Експортуємо…" />
               ) : (
-                <FileSpreadsheet size={15} />
+                <>
+                  <FileSpreadsheet size={15} />
+                  Експорт обраного меню
+                </>
               )}
-              Експорт обраного меню
             </button>
           </div>
         </div>
@@ -339,11 +343,13 @@ export function WeeklyMenuExcelTools({
                 onClick={() => void handlePreview()}
               >
                 {previewMutation.isPending ? (
-                  <LoaderCircle size={15} className="animate-spin" />
+                  <LoadingSpinner size="sm" label="Перевіряємо файл…" />
                 ) : (
-                  <FileSpreadsheet size={15} />
+                  <>
+                    <FileSpreadsheet size={15} />
+                    Перевірити файл
+                  </>
                 )}
-                Перевірити файл
               </button>
             </div>
           </div>
@@ -395,11 +401,13 @@ export function WeeklyMenuExcelTools({
                     onClick={() => void handleCommit()}
                   >
                     {commitMutation.isPending ? (
-                      <LoaderCircle size={15} className="animate-spin" />
+                      <LoadingSpinner size="sm" label="Імпортуємо…" />
                     ) : (
-                      <CheckCircle2 size={15} />
+                      <>
+                        <CheckCircle2 size={15} />
+                        Імпортувати {previewSummary?.menus ?? 0} тиж.
+                      </>
                     )}
-                    Імпортувати {previewSummary?.menus ?? 0} тиж.
                   </button>
                 </div>
               </div>

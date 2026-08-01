@@ -16,6 +16,7 @@ import {
   useUpdateMenuRequirement,
 } from '@/features/menu-requirement-edit/model/UseMenuRequirementMutations';
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 import { RequestError } from '@/shared/ui/RequestError';
 import { MenuRequirementCalendarWorkspace } from '@/widgets/menu-requirement-calendar-workspace/ui/MenuRequirementCalendarWorkspace';
 
@@ -118,9 +119,7 @@ export function MenuRequirementSchoolWorkspace() {
       {requirements.isPending ? (
         <section className="nf-panel">
           <div className="nf-panel-body">
-            <p role="status" className="text-sm text-slate-600">
-              Завантажуємо меню-вимоги…
-            </p>
+            <LoadingSpinner label="Завантажуємо меню-вимоги…" />
           </div>
         </section>
       ) : null}

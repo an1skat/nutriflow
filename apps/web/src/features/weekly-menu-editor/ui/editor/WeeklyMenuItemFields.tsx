@@ -12,6 +12,7 @@ import {
   ingredientsQueryOptions,
 } from '@/entities/recipe/api/RecipeQueries';
 import type { Allergen } from '@/entities/recipe/model/Recipe';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 
 import type { WeeklyMenuFormValues } from '../../model/WeeklyMenuFormSchema';
 import {
@@ -86,7 +87,9 @@ export function DishCardLookupField({
             />
             <div className="max-h-56 overflow-y-auto border border-(--nf-line) bg-white">
               {dishCards.isPending ? (
-                <div className="px-3 py-2 text-sm text-slate-600">Завантажуємо техкарти…</div>
+                <div className="px-3 py-2">
+                  <LoadingSpinner size="sm" label="Завантажуємо техкарти…" />
+                </div>
               ) : null}
               {dishCards.data?.items.map((dishCard) => (
                 <button
@@ -186,7 +189,9 @@ export function IngredientLookupField({
             />
             <div className="max-h-56 overflow-y-auto border border-(--nf-line) bg-white">
               {ingredients.isPending ? (
-                <div className="px-3 py-2 text-sm text-slate-600">Завантажуємо інгредієнти…</div>
+                <div className="px-3 py-2">
+                  <LoadingSpinner size="sm" label="Завантажуємо інгредієнти…" />
+                </div>
               ) : null}
               {ingredients.data?.items.map((ingredient) => (
                 <button
@@ -248,31 +253,34 @@ export function DishCardProductSelect({
   const selectedName = productNames.includes(item?.name ?? '') ? item?.name : '';
 
   return (
-    <select
-      id={`day-${dayIndex}-item-${itemIndex}-name`}
-      aria-label="Назва позиції"
-      value={selectedName}
-      disabled={readOnly || version.isPending}
-      className="nf-input"
-      onChange={(event) => {
-        if (event.target.value && version.data) {
-          applyDishCardProductSelection(
-            form,
-            dayIndex,
-            itemIndex,
-            event.target.value,
-            version.data
-          );
-        }
-      }}
-    >
-      <option value="">{version.isPending ? 'Завантажуємо продукти…' : 'Оберіть продукт'}</option>
-      {productNames.map((productName) => (
-        <option key={productName} value={productName}>
-          {productName}
-        </option>
-      ))}
-    </select>
+    <div className="grid gap-1">
+      <select
+        id={`day-${dayIndex}-item-${itemIndex}-name`}
+        aria-label="Назва позиції"
+        value={selectedName}
+        disabled={readOnly || version.isPending}
+        className="nf-input"
+        onChange={(event) => {
+          if (event.target.value && version.data) {
+            applyDishCardProductSelection(
+              form,
+              dayIndex,
+              itemIndex,
+              event.target.value,
+              version.data
+            );
+          }
+        }}
+      >
+        <option value="">Оберіть продукт</option>
+        {productNames.map((productName) => (
+          <option key={productName} value={productName}>
+            {productName}
+          </option>
+        ))}
+      </select>
+      {version.isPending ? <LoadingSpinner size="sm" label="Завантажуємо продукти…" /> : null}
+    </div>
   );
 }
 

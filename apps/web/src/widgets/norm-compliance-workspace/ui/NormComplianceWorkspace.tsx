@@ -13,8 +13,6 @@ import {
   CircleAlert,
   DatabaseZap,
   FileSpreadsheet,
-  LoaderCircle,
-  RefreshCw,
   Scale,
   X,
 } from 'lucide-react';
@@ -38,6 +36,7 @@ import {
 import { ageGroupLabels } from '@/entities/school-group/model/SchoolGroup';
 import type { MealType } from '@/entities/weekly-menu/model/WeeklyMenu';
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 import { RequestError } from '@/shared/ui/RequestError';
 
 type SelectedRow = {
@@ -172,11 +171,14 @@ export function NormComplianceWorkspace() {
                   void report.refetch();
                 }}
               >
-                <RefreshCw
-                  className={`size-4 ${report.isFetching ? 'animate-spin' : ''}`}
-                  aria-hidden
-                />
-                Оновити звіт
+                {report.isFetching ? (
+                  <LoadingSpinner size="sm" label="Оновлюємо…" />
+                ) : (
+                  <>
+                    <DatabaseZap className="size-4" aria-hidden />
+                    Оновити звіт
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -205,8 +207,8 @@ export function NormComplianceWorkspace() {
 
       {report.isPending && canLoadReport ? (
         <section className="nf-panel">
-          <div className="nf-panel-body" role="status">
-            Завантажуємо звіт про виконання норм…
+          <div className="nf-panel-body">
+            <LoadingSpinner label="Завантажуємо звіт про виконання норм…" />
           </div>
         </section>
       ) : null}
@@ -252,11 +254,13 @@ function NormComplianceExportButton({
       onClick={() => void handleExport()}
     >
       {isPending ? (
-        <LoaderCircle className="size-4 animate-spin" aria-hidden />
+        <LoadingSpinner size="sm" label="Експортуємо…" />
       ) : (
-        <FileSpreadsheet className="size-4" aria-hidden />
+        <>
+          <FileSpreadsheet className="size-4" aria-hidden />
+          Експорт в Excel
+        </>
       )}
-      {isPending ? 'Експортуємо…' : 'Експорт в Excel'}
     </button>
   );
 }
@@ -331,8 +335,8 @@ export function NormComplianceReportView({
           </h2>
           <div className="mt-2 grid gap-2 text-xs text-slate-700 md:grid-cols-3">
             <p>
-              <span className="font-bold text-slate-900">Більшість груп:</span> нетто-порція
-              може відхилятися до 10%.
+              <span className="font-bold text-slate-900">Більшість груп:</span> нетто-порція може
+              відхилятися до 10%.
             </p>
             <p>
               <span className="font-bold text-slate-900">Риба, птиця та червоне м’ясо:</span>{' '}

@@ -18,6 +18,7 @@ import {
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
 import { formatDate } from '@/shared/lib/FormatDate';
 import { useConfirm } from '@/shared/ui/ConfirmDialog';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 import { RequestError } from '@/shared/ui/RequestError';
 
 function getMealTypeLabel(menu: WeeklyMenu) {
@@ -165,8 +166,14 @@ export function WeeklyMenuArchiveWorkspace() {
                 disabled={!effectiveSelectedMenuIds.length || bulkActionPending}
                 onClick={() => void handleRestoreSelected()}
               >
-                <RotateCcw className="size-4" aria-hidden />
-                {restoreMenus.isPending ? 'Повертаємо…' : 'Повернути вибрані'}
+                {restoreMenus.isPending ? (
+                  <LoadingSpinner size="sm" label="Повертаємо…" />
+                ) : (
+                  <>
+                    <RotateCcw className="size-4" aria-hidden />
+                    Повернути вибрані
+                  </>
+                )}
               </button>
               <button
                 type="button"
@@ -174,17 +181,19 @@ export function WeeklyMenuArchiveWorkspace() {
                 disabled={!effectiveSelectedMenuIds.length || bulkActionPending}
                 onClick={() => void handleDeleteSelected()}
               >
-                <Trash2 className="size-4" aria-hidden />
-                {deleteMenus.isPending ? 'Видаляємо…' : 'Видалити вибрані'}
+                {deleteMenus.isPending ? (
+                  <LoadingSpinner size="sm" label="Видаляємо…" />
+                ) : (
+                  <>
+                    <Trash2 className="size-4" aria-hidden />
+                    Видалити вибрані
+                  </>
+                )}
               </button>
             </div>
           </div>
 
-          {menus.isPending ? (
-            <p role="status" className="text-sm text-slate-600">
-              Завантажуємо архів…
-            </p>
-          ) : null}
+          {menus.isPending ? <LoadingSpinner label="Завантажуємо архів…" /> : null}
 
           {menus.isError ? (
             <RequestError error={menus.error} onRetry={() => void menus.refetch()} />
@@ -304,8 +313,14 @@ function WeeklyMenuArchiveItem({
             disabled={disabled || restoreMenu.isPending || deleteMenu.isPending}
             onClick={() => void handleRestore()}
           >
-            <RotateCcw className="size-4" aria-hidden />
-            {restoreMenu.isPending ? 'Повертаємо…' : 'Повернути'}
+            {restoreMenu.isPending ? (
+              <LoadingSpinner size="sm" label="Повертаємо…" />
+            ) : (
+              <>
+                <RotateCcw className="size-4" aria-hidden />
+                Повернути
+              </>
+            )}
           </button>
           <button
             type="button"
@@ -313,8 +328,14 @@ function WeeklyMenuArchiveItem({
             disabled={disabled || restoreMenu.isPending || deleteMenu.isPending}
             onClick={() => void handleDelete()}
           >
-            <Trash2 className="size-4" aria-hidden />
-            {deleteMenu.isPending ? 'Видаляємо…' : 'Видалити'}
+            {deleteMenu.isPending ? (
+              <LoadingSpinner size="sm" label="Видаляємо…" />
+            ) : (
+              <>
+                <Trash2 className="size-4" aria-hidden />
+                Видалити
+              </>
+            )}
           </button>
         </div>
       </div>

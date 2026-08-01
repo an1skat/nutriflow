@@ -10,6 +10,7 @@ import { useCurrentUser } from '@/entities/session/api/SessionQueries';
 import type { AdminPermission, UserRole } from '@/entities/session/model/Session';
 import { getHomePath, getRouteAccess } from '@/features/access/model/AccessPolicy';
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 
 type AccessGuardProps = {
   children: ReactNode;
@@ -91,7 +92,11 @@ export function AccessGuard({
               disabled={currentUser.isFetching}
               className="nf-button nf-button-primary mt-4"
             >
-              {currentUser.isFetching ? 'Перевіряємо…' : 'Повторити'}
+              {currentUser.isFetching ? (
+                <LoadingSpinner size="sm" label="Перевіряємо…" />
+              ) : (
+                'Повторити'
+              )}
             </button>
           </div>
         </div>
@@ -109,9 +114,7 @@ export function AccessGuard({
 function SessionMessage({ text }: { text: string }) {
   return (
     <main className="flex min-h-[50vh] items-center justify-center p-6">
-      <p role="status" className="text-sm text-slate-600">
-        {text}
-      </p>
+      <LoadingSpinner label={text} />
     </main>
   );
 }

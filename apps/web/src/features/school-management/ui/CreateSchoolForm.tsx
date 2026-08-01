@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 
 import { type SchoolFormValues, schoolFormSchema } from '../model/SchoolFormSchema';
 import { useCreateSchool } from '../model/UseSchoolMutations';
@@ -67,7 +68,11 @@ export function CreateSchoolForm() {
           disabled={form.formState.isSubmitting}
           className="nf-button nf-button-primary"
         >
-          {form.formState.isSubmitting ? 'Створюємо…' : 'Створити школу'}
+          {form.formState.isSubmitting ? (
+            <LoadingSpinner size="sm" label="Створюємо…" />
+          ) : (
+            'Створити школу'
+          )}
         </button>
       </div>
 

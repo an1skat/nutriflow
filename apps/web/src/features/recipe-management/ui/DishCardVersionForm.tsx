@@ -15,6 +15,7 @@ import type { DishCardVersion } from '@/entities/recipe/model/Recipe';
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
 import { createObjectId } from '@/shared/lib/ObjectId';
 import { FormField as Field, FormSection as Section } from '@/shared/ui/FormLayout';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 
 import {
   type DishCardVersionFormValues,
@@ -286,7 +287,7 @@ export function DishCardVersionForm({
     <form onSubmit={onSubmit} className="flex flex-col gap-6">
       <Section title="Алергени">
         {allergenQuery.isLoading ? (
-          <p className="text-sm text-slate-500">Завантажуємо…</p>
+          <LoadingSpinner label="Завантажуємо алергени…" />
         ) : allergens.length === 0 ? (
           <p className="text-sm text-slate-500">Аллергени відсутні.</p>
         ) : (
@@ -451,7 +452,13 @@ export function DishCardVersionForm({
 
       <div className="flex flex-wrap items-center gap-3">
         <button type="submit" disabled={isBusy} className="nf-button nf-button-primary">
-          {isBusy ? '…' : mode === 'create' ? 'Створити версію (draft)' : 'Зберегти версію'}
+          {isBusy ? (
+            <LoadingSpinner size="sm" label="Зберігаємо…" />
+          ) : mode === 'create' ? (
+            'Створити версію (draft)'
+          ) : (
+            'Зберегти версію'
+          )}
         </button>
         {mode === 'edit' && version && version.status !== 'confirmed' ? (
           <button

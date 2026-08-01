@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 
 import {
   type AllergenFormValues,
@@ -67,7 +68,7 @@ export function CreateAllergenForm({ onCreated }: { onCreated?: () => void }) {
           disabled={form.formState.isSubmitting}
           className="nf-button nf-button-primary"
         >
-          {form.formState.isSubmitting ? '…' : 'Додати'}
+          {form.formState.isSubmitting ? <LoadingSpinner size="sm" label="Додаємо…" /> : 'Додати'}
         </button>
       </div>
       <div className="sm:col-span-3">

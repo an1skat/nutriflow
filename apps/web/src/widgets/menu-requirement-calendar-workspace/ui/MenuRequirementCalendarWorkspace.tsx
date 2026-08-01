@@ -11,6 +11,7 @@ import { useSchools } from '@/entities/school/api/SchoolQueries';
 import { useCurrentUser } from '@/entities/session/api/SessionQueries';
 import type { MealType } from '@/entities/weekly-menu/model/WeeklyMenu';
 import { addDaysToLocalIsoDate, toLocalIsoDate } from '@/shared/lib/LocalDate';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 import { RequestError } from '@/shared/ui/RequestError';
 
 import { formatFullDay } from './calendar/CalendarFormatting';
@@ -170,23 +171,26 @@ export function MenuRequirementCalendarWorkspace({
           ) : !schoolWeekOnly ? (
             <label className="grid gap-1">
               <span className="nf-label">Школа</span>
-              <select
-                className="nf-input"
-                value={effectiveSchoolId}
-                onChange={(event) => {
-                  setSelectedSchoolId(event.target.value);
-                  setSelectedGroupId('');
-                  resetNavigation();
-                }}
-                disabled={schools.isPending}
-              >
-                <option value="">Оберіть школу</option>
-                {(schools.data?.items ?? []).map((school) => (
-                  <option key={school.id} value={school.id}>
-                    {school.name}
-                  </option>
-                ))}
-              </select>
+              {schools.isPending ? (
+                <LoadingSpinner size="sm" label="Завантажуємо школи…" />
+              ) : (
+                <select
+                  className="nf-input"
+                  value={effectiveSchoolId}
+                  onChange={(event) => {
+                    setSelectedSchoolId(event.target.value);
+                    setSelectedGroupId('');
+                    resetNavigation();
+                  }}
+                >
+                  <option value="">Оберіть школу</option>
+                  {(schools.data?.items ?? []).map((school) => (
+                    <option key={school.id} value={school.id}>
+                      {school.name}
+                    </option>
+                  ))}
+                </select>
+              )}
             </label>
           ) : null}
 
@@ -236,22 +240,26 @@ export function MenuRequirementCalendarWorkspace({
           {!schoolWeekOnly ? (
             <label className="grid gap-1">
               <span className="nf-label">Група</span>
-              <select
-                className="nf-input"
-                value={selectedGroupId}
-                onChange={(event) => {
-                  setSelectedGroupId(event.target.value);
-                  resetNavigation();
-                }}
-                disabled={!effectiveSchoolId || groups.isPending || groups.isError}
-              >
-                <option value="">Усі групи</option>
-                {(groups.data?.items ?? []).map((group) => (
-                  <option key={group.id} value={group.id}>
-                    {group.name}
-                  </option>
-                ))}
-              </select>
+              {groups.isPending ? (
+                <LoadingSpinner size="sm" label="Завантажуємо групи…" />
+              ) : (
+                <select
+                  className="nf-input"
+                  value={selectedGroupId}
+                  onChange={(event) => {
+                    setSelectedGroupId(event.target.value);
+                    resetNavigation();
+                  }}
+                  disabled={!effectiveSchoolId || groups.isError}
+                >
+                  <option value="">Усі групи</option>
+                  {(groups.data?.items ?? []).map((group) => (
+                    <option key={group.id} value={group.id}>
+                      {group.name}
+                    </option>
+                  ))}
+                </select>
+              )}
             </label>
           ) : null}
         </div>
@@ -268,9 +276,7 @@ export function MenuRequirementCalendarWorkspace({
       <section className="nf-panel overflow-hidden">
         {calendar.isPending ? (
           <div className="nf-panel-body">
-            <p role="status" className="text-sm text-slate-600">
-              Завантажуємо календар…
-            </p>
+            <LoadingSpinner label="Завантажуємо календар…" />
           </div>
         ) : null}
 
