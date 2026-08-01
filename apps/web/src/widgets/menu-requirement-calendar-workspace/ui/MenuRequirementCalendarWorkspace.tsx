@@ -6,7 +6,6 @@ import {
   useMenuRequirementCalendar,
   useMenuRequirementReport,
 } from '@/entities/menu-requirement/api/MenuRequirementQueries';
-import { useSchoolGroups } from '@/entities/school-group/api/SchoolGroupQueries';
 import { useSchools } from '@/entities/school/api/SchoolQueries';
 import { useCurrentUser } from '@/entities/session/api/SessionQueries';
 import type { MealType } from '@/entities/weekly-menu/model/WeeklyMenu';
@@ -59,7 +58,6 @@ export function MenuRequirementCalendarWorkspace({
   const [selectedSchoolId, setSelectedSchoolId] = useState('');
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMealType, setSelectedMealType] = useState<'' | MealType>('');
-  const [selectedGroupId, setSelectedGroupId] = useState('');
   const [selectedMonthNumber, setSelectedMonthNumber] = useState<number | null>(() =>
     schoolWeekOnly ? currentDate.getMonth() + 1 : null
   );
@@ -76,20 +74,11 @@ export function MenuRequirementCalendarWorkspace({
   const effectiveSchoolId = isSchoolUser
     ? ownSchoolId
     : selectedSchoolId || schools.data?.items[0]?.id || '';
-  const groups = useSchoolGroups(
-    schoolWeekOnly
-      ? { mode: 'admin', schoolId: '' }
-      : isSchoolUser
-        ? { mode: 'own' }
-        : { mode: 'admin', schoolId: effectiveSchoolId },
-    { offset: 0, limit: 100 }
-  );
 
   const calendar = useMenuRequirementCalendar({
     school_id: effectiveSchoolId,
     year: selectedYear,
     meal_type: selectedMealType || undefined,
-    school_group_id: selectedGroupId || undefined,
     enabled: effectiveSchoolId.length > 0,
   });
 
@@ -116,7 +105,6 @@ export function MenuRequirementCalendarWorkspace({
     date_to: reportRange?.dateTo ?? '',
     granularity: reportRange?.granularity ?? 'month',
     meal_type: selectedMealType || undefined,
-    school_group_id: selectedGroupId || undefined,
     enabled: Boolean(effectiveSchoolId && reportRange),
   });
 
@@ -158,7 +146,7 @@ export function MenuRequirementCalendarWorkspace({
           className={`nf-panel-body grid gap-4 ${
             schoolWeekOnly
               ? ''
-              : 'lg:grid-cols-[minmax(220px,1.2fr)_140px_minmax(260px,1fr)_minmax(220px,1fr)]'
+              : 'lg:grid-cols-[minmax(220px,1.2fr)_140px_minmax(260px,1fr)]'
           }`}
         >
           {!schoolWeekOnly && isSchoolUser ? (
@@ -179,7 +167,6 @@ export function MenuRequirementCalendarWorkspace({
                   value={effectiveSchoolId}
                   onChange={(event) => {
                     setSelectedSchoolId(event.target.value);
-                    setSelectedGroupId('');
                     resetNavigation();
                   }}
                 >
@@ -237,31 +224,6 @@ export function MenuRequirementCalendarWorkspace({
             </div>
           </div>
 
-          {!schoolWeekOnly ? (
-            <label className="grid gap-1">
-              <span className="nf-label">Група</span>
-              {groups.isPending ? (
-                <LoadingSpinner size="sm" label="Завантажуємо групи…" />
-              ) : (
-                <select
-                  className="nf-input"
-                  value={selectedGroupId}
-                  onChange={(event) => {
-                    setSelectedGroupId(event.target.value);
-                    resetNavigation();
-                  }}
-                  disabled={!effectiveSchoolId || groups.isError}
-                >
-                  <option value="">Усі групи</option>
-                  {(groups.data?.items ?? []).map((group) => (
-                    <option key={group.id} value={group.id}>
-                      {group.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </label>
-          ) : null}
         </div>
       </section>
 
@@ -340,7 +302,6 @@ export function MenuRequirementCalendarWorkspace({
                     dateFrom: selectedWeek.date_from,
                     dateTo: selectedWeek.date_to,
                     mealType: selectedMealType || undefined,
-                    schoolGroupId: selectedGroupId || undefined,
                   })
                 : undefined
             }
