@@ -441,3 +441,20 @@ class WeeklyMenuImportCommitResponse(BaseModel):
     created_menu_ids: list[PydanticObjectId]
     menu: WeeklyMenuResponse | None = None
     menus: list[WeeklyMenuResponse]
+
+
+class CurrentWeekClosedDayResponse(BaseModel):
+    menu_id: PydanticObjectId
+    menu_title: str
+    meal_type: MealType
+    weekday: Weekday
+    date: Date
+    closed_at: datetime
+    close_reason: DayCloseReason | None
+
+
+class CurrentWeekClosedDaysResponse(BaseModel):
+    school_id: PydanticObjectId
+    week_starts_on: Date
+    week_ends_on: Date
+    items: list[CurrentWeekClosedDayResponse]

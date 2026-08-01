@@ -1,39 +1,39 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation'
 
-import { useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Check, FileSpreadsheet, Lock, Save, Unlock } from 'lucide-react';
-import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query'
+import { AlertTriangle, Check, FileSpreadsheet, Lock, Save } from 'lucide-react'
+import { toast } from 'sonner'
 
-import { dishCardVersionQueryOptions } from '@/entities/recipe/api/RecipeQueries';
-import type { DishCard } from '@/entities/recipe/model/Recipe';
-import { useOwnSchoolGroups } from '@/entities/school-group/api/SchoolGroupQueries';
-import type { SchoolGroup } from '@/entities/school-group/model/SchoolGroup';
-import { useWeeklyMenu, useWeeklyMenus } from '@/entities/weekly-menu/api/WeeklyMenuQueries';
-import type { DailyMenu, DailyMenuItem, WeeklyMenu } from '@/entities/weekly-menu/model/WeeklyMenu';
-import { WEEKDAY_LABELS } from '@/entities/weekly-menu/model/WeeklyMenu';
+import { dishCardVersionQueryOptions } from '@/entities/recipe/api/RecipeQueries'
+import type { DishCard } from '@/entities/recipe/model/Recipe'
+import { useOwnSchoolGroups } from '@/entities/school-group/api/SchoolGroupQueries'
+import type { SchoolGroup } from '@/entities/school-group/model/SchoolGroup'
+import { useWeeklyMenu, useWeeklyMenus } from '@/entities/weekly-menu/api/WeeklyMenuQueries'
+import type { DailyMenu, DailyMenuItem, WeeklyMenu } from '@/entities/weekly-menu/model/WeeklyMenu'
+import { WEEKDAY_LABELS } from '@/entities/weekly-menu/model/WeeklyMenu'
 import {
   clearDailyMenuDraft,
   loadDailyMenuDraft,
   prepareDailyMenuDays,
   saveDailyMenuDraft,
   updateDailyMenuGroupChildrenCount,
-} from '@/features/daily-menu/model/DailyMenuDraftStorage';
-import { useGenerateMenuRequirements } from '@/features/menu-requirement-generation/model/UseGenerateMenuRequirements';
+} from '@/features/daily-menu/model/DailyMenuDraftStorage'
+import { useGenerateMenuRequirements } from '@/features/menu-requirement-generation/model/UseGenerateMenuRequirements'
 import {
   useCloseWeeklyMenuDay,
-  useDevReopenWeeklyMenuDay,
   useUpdateWeeklyMenu,
-} from '@/features/weekly-menu-editor/model/UseWeeklyMenuMutations';
-import { getApiErrorMessage } from '@/shared/api/HttpClient';
-import { formatDate } from '@/shared/lib/FormatDate';
-import { useConfirm } from '@/shared/ui/ConfirmDialog';
-import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
-import { RequestError } from '@/shared/ui/RequestError';
+} from '@/features/weekly-menu-editor/model/UseWeeklyMenuMutations'
+import { getApiErrorMessage } from '@/shared/api/HttpClient'
+import { formatDate } from '@/shared/lib/FormatDate'
+import { useConfirm } from '@/shared/ui/ConfirmDialog'
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner'
+import { RequestError } from '@/shared/ui/RequestError'
 
+import type { CatalogSelection } from './daily-menu/DailyMenuContent'
 import {
   DayMenuPanel,
   buildDailyMenuUpdatePayload,
@@ -42,8 +42,7 @@ import {
   formatMenuDate,
   resolveDayDate,
   sortDays,
-} from './daily-menu/DailyMenuContent';
-import type { CatalogSelection } from './daily-menu/DailyMenuContent';
+} from './daily-menu/DailyMenuContent'
 
 export function DailyMenuSchoolWorkspace() {
   const confirm = useConfirm();
@@ -60,7 +59,6 @@ export function DailyMenuSchoolWorkspace() {
   const selectedMenu = useWeeklyMenu(effectiveMenuId);
   const updateWeeklyMenu = useUpdateWeeklyMenu(effectiveMenuId);
   const closeWeeklyMenuDay = useCloseWeeklyMenuDay(effectiveMenuId);
-  const devReopenWeeklyMenuDay = useDevReopenWeeklyMenuDay(effectiveMenuId);
   const generateMenuRequirements = useGenerateMenuRequirements();
   const [days, setDays] = useState<DailyMenu[]>([]);
   const [activeWeekday, setActiveWeekday] = useState<DailyMenu['weekday'] | null>(null);
@@ -115,7 +113,6 @@ export function DailyMenuSchoolWorkspace() {
 
   const activeDay = days.find((day) => day.weekday === activeWeekday) ?? null;
   const isActiveDayClosed = Boolean(activeDay?.closed_at);
-  const showDevReopen = process.env.NODE_ENV !== 'production';
   const canGenerateActiveDay =
     !isActiveDayClosed &&
     (activeDay?.items.some((item) => item.servings.some((serving) => serving.children_count > 0)) ??
@@ -312,39 +309,6 @@ export function DailyMenuSchoolWorkspace() {
     }
   };
 
-  const reopenActiveDayForDev = async () => {
-    const menu = selectedMenu.data;
-
-    if (!menu || !activeDay || !activeDay.closed_at || !showDevReopen) {
-      return;
-    }
-
-    const confirmed = await confirm({
-      title: 'Відкрити день повторно?',
-      description:
-        'Dev-дія зніме блокування з дня. Уже сформована меню-вимога не видаляється; після тестових правок сформуйте її повторно.',
-      confirmLabel: 'Відкрити день',
-      variant: 'danger',
-    });
-
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      const updatedMenu = await devReopenWeeklyMenuDay.mutateAsync(activeDay.weekday);
-      const nextDays = prepareDailyMenuDays(sortDays(updatedMenu.days), activeGroups);
-      initializedMenuKey.current = `${updatedMenu.id}:${updatedMenu.updated_at}`;
-      setDays(nextDays);
-      setActiveWeekday(activeDay.weekday);
-      setSavedAt(updatedMenu.updated_at);
-      setIsDirty(false);
-      toast.success('День відкрито повторно для dev-тестування.');
-    } catch (error) {
-      toast.error(getApiErrorMessage(error));
-    }
-  };
-
   return (
     <main className="nf-page nf-page-wide">
       <header className="nf-page-header">
@@ -404,7 +368,6 @@ export function DailyMenuSchoolWorkspace() {
                 isActiveDayClosed ||
                 updateWeeklyMenu.isPending ||
                 closeWeeklyMenuDay.isPending ||
-                devReopenWeeklyMenuDay.isPending ||
                 generateMenuRequirements.isPending
               }
             >
@@ -428,7 +391,6 @@ export function DailyMenuSchoolWorkspace() {
                 !canGenerateActiveDay ||
                 updateWeeklyMenu.isPending ||
                 closeWeeklyMenuDay.isPending ||
-                devReopenWeeklyMenuDay.isPending ||
                 generateMenuRequirements.isPending
               }
               title={
@@ -446,31 +408,6 @@ export function DailyMenuSchoolWorkspace() {
                 </>
               )}
             </button>
-            {showDevReopen && isActiveDayClosed ? (
-              <button
-                type="button"
-                className="nf-button nf-button-secondary shrink-0"
-                onClick={() => void reopenActiveDayForDev()}
-                disabled={
-                  !selectedMenu.data ||
-                  !activeDay ||
-                  updateWeeklyMenu.isPending ||
-                  closeWeeklyMenuDay.isPending ||
-                  devReopenWeeklyMenuDay.isPending ||
-                  generateMenuRequirements.isPending
-                }
-                title="Dev-only: зняти блокування з дня для тестування"
-              >
-                {devReopenWeeklyMenuDay.isPending ? (
-                  <LoadingSpinner size="sm" label="Відкриваємо…" />
-                ) : (
-                  <>
-                    <Unlock className="size-4" aria-hidden />
-                    Відкрити день (dev)
-                  </>
-                )}
-              </button>
-            ) : null}
             <button
               type="button"
               className="nf-button nf-button-primary shrink-0"
@@ -482,7 +419,6 @@ export function DailyMenuSchoolWorkspace() {
                 !canGenerateActiveDay ||
                 updateWeeklyMenu.isPending ||
                 closeWeeklyMenuDay.isPending ||
-                devReopenWeeklyMenuDay.isPending ||
                 generateMenuRequirements.isPending
               }
               title={

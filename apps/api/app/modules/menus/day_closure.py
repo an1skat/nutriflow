@@ -1,11 +1,12 @@
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from datetime import date as Date
 from zoneinfo import ZoneInfo
 
 from beanie import PydanticObjectId
 
-from app.modules.identity.models import School, User, UserRole
+from app.modules.auth.service import user_has_permissions
+from app.modules.identity.models import AdminPermission, School, User, UserRole
 from app.modules.menu_requirements.service import (
     MenuRequirementValidationError,
     generate_menu_requirements,
@@ -100,40 +101,118 @@ async def close_all_due_weekly_menu_days() -> tuple[int, int]:
     return closed_days, failed_menus
 
 
-async def reopen_weekly_menu_day_for_dev(
+async def list_current_week_closed_days(
+    school_id: PydanticObjectId,
+    current_user: User,
+) -> tuple[Date, Date, list[tuple[WeeklyMenu, DailyMenu, Date]]]:
+    await _ensure_day_reopen_permission(current_user)
+    await _ensure_day_reopen_school_access(current_user, school_id)
+
+    today = _today_in_school_timezone()
+    week_starts_on, week_ends_on = _current_school_workweek(today)
+
+    menus = await WeeklyMenu.find(
+        WeeklyMenu.school_id == school_id, WeeklyMenu.status == WeeklyMenuStatus.PUBLISHED
+    ).to_list()
+
+    closed_days: list[tuple[WeeklyMenu, DailyMenu, Date]] = []
+
+    for menu in menus:
+        for day in menu.days:
+            if day.closed_at is None:
+                continue
+
+            service_date = _known_service_date(menu, day)
+            if service_date is None:
+                continue
+            if not week_starts_on <= service_date <= week_ends_on:
+                continue
+
+            closed_days.append((menu, day, service_date))
+
+    closed_days.sort(key=lambda item: (item[2], item[0].meal_type.value, item[0].title.casefold()))
+
+    return week_starts_on, week_ends_on, closed_days
+
+
+async def reopen_weekly_menu_day(
     menu_id: PydanticObjectId,
     weekday: Weekday,
     current_user: User,
 ) -> WeeklyMenu:
-    if current_user.role != UserRole.SCHOOL_USER:
-        raise MenuAccessDeniedError("Only schools can reopen their daily menus")
+    await _ensure_day_reopen_permission(current_user)
 
     menu = await WeeklyMenu.get(menu_id)
     if menu is None:
         raise MenuNotFoundError("Weekly menu not found")
-    if menu.school_id != current_user.school_id:
-        raise MenuAccessDeniedError("School access denied")
+    if menu.school_id is None:
+        raise MenuValidationError("Only school menu copies can be reopened")
     if menu.status != WeeklyMenuStatus.PUBLISHED:
-        raise MenuAccessDeniedError("Menu access denied")
+        raise MenuValidationError("Only published school menus can be reopened")
+
+    await _ensure_day_reopen_school_access(current_user, menu.school_id)
 
     day = next((candidate for candidate in menu.days if candidate.weekday == weekday), None)
     if day is None:
         raise MenuNotFoundError("Daily menu not found")
+
+    service_date = _known_service_date(menu, day)
+    if service_date is None:
+        raise MenuValidationError("Daily menu date is required to reopen it")
+
+    today = _today_in_school_timezone()
+    week_starts_on, week_end_on = _current_school_workweek(today)
+
+    if not week_starts_on <= service_date <= week_end_on:
+        raise MenuValidationError("Only current-week daily menus can be reopened")
+
     if day.closed_at is None:
         return menu
 
     now = datetime.now(UTC)
-    day.closed_at = None
-    day.closed_by = None
-    day.close_reason = None
-    day.close_notification_pending = False
-    day.close_notification_sent_at = None
-    day.dev_reopened_at = now
-    menu.updated_by = current_user.id
-    menu.updated_at = now
-    menu.revision += 1
-    await menu.save()
-    return menu
+    result = await WeeklyMenu.get_pymongo_collection().update_one(
+        {
+            "_id": menu.id,
+            "school_id": menu.school_id,
+            "status": WeeklyMenuStatus.PUBLISHED.value,
+            "days": {
+                "$elemMatch": {
+                    "weekday": weekday.value,
+                    "closed_at": {"$ne": None},
+                }
+            },
+        },
+        {
+            "$set": {
+                "days.$.closed_at": None,
+                "days.$.closed_by": None,
+                "days.$.close_reason": None,
+                "days.$.close_notification_pending": False,
+                "days.$.close_notification_sent_at": None,
+                "days.$.reopened_at": now,
+                "days.$.reopened_by": current_user.id,
+                "updated_by": current_user.id,
+                "updated_at": now,
+            },
+            "$inc": {"revision": 1},
+        },
+    )
+
+    updated_menu = await WeeklyMenu.get(menu_id)
+    if updated_menu is None:
+        raise MenuNotFoundError("Weekly menu not found")
+
+    if result.modified_count == 0:
+        updated_day = next(
+            (candidate for candidate in updated_menu.days if candidate.weekday == weekday), None
+        )
+
+        if updated_day is None:
+            raise MenuNotFoundError("Daily menu not found")
+        if updated_day.closed_at is not None:
+            raise MenuValidationError("Daily menu could not be reopened")
+
+    return updated_menu
 
 
 async def _close_weekly_menu_day(
@@ -196,7 +275,8 @@ async def _close_weekly_menu_day(
                 "days.$.close_reason": reason.value,
                 "days.$.close_notification_pending": True,
                 "days.$.close_notification_sent_at": None,
-                "days.$.dev_reopened_at": None,
+                "days.$.reopened_at": None,
+                "days.$.reopened_by": None,
                 "updated_by": current_user.id,
                 "updated_at": now,
             },
@@ -251,7 +331,7 @@ def _resolve_auto_close_service_date(
     day: DailyMenu,
     today: Date,
 ) -> Date | None:
-    if day.dev_reopened_at is not None:
+    if day.reopened_at is not None:
         return None
 
     if day.date is not None or menu.starts_on is not None:
@@ -265,3 +345,41 @@ def _resolve_auto_close_service_date(
 
 def _today_in_school_timezone() -> Date:
     return datetime.now(SCHOOL_TIMEZONE).date()
+
+
+def _current_school_workweek(today: Date) -> tuple[Date, Date]:
+    monday = today - timedelta(today.weekday())
+    friday = monday + timedelta(days=4)
+    return monday, friday
+
+
+def _known_service_date(menu: WeeklyMenu, day: DailyMenu) -> Date | None:
+    if day.date is not None:
+        return day.date
+    if menu.starts_on is not None:
+        return resolve_service_date(menu, day, menu.starts_on)
+    return None
+
+
+async def _ensure_day_reopen_permission(current_user: User) -> None:
+    if current_user.role not in {UserRole.OWNER, UserRole.ADMIN}:
+        raise MenuAccessDeniedError("Only administrators can reopen daily menus")
+    if not await user_has_permissions(current_user, AdminPermission.MENUS_MANAGE):
+        raise MenuAccessDeniedError("Insufficient permissions")
+    if current_user.id is None:
+        raise MenuAccessDeniedError("Current user is not persisted")
+
+
+async def _ensure_day_reopen_school_access(
+    current_user: User, school_id: PydanticObjectId
+) -> School:
+    school = await School.get(school_id)
+
+    if school is None:
+        raise MenuValidationError("School not found")
+    if not school.is_active:
+        raise MenuValidationError("School is inactive")
+    if current_user.role == UserRole.ADMIN and school.admin_owner_id != current_user.id:
+        raise MenuAccessDeniedError("School access denied")
+
+    return school

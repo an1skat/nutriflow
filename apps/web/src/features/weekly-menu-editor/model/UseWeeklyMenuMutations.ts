@@ -9,7 +9,6 @@ import {
   closeWeeklyMenuDay,
   createWeeklyMenu,
   deleteWeeklyMenu,
-  devReopenWeeklyMenuDay,
   publishWeeklyMenu,
   restoreSchoolWeeklyMenu,
   restoreWeeklyMenu,
@@ -134,31 +133,6 @@ export function useCloseWeeklyMenuDay(menuId: string) {
 
   return useMutation({
     mutationFn: (weekday: Weekday) => closeWeeklyMenuDay(menuId, weekday),
-    onSuccess: async (menu) => {
-      queryClient.setQueryData(weeklyMenuQueryKeys.detail(menuId), menu);
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: weeklyMenuQueryKeys.lists(),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: menuRequirementQueryKeys.lists(),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: menuRequirementQueryKeys.calendars(),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: menuRequirementQueryKeys.reports(),
-        }),
-      ]);
-    },
-  });
-}
-
-export function useDevReopenWeeklyMenuDay(menuId: string) {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (weekday: Weekday) => devReopenWeeklyMenuDay(menuId, weekday),
     onSuccess: async (menu) => {
       queryClient.setQueryData(weeklyMenuQueryKeys.detail(menuId), menu);
       await Promise.all([

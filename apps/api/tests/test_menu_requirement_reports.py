@@ -30,6 +30,7 @@ def create_confirmed_dish(
     ingredient_name: str = "Морква",
     card_number: str = "REQ-R-1",
     net_amount: str = "20.25",
+    gross_amount: str = "25",
 ) -> tuple[str, str, str]:
     ingredient_response = client.post(
         "/api/v1/recipes/ingredients",
@@ -63,7 +64,7 @@ def create_confirmed_dish(
                 {
                     "ingredient_id": ingredient_id,
                     "ingredient_name_snapshot": ingredient_name,
-                    "gross_amount": net_amount,
+                    "gross_amount": gross_amount,
                     "net_amount": net_amount,
                     "unit": "g",
                     "portion_variant_id": str(variant_id),

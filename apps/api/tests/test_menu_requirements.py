@@ -11,8 +11,11 @@ from pymongo import MongoClient
 from app.core.config import get_settings
 from app.modules.menu_requirements.service import _menu_day_service_date, resolve_service_date
 from app.modules.menu_requirements.utils import hash_daily_menu
+from app.modules.menus.day_closure import (
+    _current_school_workweek,
+    _resolve_auto_close_service_date,
+)
 from app.modules.menus.models import DailyMenu, MealType, Weekday, WeeklyMenu
-from app.modules.menus.service import _resolve_auto_close_service_date
 
 
 def login(client: TestClient, identifier: str, password: str) -> None:
@@ -66,15 +69,23 @@ def test_service_date_derives_from_week_start_when_day_date_is_missing() -> None
 
 
 @pytest.mark.no_clean_database
-def test_dev_reopened_day_is_not_auto_closed_again() -> None:
+def test_current_school_workweek_is_monday_through_friday() -> None:
+    assert _current_school_workweek(Date(2026, 8, 1)) == (
+        Date(2026, 7, 27),
+        Date(2026, 7, 31),
+    )
+
+
+@pytest.mark.no_clean_database
+def test_reopened_day_is_not_auto_closed_again() -> None:
     day = DailyMenu.model_construct(
         weekday=Weekday.MONDAY,
         date=Date(2026, 7, 6),
-        dev_reopened_at=datetime(2026, 7, 20, 10, 0, tzinfo=UTC),
+        reopened_at=datetime(2026, 7, 20, 10, 0, tzinfo=UTC),
         items=[],
     )
     menu = WeeklyMenu.model_construct(
-        title="Dev-відкрите меню",
+        title="Повторно відкрите меню",
         meal_type=MealType.LUNCH,
         starts_on=Date(2026, 7, 6),
         days=[day],
@@ -96,6 +107,8 @@ def test_requirement_hash_ignores_close_notification_delivery_state() -> None:
 
     day.close_notification_pending = True
     day.close_notification_sent_at = datetime(2026, 7, 6, 16, 0, tzinfo=UTC)
+    day.reopened_at = datetime(2026, 7, 6, 17, 0, tzinfo=UTC)
+    day.reopened_by = PydanticObjectId()
 
     assert hash_daily_menu(day) == initial_hash
 
@@ -432,7 +445,10 @@ def test_school_generates_and_regenerates_menu_requirement(seeded_client) -> Non
     assert technologist_delete_response.status_code == 204
 
 
-def test_school_closes_day_and_locks_saved_daily_menu(seeded_client) -> None:
+def test_school_closes_day_and_admin_reopens_it(
+    seeded_client,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     client, identities = seeded_client
     login(client, identities.admin.username, identities.admin_password)
 
@@ -524,8 +540,63 @@ def test_school_closes_day_and_locks_saved_daily_menu(seeded_client) -> None:
     assert regenerate_response.status_code == 400
     assert regenerate_response.json()["detail"] == "Daily menu is closed"
 
+    school_reopen_response = client.post(
+        f"/api/v1/menus/weekly/{menu['id']}/days/monday/reopen",
+        headers=csrf_headers(client),
+    )
+    assert school_reopen_response.status_code == 403
+    assert school_reopen_response.json()["detail"] == ("Only administrators can reopen daily menus")
+
+    login(client, identities.lower_admin.username, identities.lower_admin_password)
+
+    forbidden_school_response = client.get(
+        "/api/v1/menus/weekly/current-week/closed-days",
+        params={"school_id": str(identities.other_school.id)},
+    )
+    assert forbidden_school_response.status_code == 403
+    assert forbidden_school_response.json()["detail"] == "School access denied"
+
+    monkeypatch.setattr(
+        "app.modules.menus.day_closure._today_in_school_timezone",
+        lambda: Date(2026, 7, 13),
+    )
+    previous_workweek_response = client.post(
+        f"/api/v1/menus/weekly/{menu['id']}/days/monday/reopen",
+        headers=csrf_headers(client),
+    )
+    assert previous_workweek_response.status_code == 400
+    assert previous_workweek_response.json()["detail"] == (
+        "Only current-week daily menus can be reopened"
+    )
+
+    monkeypatch.setattr(
+        "app.modules.menus.day_closure._today_in_school_timezone",
+        lambda: Date(2026, 7, 6),
+    )
+    closed_days_response = client.get(
+        "/api/v1/menus/weekly/current-week/closed-days",
+        params={"school_id": str(identities.own_school.id)},
+    )
+    assert closed_days_response.status_code == 200
+    assert closed_days_response.json() == {
+        "school_id": str(identities.own_school.id),
+        "week_starts_on": "2026-07-06",
+        "week_ends_on": "2026-07-10",
+        "items": [
+            {
+                "menu_id": menu["id"],
+                "menu_title": menu["title"],
+                "meal_type": "lunch",
+                "weekday": "monday",
+                "date": "2026-07-06",
+                "closed_at": closed_day["closed_at"],
+                "close_reason": "manual",
+            }
+        ],
+    }
+
     reopen_response = client.post(
-        f"/api/v1/menus/weekly/{menu['id']}/days/monday/dev-reopen",
+        f"/api/v1/menus/weekly/{menu['id']}/days/monday/reopen",
         headers=csrf_headers(client),
     )
     assert reopen_response.status_code == 200
@@ -534,6 +605,35 @@ def test_school_closes_day_and_locks_saved_daily_menu(seeded_client) -> None:
     assert reopened_day["closed_at"] is None
     assert reopened_day["closed_by"] is None
     assert reopened_day["close_reason"] is None
+    assert reopened_menu["revision"] == closed_menu["revision"] + 1
+
+    duplicate_reopen_response = client.post(
+        f"/api/v1/menus/weekly/{menu['id']}/days/monday/reopen",
+        headers=csrf_headers(client),
+    )
+    assert duplicate_reopen_response.status_code == 200
+    assert duplicate_reopen_response.json()["revision"] == reopened_menu["revision"]
+
+    closed_days_after_reopen_response = client.get(
+        "/api/v1/menus/weekly/current-week/closed-days",
+        params={"school_id": str(identities.own_school.id)},
+    )
+    assert closed_days_after_reopen_response.status_code == 200
+    assert closed_days_after_reopen_response.json()["items"] == []
+
+    mongo_client = MongoClient(settings.mongo_uri, tz_aware=True)
+    try:
+        stored_menu = mongo_client[settings.mongo_db]["weekly_menus"].find_one(
+            {"_id": PydanticObjectId(menu["id"])}
+        )
+    finally:
+        mongo_client.close()
+    assert stored_menu is not None
+    assert stored_menu["days"][0]["close_notification_pending"] is False
+    assert stored_menu["days"][0]["reopened_at"] is not None
+    assert stored_menu["days"][0]["reopened_by"] == identities.lower_admin.id
+
+    login(client, identities.school_user.username, identities.school_user_password)
 
     reopened_day["items"][0]["servings"][0]["children_count"] = 6
     reopened_edit_response = client.patch(

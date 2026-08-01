@@ -138,6 +138,23 @@ export const publishWeeklyMenuResponseSchema = z.object({
   skipped_existing_school_ids: z.array(z.string().min(1)),
 });
 
+export const currentWeekClosedDaySchema = z.object({
+  menu_id: z.string().min(1),
+  menu_title: z.string().min(1),
+  meal_type: mealTypeSchema,
+  weekday: weekdaySchema,
+  date: z.string().min(1),
+  closed_at: z.string().min(1),
+  close_reason: dayCloseReasonSchema.nullable(),
+});
+
+export const currentWeekClosedDaysSchema = z.object({
+  school_id: z.string().min(1),
+  week_starts_on: z.string().min(1),
+  week_ends_on: z.string().min(1),
+  items: z.array(currentWeekClosedDaySchema),
+});
+
 export type MealType = z.infer<typeof mealTypeSchema>;
 export type Weekday = z.infer<typeof weekdaySchema>;
 export type WeeklyMenuStatus = z.infer<typeof weeklyMenuStatusSchema>;
@@ -217,3 +234,6 @@ export type PublishWeeklyMenuPayload = {
   school_ids?: string[];
   replace_existing?: boolean;
 };
+
+export type CurrentWeekClosedDay = z.infer<typeof currentWeekClosedDaySchema>;
+export type CurrentWeekClosedDays = z.infer<typeof currentWeekClosedDaysSchema>;

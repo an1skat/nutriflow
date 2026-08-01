@@ -26,6 +26,8 @@ def hash_daily_menu(day: DailyMenu) -> str:
     day_data.pop("close_reason", None)
     day_data.pop("close_notification_pending", None)
     day_data.pop("close_notification_sent_at", None)
+    day_data.pop("reopened_at", None)
+    day_data.pop("reopened_by", None)
     day_data.pop("dev_reopened_at", None)
     canonical = json.dumps(
         day_data,

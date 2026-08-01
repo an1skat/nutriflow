@@ -23,7 +23,10 @@ from app.modules.menus.day_closure import (
     close_weekly_menu_day as close_weekly_menu_day,
 )
 from app.modules.menus.day_closure import (
-    reopen_weekly_menu_day_for_dev as reopen_weekly_menu_day_for_dev,
+    list_current_week_closed_days as list_current_week_closed_days,
+)
+from app.modules.menus.day_closure import (
+    reopen_weekly_menu_day as reopen_weekly_menu_day,
 )
 from app.modules.menus.errors import (
     MenuAccessDeniedError,
@@ -614,7 +617,8 @@ def _merge_distributed_days(
                         merged_day.items[index] = deepcopy(current_item)
                     else:
                         item.servings = deepcopy(current_item.servings)
-            merged_day.dev_reopened_at = current_day.dev_reopened_at
+            merged_day.reopened_at = current_day.reopened_at
+            merged_day.reopened_by = current_day.reopened_by
         merged_days.append(merged_day)
 
     source_weekdays = {day.weekday for day in source_days}
@@ -1313,7 +1317,8 @@ def _copy_day_close_metadata(
         submitted_day.close_reason = current_day.close_reason
         submitted_day.close_notification_pending = current_day.close_notification_pending
         submitted_day.close_notification_sent_at = current_day.close_notification_sent_at
-        submitted_day.dev_reopened_at = current_day.dev_reopened_at
+        submitted_day.reopened_at = current_day.reopened_at
+        submitted_day.reopened_by = current_day.reopened_by
 
 
 def _day_content_dump(day: DailyMenu) -> dict[str, Any]:
@@ -1323,7 +1328,8 @@ def _day_content_dump(day: DailyMenu) -> dict[str, Any]:
     data.pop("close_reason", None)
     data.pop("close_notification_pending", None)
     data.pop("close_notification_sent_at", None)
-    data.pop("dev_reopened_at", None)
+    data.pop("reopened_at", None)
+    data.pop("reopened_by", None)
     return data
 
 

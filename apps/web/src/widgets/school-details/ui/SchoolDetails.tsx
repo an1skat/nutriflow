@@ -8,8 +8,10 @@ import { toast } from 'sonner';
 
 import { useSchoolUsers } from '@/entities/school-user/api/SchoolUserQueries';
 import { useSchool } from '@/entities/school/api/SchoolQueries';
+import { useCurrentUser } from '@/entities/session/api/SessionQueries';
 import { useWeeklyMenus } from '@/entities/weekly-menu/api/WeeklyMenuQueries';
 import type { WeeklyMenu } from '@/entities/weekly-menu/model/WeeklyMenu';
+import { hasPermission } from '@/features/access/model/AccessPolicy';
 import { EditSchoolForm } from '@/features/school-management/ui/EditSchoolForm';
 import { CreateSchoolUserForm } from '@/features/school-user-management/ui/CreateSchoolUserForm';
 import { useRevokeWeeklyMenu } from '@/features/weekly-menu-editor/model/UseWeeklyMenuMutations';
@@ -20,6 +22,7 @@ import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 import { PaginationControls } from '@/shared/ui/PaginationControls';
 import { RequestError } from '@/shared/ui/RequestError';
 import { StatusBadge } from '@/shared/ui/StatusBadge';
+import { SchoolDayReopeningPanel } from '@/widgets/school-day-reopening/ui/SchoolDayReopeningPanel';
 import { SchoolGroupsPanel } from '@/widgets/school-groups/ui/SchoolGroupsPanel';
 
 import { SchoolMenuPreviewDialog } from './SchoolMenuPreviewDialog';
@@ -27,6 +30,10 @@ import { SchoolMenuPreviewDialog } from './SchoolMenuPreviewDialog';
 const PAGE_SIZE = 20;
 
 export function SchoolDetails({ schoolId }: { schoolId: string }) {
+  const currentUser = useCurrentUser();
+  const canManageMenus = Boolean(
+    currentUser.data && hasPermission(currentUser.data, 'menus.manage')
+  );
   const school = useSchool(schoolId);
   const [offset, setOffset] = useState(0);
   const users = useSchoolUsers(schoolId, {
@@ -84,7 +91,12 @@ export function SchoolDetails({ schoolId }: { schoolId: string }) {
         <SchoolGroupsPanel mode="admin" schoolId={schoolId} />
       </details>
 
-      <SchoolMenusPanel schoolId={schoolId} />
+      {canManageMenus ? (
+        <>
+          <SchoolDayReopeningPanel schoolId={schoolId} />
+          <SchoolMenusPanel schoolId={schoolId} />
+        </>
+      ) : null}
 
       <section className="nf-panel mt-5">
         <div className="nf-panel-header">

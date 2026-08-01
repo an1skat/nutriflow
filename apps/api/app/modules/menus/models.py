@@ -151,7 +151,8 @@ class DailyMenu(BaseModel):
     close_reason: DayCloseReason | None = None
     close_notification_pending: bool = False
     close_notification_sent_at: datetime | None = None
-    dev_reopened_at: datetime | None = None
+    reopened_at: datetime | None = None
+    reopened_by: PydanticObjectId | None = None
 
     @model_validator(mode="after")
     def validate_item_positions(self) -> Self:

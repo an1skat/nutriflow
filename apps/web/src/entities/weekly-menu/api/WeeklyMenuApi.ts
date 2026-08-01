@@ -2,6 +2,7 @@ import { apiClient, getCsrfHeaders } from '@/shared/api/HttpClient';
 import { toApiPaginationParams } from '@/shared/api/Pagination';
 
 import {
+  CurrentWeekClosedDays,
   type PublishWeeklyMenuPayload,
   type PublishWeeklyMenuResponse,
   type Weekday,
@@ -10,6 +11,7 @@ import {
   type WeeklyMenuListRequest,
   type WeeklyMenuPayload,
   type WeeklyMenuUpdatePayload,
+  currentWeekClosedDaysSchema,
   publishWeeklyMenuResponseSchema,
   weeklyMenuListSchema,
   weeklyMenuSchema,
@@ -90,21 +92,6 @@ export async function closeWeeklyMenuDay(menuId: string, weekday: Weekday): Prom
   return weeklyMenuSchema.parse(response.data);
 }
 
-export async function devReopenWeeklyMenuDay(
-  menuId: string,
-  weekday: Weekday
-): Promise<WeeklyMenu> {
-  const response = await apiClient.post<unknown>(
-    `/menus/weekly/${menuId}/days/${weekday}/dev-reopen`,
-    null,
-    {
-      headers: getCsrfHeaders(),
-    }
-  );
-
-  return weeklyMenuSchema.parse(response.data);
-}
-
 export async function revokeWeeklyMenu(menuId: string): Promise<WeeklyMenu> {
   const response = await apiClient.post<unknown>(`/menus/weekly/${menuId}/revoke`, null, {
     headers: getCsrfHeaders(),
@@ -136,4 +123,24 @@ export async function publishWeeklyMenu(
   });
 
   return publishWeeklyMenuResponseSchema.parse(response.data);
+}
+
+export async function fetchCurrentWeekClosedDays(schoolId: string): Promise<CurrentWeekClosedDays> {
+  const response = await apiClient.get<unknown>('/menus/weekly/current-week/closed-days', {
+    params: { school_id: schoolId },
+  });
+
+  return currentWeekClosedDaysSchema.parse(response.data);
+}
+
+export async function reopenWeeklyMenuDay(menuId: string, weekday: Weekday): Promise<WeeklyMenu> {
+  const response = await apiClient.post<unknown>(
+    `/menus/weekly/${menuId}/days/${weekday}/reopen`,
+    null,
+    {
+      headers: getCsrfHeaders(),
+    }
+  );
+
+  return weeklyMenuSchema.parse(response.data);
 }

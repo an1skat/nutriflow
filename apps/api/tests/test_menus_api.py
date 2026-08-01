@@ -194,7 +194,6 @@ def test_admin_previews_and_commits_imported_weekly_menu(seeded_client):
         client,
         card_number="1.54",
         allergen_codes=["ГЦ"],
-        output_grams="120",
     )
 
     preview_response = client.post(
@@ -215,7 +214,9 @@ def test_admin_previews_and_commits_imported_weekly_menu(seeded_client):
     assert preview["available_sheet_names"] == ["І тиждень"]
     assert preview["selected_sheet_name"] == "І тиждень"
     assert [diagnostic["code"] for diagnostic in preview["diagnostics"]] == [
-        "portion_variant_scaled"
+        "portion_variant_scaled",
+        "portion_variant_scaled",
+        "portion_variant_scaled",
     ]
     assert preview["menu"]["days"][0]["items"][0]["recipe_card_number"] == "1.54"
 
