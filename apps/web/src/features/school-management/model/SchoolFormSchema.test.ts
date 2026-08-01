@@ -3,23 +3,20 @@ import { describe, expect, it } from 'vitest';
 import { editSchoolFormSchema, schoolFormSchema } from './SchoolFormSchema';
 
 describe('school form schemas', () => {
-  it('trims school values', () => {
+  it('trims the school name', () => {
     expect(
       schoolFormSchema.parse({
         name: '  Ліцей №1  ',
-        code: '  school-1  ',
       })
     ).toEqual({
       name: 'Ліцей №1',
-      code: 'school-1',
     });
   });
 
-  it('requires a valid name and code', () => {
+  it('requires a valid name', () => {
     expect(
       schoolFormSchema.safeParse({
         name: '',
-        code: 'A',
       }).success
     ).toBe(false);
   });
@@ -28,7 +25,6 @@ describe('school form schemas', () => {
     expect(
       editSchoolFormSchema.parse({
         name: 'Ліцей №1',
-        code: 'SCHOOL-1',
         is_active: false,
       }).is_active
     ).toBe(false);

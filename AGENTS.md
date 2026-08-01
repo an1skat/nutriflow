@@ -75,7 +75,7 @@ app/
 ```
 
 ### Документи БД (`modules/identity/models.py`)
-- `School`: `name`, `code` (нормалізується у верхній регістр, unique-індекс), `is_active`, `created_at`, `updated_at`.
+- `School`: `name`, `is_active`, `created_at`, `updated_at`.
 - `User`: `username` (unique, патерн `^[a-z0-9][a-z0-9._-]*$`, нормалізується lower), `email` (partial unique), `password_hash`, `role` (`ADMIN` | `SCHOOL_USER`), `school_id`, `is_active`, `auth_version`. Валідатори: адмін не має `school_id` й обов'язково має email; school-юзер обов'язково має `school_id`.
 - `RefreshSession`: `user_id`, `family_id`, `token_hash` (unique), `expires_at` (TTL-індекс), `revoked_at`, `revoke_reason`, `replaced_by_session_id`.
 

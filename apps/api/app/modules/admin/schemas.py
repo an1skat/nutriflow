@@ -16,7 +16,6 @@ from app.modules.identity.models import (
     AdminPermission,
     AgeGroup,
     School,
-    SchoolCode,
     SchoolGroup,
     TrimmedName,
     User,
@@ -26,13 +25,11 @@ from app.modules.identity.models import (
 
 class CreateSchoolRequest(BaseModel):
     name: TrimmedName
-    code: SchoolCode
     admin_owner_id: PydanticObjectId | None = None
 
 
 class UpdateSchoolRequest(BaseModel):
     name: TrimmedName | None = None
-    code: SchoolCode | None = None
     admin_owner_id: PydanticObjectId | None = None
     is_active: bool | None = None
 
@@ -42,8 +39,6 @@ class UpdateSchoolRequest(BaseModel):
             raise ValueError("At least one field must be provided")
         if "name" in self.model_fields_set and self.name is None:
             raise ValueError("School name cannot be null")
-        if "code" in self.model_fields_set and self.code is None:
-            raise ValueError("School code cannot be null")
         if "is_active" in self.model_fields_set and self.is_active is None:
             raise ValueError("is_active cannot be null")
         return self
@@ -54,7 +49,6 @@ class SchoolResponse(BaseModel):
 
     id: PydanticObjectId
     name: str
-    code: str
     admin_owner_id: PydanticObjectId | None
     is_active: bool
     created_at: datetime

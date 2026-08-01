@@ -69,7 +69,6 @@ export function SchoolsOverview() {
                 <thead>
                   <tr>
                     <th>Назва</th>
-                    <th className="w-44">Код</th>
                     <th className="w-40">Статус</th>
                     <th className="w-52">Оновлено</th>
                   </tr>
@@ -81,9 +80,6 @@ export function SchoolsOverview() {
                         <Link href={`/admin/schools/${school.id}`} className="nf-link">
                           {school.name}
                         </Link>
-                      </td>
-                      <td>
-                        <code className="text-xs">{school.code}</code>
                       </td>
                       <td>
                         <StatusBadge isActive={school.is_active} />

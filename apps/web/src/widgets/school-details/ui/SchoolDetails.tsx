@@ -70,9 +70,7 @@ export function SchoolDetails({ schoolId }: { schoolId: string }) {
           </div>
           <StatusBadge isActive={school.data.is_active} />
         </div>
-        <p className="nf-description">
-          Код: <code>{school.data.code}</code> · Створено {formatDate(school.data.created_at)}
-        </p>
+        <p className="nf-description">Створено {formatDate(school.data.created_at)}</p>
       </header>
 
       <section className="nf-panel">

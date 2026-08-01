@@ -5,7 +5,6 @@ export const detailTranslations: Record<string, string> = {
   'CSRF validation failed': 'Не вдалося підтвердити безпечність запиту. Оновіть сторінку.',
   'Insufficient permissions': 'Недостатньо прав для виконання операції.',
   'School access denied': 'Немає доступу до даних цієї школи.',
-  'A school with this code already exists': 'Школа з таким кодом уже існує.',
   'School not found': 'Школу не знайдено.',
   'Admin password confirmation required': 'Потрібно підтвердити пароль адміністратора.',
   'Invalid admin password': 'Неправильний пароль адміністратора.',

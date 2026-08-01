@@ -5,7 +5,6 @@ import { schoolListSchema, schoolSchema } from './School';
 const school = {
   id: 'school-id',
   name: 'Ліцей №1',
-  code: 'LYCEUM-1',
   admin_owner_id: 'admin-id',
   is_active: true,
   created_at: '2026-07-03T08:00:00Z',

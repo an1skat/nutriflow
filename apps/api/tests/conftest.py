@@ -136,20 +136,17 @@ async def seed_identities() -> SeededIdentities:
 
         own_school = School(
             name="Own School",
-            code="OWN",
             admin_owner_id=lower_admin.id,
         )
         await own_school.insert()
 
         other_school = School(
             name="Other School",
-            code="OTHER",
         )
         await other_school.insert()
 
         inactive_school = School(
             name="Inactive School",
-            code="INACTIVE",
             is_active=False,
         )
         await inactive_school.insert()

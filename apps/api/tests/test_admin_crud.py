@@ -75,14 +75,12 @@ def test_admin_can_list_get_and_update_schools(seeded_client):
         f"/api/v1/admin/schools/{identities.other_school.id}",
         json={
             "name": "Updated School",
-            "code": "updated-code",
         },
         headers=csrf_headers(client),
     )
 
     assert update_response.status_code == 200
     assert update_response.json()["name"] == "Updated School"
-    assert update_response.json()["code"] == "UPDATED-CODE"
 
     get_response = client.get(f"/api/v1/admin/schools/{identities.other_school.id}")
 

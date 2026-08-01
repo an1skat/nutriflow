@@ -22,7 +22,6 @@ export function EditSchoolForm({ school }: EditSchoolFormProps) {
     resolver: zodResolver(editSchoolFormSchema),
     defaultValues: {
       name: school.name,
-      code: school.code,
       is_active: school.is_active,
     },
   });
@@ -30,7 +29,6 @@ export function EditSchoolForm({ school }: EditSchoolFormProps) {
   useEffect(() => {
     form.reset({
       name: school.name,
-      code: school.code,
       is_active: school.is_active,
     });
   }, [form, school]);
@@ -50,30 +48,16 @@ export function EditSchoolForm({ school }: EditSchoolFormProps) {
 
   return (
     <form onSubmit={onSubmit} className="space-y-3">
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <label htmlFor="edit-school-name" className="nf-label">
-            Назва школи
-          </label>
-          <input id="edit-school-name" {...form.register('name')} className="nf-input" />
-          {form.formState.errors.name ? (
-            <p role="alert" className="nf-field-error">
-              {form.formState.errors.name.message}
-            </p>
-          ) : null}
-        </div>
-
-        <div>
-          <label htmlFor="edit-school-code" className="nf-label">
-            Код
-          </label>
-          <input id="edit-school-code" {...form.register('code')} className="nf-input uppercase" />
-          {form.formState.errors.code ? (
-            <p role="alert" className="nf-field-error">
-              {form.formState.errors.code.message}
-            </p>
-          ) : null}
-        </div>
+      <div>
+        <label htmlFor="edit-school-name" className="nf-label">
+          Назва школи
+        </label>
+        <input id="edit-school-name" {...form.register('name')} className="nf-input" />
+        {form.formState.errors.name ? (
+          <p role="alert" className="nf-field-error">
+            {form.formState.errors.name.message}
+          </p>
+        ) : null}
       </div>
 
       <label className="nf-checkbox-row">

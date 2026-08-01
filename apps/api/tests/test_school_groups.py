@@ -33,7 +33,6 @@ def test_new_school_has_default_age_groups(seeded_client):
         "/api/v1/admin/schools",
         json={
             "name": "Default Groups School",
-            "code": "DGS",
         },
         headers=csrf_headers(client),
     )

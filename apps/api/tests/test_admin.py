@@ -44,7 +44,6 @@ def test_admin_can_create_school_and_school_user(seeded_client):
         "/api/v1/admin/schools",
         json={
             "name": "New School",
-            "code": "new-school",
         },
         headers=csrf_headers(client),
     )
@@ -54,7 +53,6 @@ def test_admin_can_create_school_and_school_user(seeded_client):
     school_data = school_response.json()
 
     assert school_data["name"] == "New School"
-    assert school_data["code"] == "NEW-SCHOOL"
     assert school_data["is_active"] is True
 
     user_response = client.post(
@@ -116,7 +114,6 @@ def test_lower_admin_sees_and_manages_only_owned_schools(seeded_client):
         "/api/v1/admin/schools",
         json={
             "name": "Lower Admin School",
-            "code": "LOWER",
         },
         headers=csrf_headers(client),
     )
@@ -213,7 +210,6 @@ def test_admin_endpoint_requires_authentication(seeded_client):
         "/api/v1/admin/schools",
         json={
             "name": "Forbidden School",
-            "code": "FORBIDDEN",
         },
     )
 
@@ -233,7 +229,6 @@ def test_admin_endpoint_requires_csrf(seeded_client):
         "/api/v1/admin/schools",
         json={
             "name": "Missing CSRF School",
-            "code": "NO-CSRF",
         },
     )
 
@@ -254,34 +249,12 @@ def test_school_user_cannot_create_school(seeded_client):
         "/api/v1/admin/schools",
         json={
             "name": "Unauthorized School",
-            "code": "UNAUTHORIZED",
         },
         headers=csrf_headers(client),
     )
 
     assert response.status_code == 403
     assert response.json()["detail"] == "Insufficient permissions"
-
-
-def test_duplicate_school_code_returns_conflict(seeded_client):
-    client, identities = seeded_client
-
-    login(
-        client,
-        identities.admin.username,
-        identities.admin_password,
-    )
-
-    response = client.post(
-        "/api/v1/admin/schools",
-        json={
-            "name": "Duplicate School",
-            "code": identities.own_school.code.lower(),
-        },
-        headers=csrf_headers(client),
-    )
-
-    assert response.status_code == 409
 
 
 @pytest.mark.parametrize(

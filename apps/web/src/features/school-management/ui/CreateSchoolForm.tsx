@@ -15,7 +15,6 @@ export function CreateSchoolForm() {
     resolver: zodResolver(schoolFormSchema),
     defaultValues: {
       name: '',
-      code: '',
     },
   });
 
@@ -34,7 +33,7 @@ export function CreateSchoolForm() {
   });
 
   return (
-    <form onSubmit={onSubmit} className="grid gap-3 sm:grid-cols-[minmax(220px,1fr)_180px_auto]">
+    <form onSubmit={onSubmit} className="grid gap-3 sm:grid-cols-[minmax(220px,1fr)_auto]">
       <div>
         <label htmlFor="school-name" className="nf-label">
           Назва школи
@@ -43,18 +42,6 @@ export function CreateSchoolForm() {
         {form.formState.errors.name ? (
           <p role="alert" className="nf-field-error">
             {form.formState.errors.name.message}
-          </p>
-        ) : null}
-      </div>
-
-      <div>
-        <label htmlFor="school-code" className="nf-label">
-          Код
-        </label>
-        <input id="school-code" {...form.register('code')} className="nf-input uppercase" />
-        {form.formState.errors.code ? (
-          <p role="alert" className="nf-field-error">
-            {form.formState.errors.code.message}
           </p>
         ) : null}
       </div>
@@ -77,12 +64,12 @@ export function CreateSchoolForm() {
       </div>
 
       {form.formState.errors.root ? (
-        <p role="alert" className="nf-error sm:col-span-3">
+        <p role="alert" className="nf-error sm:col-span-2">
           {form.formState.errors.root.message}
         </p>
       ) : null}
       {createSchool.isSuccess ? (
-        <p role="status" className="nf-success sm:col-span-3">
+        <p role="status" className="nf-success sm:col-span-2">
           Школу створено.
         </p>
       ) : null}

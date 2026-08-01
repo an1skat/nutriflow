@@ -28,10 +28,6 @@ from app.modules.identity.models import (
 )
 
 
-class SchoolAlreadyExistsError(ValueError):
-    """A school with the same unique data already exists."""
-
-
 class SchoolNotFoundError(ValueError):
     """The requested school does not exist."""
 
@@ -106,14 +102,10 @@ async def create_school(actor: User, data: CreateSchoolRequest) -> School:
     admin_owner_id = await _resolve_school_owner(actor, data.admin_owner_id)
     school = School(
         name=data.name,
-        code=data.code,
         admin_owner_id=admin_owner_id,
     )
 
-    try:
-        await school.insert()
-    except DuplicateKeyError as exc:
-        raise SchoolAlreadyExistsError("A school with this code already exists") from exc
+    await school.insert()
 
     return school
 
@@ -128,8 +120,6 @@ async def update_school(
 
     if "name" in data.model_fields_set:
         school.name = data.name
-    if "code" in data.model_fields_set and data.code is not None:
-        school.code = data.code.upper()
     if "admin_owner_id" in data.model_fields_set:
         if actor.role != UserRole.OWNER:
             raise AdminAccessDeniedError("Only owner can reassign schools")
@@ -139,10 +129,7 @@ async def update_school(
 
     school.updated_at = datetime.now(UTC)
 
-    try:
-        await school.save()
-    except DuplicateKeyError as exc:
-        raise SchoolAlreadyExistsError("A school with this code already exists") from exc
+    await school.save()
 
     if was_active and not school.is_active:
         await _revoke_school_sessions(

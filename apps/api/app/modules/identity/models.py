@@ -8,9 +8,6 @@ from pymongo import ASCENDING, IndexModel
 
 TrimmedName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 
-SchoolCode = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=50)]
-
-
 def utc_now() -> datetime:
     return datetime.now(UTC)
 
@@ -70,26 +67,15 @@ def default_school_groups() -> list[SchoolGroup]:
 
 class School(Document):
     name: TrimmedName
-    code: SchoolCode
     admin_owner_id: PydanticObjectId | None = None
     groups: list[SchoolGroup] = Field(default_factory=default_school_groups, min_length=1)
     is_active: bool = True
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 
-    @field_validator("code")
-    @classmethod
-    def normalize_code(cls, value: str) -> str:
-        return value.upper()
-
     class Settings:
         name = "schools"
         indexes = [
-            IndexModel(
-                [("code", ASCENDING)],
-                unique=True,
-                name="uq_school_code",
-            ),
             IndexModel(
                 [("admin_owner_id", ASCENDING)],
                 name="ix_school_admin_owner",

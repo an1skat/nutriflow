@@ -6,11 +6,6 @@ export const schoolFormSchema = z.object({
     .trim()
     .min(1, 'Введіть назву школи')
     .max(200, 'Назва має містити не більше 200 символів'),
-  code: z
-    .string()
-    .trim()
-    .min(2, 'Код має містити щонайменше 2 символи')
-    .max(50, 'Код має містити не більше 50 символів'),
 });
 
 export const editSchoolFormSchema = schoolFormSchema.extend({

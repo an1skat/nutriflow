@@ -34,7 +34,6 @@ from app.modules.admin.service import (
     AdminUserAlreadyExistsError,
     AdminUserNotFoundError,
     AdminUserOwnsSchoolsError,
-    SchoolAlreadyExistsError,
     SchoolGroupNotFoundError,
     SchoolInactiveError,
     SchoolNotFoundError,
@@ -285,8 +284,6 @@ async def create_school(
 ) -> SchoolResponse:
     try:
         school = await create_school_record(admin, payload)
-    except SchoolAlreadyExistsError as exc:
-        raise conflict(exc) from exc
     except (AdminAccessDeniedError, AdminUserNotFoundError) as exc:
         raise forbidden(exc) from exc
 
@@ -327,8 +324,6 @@ async def update_school(
         school = await update_school_record(admin, school_id, payload)
     except SchoolNotFoundError as exc:
         raise not_found(exc) from exc
-    except SchoolAlreadyExistsError as exc:
-        raise conflict(exc) from exc
     except (AdminAccessDeniedError, AdminUserNotFoundError) as exc:
         raise forbidden(exc) from exc
 
