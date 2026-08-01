@@ -204,8 +204,10 @@ function SchoolMenusPanel({ schoolId }: { schoolId: string }) {
     status: 'revoked',
   });
 
-  const menus = [
-    ...(activeMenus.data?.items ?? []),
+  const activeMenuItems = [...(activeMenus.data?.items ?? [])].sort((left, right) =>
+    right.updated_at.localeCompare(left.updated_at)
+  );
+  const historicalMenus = [
     ...(archivedMenus.data?.items ?? []),
     ...(revokedMenus.data?.items ?? []),
   ].sort((left, right) => right.updated_at.localeCompare(left.updated_at));
@@ -221,8 +223,7 @@ function SchoolMenusPanel({ schoolId }: { schoolId: string }) {
       <div className="nf-panel-header">
         <div>
           <h2 className="nf-panel-title">Меню школи</h2>
-          <p className="mt-0.5 text-xs text-slate-600">
-            Опубліковані, локально архівовані та відкликані меню цієї школи.
+          <p className="mt-0.5 text-xs text-slate-600">            Активні меню школи. Архівні та відкликані доступні в згорнутому списку.
           </p>
         </div>
       </div>
@@ -241,32 +242,55 @@ function SchoolMenusPanel({ schoolId }: { schoolId: string }) {
           />
         ))}
 
-        {!isPending && errors.length === 0 && menus.length === 0 ? (
+        {!isPending && errors.length === 0 && activeMenuItems.length + historicalMenus.length === 0 ? (
           <div className="nf-empty">Для цієї школи ще немає меню.</div>
         ) : null}
 
-        {menus.length ? (
-          <div className="nf-table-wrap">
-            <table className="nf-table">
-              <thead>
-                <tr>
-                  <th>Меню</th>
-                  <th className="w-36">Статус</th>
-                  <th className="w-44">Оновлено</th>
-                  <th className="w-40">Дія</th>
-                </tr>
-              </thead>
-              <tbody>
-                {menus.map((menu) => (
-                  <SchoolMenuRow key={menu.id} menu={menu} onPreview={() => setPreviewMenu(menu)} />
-                ))}
-              </tbody>
-            </table>
-          </div>
+        {activeMenuItems.length ? (
+          <SchoolMenusTable menus={activeMenuItems} onPreview={setPreviewMenu} />
+        ) : null}
+
+        {historicalMenus.length ? (
+          <details className="mt-4 border border-(--nf-line) bg-slate-50">
+            <summary className="cursor-pointer px-4 py-3 text-sm font-bold text-slate-800">
+              Старі меню ({historicalMenus.length})
+            </summary>
+            <div className="border-t border-(--nf-line) p-4">
+              <SchoolMenusTable menus={historicalMenus} onPreview={setPreviewMenu} />
+            </div>
+          </details>
         ) : null}
       </div>
       <SchoolMenuPreviewDialog menu={previewMenu} onClose={() => setPreviewMenu(null)} />
     </section>
+  );
+}
+
+function SchoolMenusTable({
+  menus,
+  onPreview,
+}: {
+  menus: WeeklyMenu[];
+  onPreview: (menu: WeeklyMenu) => void;
+}) {
+  return (
+    <div className="nf-table-wrap">
+      <table className="nf-table">
+        <thead>
+          <tr>
+            <th>Меню</th>
+            <th className="w-36">Статус</th>
+            <th className="w-44">Оновлено</th>
+            <th className="w-40">Дія</th>
+          </tr>
+        </thead>
+        <tbody>
+          {menus.map((menu) => (
+            <SchoolMenuRow key={menu.id} menu={menu} onPreview={() => onPreview(menu)} />
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
