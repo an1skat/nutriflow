@@ -231,7 +231,7 @@ export function buildNormComplianceHref({
   return `/norm-compliance?${params.toString()}`;
 }
 
-function getWeekReportBlockReason(week: MenuRequirementCalendarWeek): string | null {
+export function getWeekReportBlockReason(week: MenuRequirementCalendarWeek): string | null {
   const allWeekdaysHaveRequirements =
     week.days.length === 5 &&
     week.days.every(

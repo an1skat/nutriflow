@@ -1,5 +1,6 @@
 export {
   buildNormComplianceHref,
+  getWeekReportBlockReason,
   RequirementDayGrid,
   RequirementPeriodNavigator,
 } from './RequirementPeriodNavigator';

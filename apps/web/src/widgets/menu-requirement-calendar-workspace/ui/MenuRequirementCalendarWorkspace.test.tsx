@@ -19,6 +19,7 @@ import {
   RequirementReportTable,
   buildNormComplianceHref,
   getCurrentCalendarWeek,
+  getCurrentSchoolRequirementPeriod,
 } from './MenuRequirementCalendarWorkspace';
 
 vi.mock('next/link', () => ({
@@ -213,6 +214,17 @@ describe('getCurrentCalendarWeek', () => {
     ['2026-08-02', { dateFrom: '2026-07-27', dateTo: '2026-07-31' }],
   ])('uses the same Monday-to-Friday range on %s', (date, expected) => {
     expect(getCurrentCalendarWeek(new Date(`${date}T12:00:00`))).toEqual(expected);
+  });
+});
+
+describe('getCurrentSchoolRequirementPeriod', () => {
+  it.each([
+    ['2026-08-01', { year: 2026, monthNumber: 7 }],
+    ['2027-01-01', { year: 2026, monthNumber: 12 }],
+  ])('uses the month and year of the displayed work week on %s', (date, expected) => {
+    const period = getCurrentSchoolRequirementPeriod(new Date(`${date}T12:00:00`));
+
+    expect(period).toMatchObject(expected);
   });
 });
 

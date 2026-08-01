@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from 'react';
 
+import { Eye } from 'lucide-react';
+
 import {
   useMenuRequirementCalendar,
   useMenuRequirementReport,
@@ -15,6 +17,7 @@ import { RequestError } from '@/shared/ui/RequestError';
 
 import { formatFullDay } from './calendar/CalendarFormatting';
 import {
+  getWeekReportBlockReason,
   RequirementDayGrid,
   RequirementPeriodNavigator,
   RequirementReportDialog,
@@ -48,21 +51,34 @@ export function getCurrentCalendarWeek(date = new Date()): SelectedWeekRange {
   return { dateFrom, dateTo: addDaysToLocalIsoDate(dateFrom, 4) };
 }
 
+export function getCurrentSchoolRequirementPeriod(date = new Date()) {
+  const week = getCurrentCalendarWeek(date);
+
+  return {
+    year: Number(week.dateFrom.slice(0, 4)),
+    monthNumber: Number(week.dateFrom.slice(5, 7)),
+    week,
+  };
+}
+
 export function MenuRequirementCalendarWorkspace({
   schoolWeekOnly = false,
 }: {
   schoolWeekOnly?: boolean;
 }) {
   const currentDate = new Date();
-  const currentYear = currentDate.getFullYear();
+  const currentSchoolRequirementPeriod = getCurrentSchoolRequirementPeriod(currentDate);
+  const currentYear = schoolWeekOnly
+    ? currentSchoolRequirementPeriod.year
+    : currentDate.getFullYear();
   const [selectedSchoolId, setSelectedSchoolId] = useState('');
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMealType, setSelectedMealType] = useState<'' | MealType>('');
   const [selectedMonthNumber, setSelectedMonthNumber] = useState<number | null>(() =>
-    schoolWeekOnly ? currentDate.getMonth() + 1 : null
+    schoolWeekOnly ? currentSchoolRequirementPeriod.monthNumber : null
   );
   const [selectedWeekRange, setSelectedWeekRange] = useState<SelectedWeekRange | null>(() =>
-    schoolWeekOnly ? getCurrentCalendarWeek(currentDate) : null
+    schoolWeekOnly ? currentSchoolRequirementPeriod.week : null
   );
   const [reportRange, setReportRange] = useState<SelectedRange | null>(null);
   const [selectedCell, setSelectedCell] = useState<SelectedReportCell | null>(null);
@@ -107,6 +123,7 @@ export function MenuRequirementCalendarWorkspace({
     meal_type: selectedMealType || undefined,
     enabled: Boolean(effectiveSchoolId && reportRange),
   });
+  const selectedWeekBlockReason = selectedWeek ? getWeekReportBlockReason(selectedWeek) : null;
 
   const resetNavigation = () => {
     if (!schoolWeekOnly) {
@@ -250,6 +267,32 @@ export function MenuRequirementCalendarWorkspace({
                 <p className="mt-1 text-sm text-slate-600">
                   Відкрийте день, щоб побачити меню-вимоги всіх груп.
                 </p>
+              </div>
+              <div className="grid gap-2 sm:justify-items-end">
+                <button
+                  type="button"
+                  className="nf-button nf-button-secondary"
+                  disabled={Boolean(selectedWeekBlockReason)}
+                  title={selectedWeekBlockReason ?? undefined}
+                  onClick={() =>
+                    openReport({
+                      dateFrom: selectedWeek.date_from,
+                      dateTo: selectedWeek.date_to,
+                      granularity: 'week',
+                      label: `Тиждень ${selectedWeek.week_index} · ${formatFullDay(
+                        selectedWeek.date_from
+                      )} — ${formatFullDay(selectedWeek.date_to)}`,
+                    })
+                  }
+                >
+                  <Eye className="size-4" aria-hidden />
+                  Меню-вимога за тиждень
+                </button>
+                {selectedWeekBlockReason ? (
+                  <p className="max-w-xl text-xs font-semibold leading-5 text-amber-800 sm:text-right">
+                    {selectedWeekBlockReason}
+                  </p>
+                ) : null}
               </div>
             </div>
             <div className="nf-panel-body">
