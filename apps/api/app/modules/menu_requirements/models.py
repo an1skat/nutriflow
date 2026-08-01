@@ -48,10 +48,7 @@ class MenuRequirementIngredientRow(BaseModel):
     def has_values(self) -> bool:
         return any(
             cell.net_per_person_g != Decimal("0")
-            or (
-                cell.gross_per_person_g is not None
-                and cell.gross_per_person_g != Decimal("0")
-            )
+            or (cell.gross_per_person_g is not None and cell.gross_per_person_g != Decimal("0"))
             for cell in self.cells
         )
 

@@ -10,7 +10,7 @@ export default async function MenuChangesPage({
   const initialRequestId = Array.isArray(requestIdParam) ? requestIdParam[0] : requestIdParam;
 
   return (
-    <AccessGuard allowedRoles={['OWNER', 'TECHNOLOGIST']}>
+    <AccessGuard allowedRoles={['OWNER', "ADMIN", 'TECHNOLOGIST']}>
       <MenuChangeRequestsWorkspace initialRequestId={initialRequestId} />
     </AccessGuard>
   );

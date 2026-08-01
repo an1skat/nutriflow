@@ -34,14 +34,7 @@ async def send_menu_change_request_notification(request_id: PydanticObjectId) ->
             return
 
         school = await School.get(request.school_id)
-        technologists = await User.find(
-            {
-                "role": UserRole.TECHNOLOGIST.value,
-                "is_active": True,
-                "email": {"$type": "string"},
-            }
-        ).to_list()
-        recipients = sorted({str(user.email) for user in technologists if user.email is not None})
+        recipients = await _menu_change_recipients(school)
         if not recipients:
             logger.info("Menu change email skipped: no active technologist recipients")
             return
@@ -55,6 +48,28 @@ async def send_menu_change_request_notification(request_id: PydanticObjectId) ->
         await asyncio.to_thread(_send_message, message, recipients, settings)
     except Exception:
         logger.exception("Failed to send menu change notification for request %s", request_id)
+
+
+async def _menu_change_recipients(school: School | None) -> list[str]:
+    technologists = await User.find(
+        {
+            "role": UserRole.TECHNOLOGIST.value,
+            "is_active": True,
+            "email": {"$type": "string"},
+        }
+    ).to_list()
+    recipients = {str(user.email) for user in technologists if user.email is not None}
+
+    if school is not None and school.admin_owner_id is not None:
+        administrator = await User.get(school.admin_owner_id)
+        if (
+            administrator is not None
+            and administrator.is_active
+            and administrator.email is not None
+        ):
+            recipients.add(str(administrator.email))
+
+    return sorted(recipients)
 
 
 async def send_pending_day_close_notifications() -> tuple[int, int]:
@@ -177,9 +192,7 @@ def build_day_close_email(
     service_date = resolve_service_date(menu, day, closed_date)
     date_label = service_date.strftime("%d.%m.%Y")
     reason_label = (
-        "автоматично"
-        if day.close_reason == DayCloseReason.AUTOMATIC
-        else "користувачем школи"
+        "автоматично" if day.close_reason == DayCloseReason.AUTOMATIC else "користувачем школи"
     )
     subject = f"Школа «{school_name}» закрила день — {date_label}"
     text = f"Школа «{school_name}» закрила денне меню за {date_label} {reason_label}."

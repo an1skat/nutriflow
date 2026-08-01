@@ -1,12 +1,17 @@
+import asyncio
 from copy import deepcopy
+from types import SimpleNamespace
 
 import pytest
 from beanie import PydanticObjectId
 
-from app.modules.identity.models import AgeGroup
+from app.modules.identity.models import AgeGroup, User, UserRole
+from app.modules.menus import service
+from app.modules.menus.errors import MenuAccessDeniedError
 from app.modules.menus.models import (
     DailyMenu,
     DailyMenuItem,
+    MenuChangeRequestStatus,
     MenuItemServingCount,
     MenuPortion,
     Weekday,
@@ -82,3 +87,74 @@ def test_template_update_preserves_school_dish_replacement() -> None:
 
     assert merged[0].items[0].recipe_card_number == "2.17"
     assert merged[0].items[0].name == "Рис з овочами"
+
+
+def test_admin_can_only_list_and_open_change_requests_from_owned_schools(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    administrator_id = PydanticObjectId()
+    own_school_id = PydanticObjectId()
+    other_school_id = PydanticObjectId()
+    administrator = User.model_construct(id=administrator_id, role=UserRole.ADMIN)
+    captured_filters: list[dict[str, object]] = []
+
+    class RequestQuery:
+        async def count(self) -> int:
+            return 0
+
+        def sort(self, _: str) -> "RequestQuery":
+            return self
+
+        def skip(self, _: int) -> "RequestQuery":
+            return self
+
+        def limit(self, _: int) -> "RequestQuery":
+            return self
+
+        async def to_list(self) -> list[object]:
+            return []
+
+    class SchoolQuery:
+        async def to_list(self) -> list[object]:
+            return []
+
+    async def get_owned_school_ids(_: User) -> list[PydanticObjectId]:
+        return [own_school_id]
+
+    def find_change_requests(filters: dict[str, object]) -> RequestQuery:
+        captured_filters.append(filters)
+        return RequestQuery()
+
+    monkeypatch.setattr(service, "_get_admin_school_ids", get_owned_school_ids)
+    monkeypatch.setattr(service.MenuChangeRequest, "find", find_change_requests)
+    monkeypatch.setattr(service.School, "find", lambda _: SchoolQuery())
+
+    requests, total = asyncio.run(
+        service.list_menu_change_requests(
+            administrator,
+            offset=0,
+            limit=50,
+            status=MenuChangeRequestStatus.PENDING,
+        )
+    )
+
+    assert requests == []
+    assert total == 0
+    assert captured_filters == [
+        {
+            "status": MenuChangeRequestStatus.PENDING.value,
+            "school_id": {"$in": [own_school_id]},
+        }
+    ]
+
+    async def get_change_request(_: PydanticObjectId) -> SimpleNamespace:
+        return SimpleNamespace(school_id=other_school_id)
+
+    async def get_school(_: PydanticObjectId) -> SimpleNamespace:
+        return SimpleNamespace(admin_owner_id=PydanticObjectId())
+
+    monkeypatch.setattr(service.MenuChangeRequest, "get", get_change_request)
+    monkeypatch.setattr(service.School, "get", get_school)
+
+    with pytest.raises(MenuAccessDeniedError, match="School access denied"):
+        asyncio.run(service.get_menu_change_request(PydanticObjectId(), administrator))

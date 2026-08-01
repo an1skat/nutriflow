@@ -395,13 +395,11 @@ def build_ingredient_rows(
                     name=line.name,
                 ),
             )
-            net_amounts_by_row[line.key][
-                calculation.dish.menu_item_id
-            ] += line.net_per_person_g
+            net_amounts_by_row[line.key][calculation.dish.menu_item_id] += line.net_per_person_g
             if line.gross_per_person_g is not None:
-                gross_amounts_by_row[line.key][
-                    calculation.dish.menu_item_id
-                ] += line.gross_per_person_g
+                gross_amounts_by_row[line.key][calculation.dish.menu_item_id] += (
+                    line.gross_per_person_g
+                )
 
     result: list[MenuRequirementIngredientRow] = []
     for entry in sorted(rows.values(), key=lambda item: (item.name.casefold(), item.key)):
@@ -464,9 +462,7 @@ def _build_updated_ingredient_rows(
     requirement: MenuRequirement,
     row_updates: list[Any],
 ) -> list[MenuRequirementIngredientRow]:
-    rows_by_key = {
-        row.key: row for row in requirement.ingredient_rows if row.has_values()
-    }
+    rows_by_key = {row.key: row for row in requirement.ingredient_rows if row.has_values()}
     row_keys = set(rows_by_key)
     update_keys = [row.key for row in row_updates]
     if _duplicates(update_keys):
@@ -528,10 +524,7 @@ def _build_ingredient_row(
         cell
         for cell in cells
         if cell.net_per_person_g != Decimal("0")
-        or (
-            cell.gross_per_person_g is not None
-            and cell.gross_per_person_g != Decimal("0")
-        )
+        or (cell.gross_per_person_g is not None and cell.gross_per_person_g != Decimal("0"))
     ]
     per_person_total = sum(
         (cell.net_per_person_g for cell in cells),

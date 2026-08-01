@@ -113,9 +113,7 @@ def test_builds_daily_menu_requirement_workbook() -> None:
         )
     )
     gross_sheet = gross_workbook.active
-    gross_ingredient_row = next(
-        row for row in gross_sheet.iter_rows() if row[0].value == "Морква"
-    )
+    gross_ingredient_row = next(row for row in gross_sheet.iter_rows() if row[0].value == "Морква")
     assert gross_sheet["B8"].value == "Брутто"
     assert gross_ingredient_row[1].value == 25
     assert gross_ingredient_row[-1].value == 75

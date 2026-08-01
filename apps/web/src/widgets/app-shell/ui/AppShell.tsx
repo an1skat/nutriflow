@@ -67,7 +67,7 @@ const navigation: NavigationItem[] = [
     href: '/admin/menu-changes',
     label: 'Зміни від шкіл',
     icon: ClipboardCheck,
-    technologistOnly: true,
+    excludedRoles: ['OWNER', 'SCHOOL_USER'],
   },
   {
     href: '/admin/access',

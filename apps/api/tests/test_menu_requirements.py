@@ -305,9 +305,7 @@ def test_school_generates_and_regenerates_menu_requirement(seeded_client) -> Non
     )
     assert gross_export_response.status_code == 200
     gross_sheet = openpyxl.load_workbook(BytesIO(gross_export_response.content)).active
-    gross_carrot_row = next(
-        row for row in gross_sheet.iter_rows() if row[0].value == "Морква"
-    )
+    gross_carrot_row = next(row for row in gross_sheet.iter_rows() if row[0].value == "Морква")
     assert gross_carrot_row[1].value == 25
     assert gross_carrot_row[-1].value == 75
 

@@ -647,10 +647,7 @@ def _build_report_groups(
                 row_state["ingredient_id"] = row.ingredient_id
             row_state["issue_total_raw_g"] += row.issue_total_raw_g
             row_state["issue_total_rounded_g"] += row.issue_total_rounded_g
-            if (
-                row.gross_issue_total_raw_g is None
-                or row.gross_issue_total_rounded_g is None
-            ):
+            if row.gross_issue_total_raw_g is None or row.gross_issue_total_rounded_g is None:
                 row_state["gross_available"] = False
             else:
                 row_state["gross_issue_total_raw_g"] += row.gross_issue_total_raw_g
@@ -768,16 +765,12 @@ def _report_group_from_state(group_state: dict[str, Any]) -> MenuRequirementRepo
                 dish_key=cell_state["dish_key"],
                 net_per_person_g=cell_state["net_per_person_g"],
                 gross_per_person_g=(
-                    cell_state["gross_per_person_g"]
-                    if cell_state["gross_available"]
-                    else None
+                    cell_state["gross_per_person_g"] if cell_state["gross_available"] else None
                 ),
                 issue_total_raw_g=cell_state["issue_total_raw_g"],
                 issue_total_rounded_g=cell_state["issue_total_rounded_g"],
                 gross_issue_total_raw_g=(
-                    cell_state["gross_issue_total_raw_g"]
-                    if cell_state["gross_available"]
-                    else None
+                    cell_state["gross_issue_total_raw_g"] if cell_state["gross_available"] else None
                 ),
                 gross_issue_total_rounded_g=(
                     cell_state["gross_issue_total_rounded_g"]
@@ -803,11 +796,7 @@ def _report_group_from_state(group_state: dict[str, Any]) -> MenuRequirementRepo
         )
         gross_per_person_total = (
             sum(
-                (
-                    cell.gross_per_person_g
-                    for cell in cells
-                    if cell.gross_per_person_g is not None
-                ),
+                (cell.gross_per_person_g for cell in cells if cell.gross_per_person_g is not None),
                 start=Decimal("0"),
             )
             if all(cell.gross_per_person_g is not None for cell in cells)
@@ -824,9 +813,7 @@ def _report_group_from_state(group_state: dict[str, Any]) -> MenuRequirementRepo
                 issue_total_rounded_g=row_state["issue_total_rounded_g"],
                 gross_per_person_total_g=gross_per_person_total,
                 gross_issue_total_raw_g=(
-                    row_state["gross_issue_total_raw_g"]
-                    if row_state["gross_available"]
-                    else None
+                    row_state["gross_issue_total_raw_g"] if row_state["gross_available"] else None
                 ),
                 gross_issue_total_rounded_g=(
                     row_state["gross_issue_total_rounded_g"]

@@ -61,13 +61,17 @@ async def close_all_due_weekly_menu_days() -> tuple[int, int]:
         for school in await School.find({"is_active": True}).to_list()
         if school.id is not None
     }
-    school_users = await User.find(
-        {
-            "role": UserRole.SCHOOL_USER.value,
-            "is_active": True,
-            "school_id": {"$in": list(active_school_ids)},
-        }
-    ).sort("+created_at").to_list()
+    school_users = (
+        await User.find(
+            {
+                "role": UserRole.SCHOOL_USER.value,
+                "is_active": True,
+                "school_id": {"$in": list(active_school_ids)},
+            }
+        )
+        .sort("+created_at")
+        .to_list()
+    )
     actor_by_school: dict[PydanticObjectId, User] = {}
     for user in school_users:
         if user.school_id is not None and user.id is not None:

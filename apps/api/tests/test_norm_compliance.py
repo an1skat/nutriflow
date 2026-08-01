@@ -158,18 +158,24 @@ def test_regular_groups_allow_a_ten_percent_net_portion_deviation() -> None:
     )
     assert norm is not None
 
-    assert calculate_numeric_status(
-        Decimal("90"),
-        Decimal("100"),
-        minimum_percent=norm.tolerance.minimum_percent,
-        maximum_percent=norm.tolerance.maximum_percent,
-    )[0] == ComplianceStatus.COMPLETE
-    assert calculate_numeric_status(
-        Decimal("110"),
-        Decimal("100"),
-        minimum_percent=norm.tolerance.minimum_percent,
-        maximum_percent=norm.tolerance.maximum_percent,
-    )[0] == ComplianceStatus.COMPLETE
+    assert (
+        calculate_numeric_status(
+            Decimal("90"),
+            Decimal("100"),
+            minimum_percent=norm.tolerance.minimum_percent,
+            maximum_percent=norm.tolerance.maximum_percent,
+        )[0]
+        == ComplianceStatus.COMPLETE
+    )
+    assert (
+        calculate_numeric_status(
+            Decimal("110"),
+            Decimal("100"),
+            minimum_percent=norm.tolerance.minimum_percent,
+            maximum_percent=norm.tolerance.maximum_percent,
+        )[0]
+        == ComplianceStatus.COMPLETE
+    )
 
 
 def test_ready_portion_is_compared_with_the_appendix_portion_amount() -> None:

@@ -274,9 +274,17 @@ async def list_menu_change_requests(
 ) -> tuple[list[tuple[MenuChangeRequest, str]], int]:
     _ensure_change_request_access(current_user)
     filters: dict[str, Any] = {}
+
     if status is not None:
         filters["status"] = status.value
-    if school_id is not None:
+
+    if current_user.role == UserRole.ADMIN:
+        if school_id is not None:
+            await _ensure_admin_school_access(current_user, school_id)
+            filters["school_id"] = school_id
+        else:
+            filters["school_id"] = {"$in": await _get_admin_school_ids(current_user)}
+    elif school_id is not None:
         filters["school_id"] = school_id
 
     query = MenuChangeRequest.find(filters)
@@ -286,6 +294,7 @@ async def list_menu_change_requests(
     school_ids = {request.school_id for request in requests}
     schools = await School.find({"_id": {"$in": list(school_ids)}}).to_list()
     school_names = {school.id: school.name for school in schools}
+
     return [
         (request, school_names.get(request.school_id, "Невідома школа")) for request in requests
     ], total
@@ -297,11 +306,17 @@ async def list_menu_change_request_schools(
     status: MenuChangeRequestStatus = MenuChangeRequestStatus.REVIEWED,
 ) -> list[School]:
     _ensure_change_request_access(current_user)
+
     school_ids = await MenuChangeRequest.get_pymongo_collection().distinct(
         "school_id",
         {"status": status.value},
     )
-    schools = await School.find({"_id": {"$in": school_ids}}).to_list()
+    filters: dict[str, Any] = {"_id": {"$in": school_ids}}
+
+    if current_user.role == UserRole.ADMIN:
+        filters["admin_owner_id"] = current_user.id
+
+    schools = await School.find(filters).to_list()
     return sorted(schools, key=lambda school: school.name.casefold())
 
 
@@ -310,11 +325,17 @@ async def get_menu_change_request(
     current_user: User,
 ) -> tuple[MenuChangeRequest, str]:
     _ensure_change_request_access(current_user)
+
     request = await MenuChangeRequest.get(request_id)
     if request is None:
         raise MenuNotFoundError("Menu change request not found")
 
     school = await School.get(request.school_id)
+    if current_user.role == UserRole.ADMIN and (
+        school is None or school.admin_owner_id != current_user.id
+    ):
+        raise MenuAccessDeniedError("School access denied")
+
     return request, school.name if school is not None else "Невідома школа"
 
 
@@ -1159,7 +1180,7 @@ async def _get_admin_school_ids(current_user: User) -> list[PydanticObjectId]:
 
 
 def _ensure_change_request_access(current_user: User) -> None:
-    if current_user.role not in {UserRole.OWNER, UserRole.TECHNOLOGIST}:
+    if current_user.role not in {UserRole.OWNER, UserRole.ADMIN, UserRole.TECHNOLOGIST}:
         raise MenuAccessDeniedError("Only owner or technologist can review menu changes")
 
 

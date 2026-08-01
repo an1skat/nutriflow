@@ -16,8 +16,7 @@ async def run() -> None:
         closed_days, failed_menus = await close_all_due_weekly_menu_days()
         sent_emails, failed_emails = await send_pending_day_close_notifications()
         logger.info(
-            "Day closure finished: closed=%d, close_failures=%d, emails_sent=%d, "
-            "email_failures=%d",
+            "Day closure finished: closed=%d, close_failures=%d, emails_sent=%d, email_failures=%d",
             closed_days,
             failed_menus,
             sent_emails,
