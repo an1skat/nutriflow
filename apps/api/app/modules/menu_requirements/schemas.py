@@ -188,6 +188,7 @@ class MenuRequirementReportGranularity(StrEnum):
     DAY = "day"
     WEEK = "week"
     MONTH = "month"
+    RANGE = "range"
 
 
 class MenuRequirementAggregateStatus(StrEnum):

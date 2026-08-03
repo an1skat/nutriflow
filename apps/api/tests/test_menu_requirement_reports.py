@@ -191,7 +191,7 @@ def generate_requirement(
     return response.json()["items"][0]
 
 
-def test_week_report_aggregates_daily_requirements_with_cell_breakdown(
+def test_week_and_custom_range_reports_aggregate_daily_requirements(
     seeded_client,
 ) -> None:
     client, identities = seeded_client
@@ -241,6 +241,16 @@ def test_week_report_aggregates_daily_requirements_with_cell_breakdown(
         "meal_type": "lunch",
         "school_group_id": group_id,
     }
+    range_params = {**report_params, "granularity": "range"}
+    incomplete_range_response = client.get(
+        "/api/v1/menu-requirements/report",
+        params=range_params,
+    )
+    assert incomplete_range_response.status_code == 400
+    assert incomplete_range_response.json()["detail"] == (
+        "Menu requirement report cannot be generated; missing dates: 2026-07-07"
+    )
+
     response = client.get("/api/v1/menu-requirements/report", params=report_params)
 
     assert response.status_code == 200
@@ -306,6 +316,24 @@ def test_week_report_aggregates_daily_requirements_with_cell_breakdown(
     assert school_export_response.json()["detail"] == (
         "Weekly menu requirement report requires complete menu requirements for all five weekdays"
     )
+
+    generate_requirement(
+        client,
+        menu_id=menu["id"],
+        weekday="tuesday",
+        service_date="2026-07-07",
+    )
+    complete_range_response = client.get(
+        "/api/v1/menu-requirements/report",
+        params=range_params,
+    )
+    assert complete_range_response.status_code == 200
+    complete_range = complete_range_response.json()
+    assert complete_range["granularity"] == "range"
+    assert complete_range["status"] == "complete"
+    assert complete_range["missing_dates"] == []
+    assert complete_range["stale_dates"] == []
+    assert complete_range["groups"][0]["dishes"][0]["children_count_total"] == 9
 
 
 def test_report_marks_generated_day_stale_after_daily_menu_changes(

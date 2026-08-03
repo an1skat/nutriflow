@@ -71,3 +71,39 @@ export const detailTranslations: Record<string, string> = {
   'Import preview contains errors and cannot be committed':
     'У файлі є критичні помилки, тому його не можна імпортувати.',
 };
+
+const incompleteRangePrefix = 'Menu requirement report cannot be generated';
+
+export function translateApiDetail(detail: string): string {
+  const staticTranslation = detailTranslations[detail];
+  if (staticTranslation) {
+    return staticTranslation;
+  }
+
+  if (!detail.startsWith(incompleteRangePrefix)) {
+    return detail;
+  }
+
+  const parts = detail
+    .slice(incompleteRangePrefix.length)
+    .split(';')
+    .map((part) => part.trim());
+  const missingDates = parts
+    .find((part) => part.startsWith('missing dates:'))
+    ?.slice('missing dates:'.length)
+    .trim();
+  const staleDates = parts
+    .find((part) => part.startsWith('stale dates:'))
+    ?.slice('stale dates:'.length)
+    .trim();
+  const messages = ['Неможливо сформувати меню-вимогу за вибраний період.'];
+
+  if (missingDates) {
+    messages.push(`Немає меню-вимоги за дати: ${missingDates}.`);
+  }
+  if (staleDates) {
+    messages.push(`Потрібно оновити меню-вимогу за дати: ${staleDates}.`);
+  }
+
+  return messages.join(' ');
+}

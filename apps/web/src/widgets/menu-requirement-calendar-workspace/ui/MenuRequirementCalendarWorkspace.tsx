@@ -17,11 +17,11 @@ import { RequestError } from '@/shared/ui/RequestError';
 
 import { formatFullDay } from './calendar/CalendarFormatting';
 import {
-  getWeekReportBlockReason,
   RequirementDayGrid,
   RequirementPeriodNavigator,
   RequirementReportDialog,
   buildNormComplianceHref,
+  getWeekReportBlockReason,
 } from './calendar/RequirementCalendarContent';
 import type {
   SelectedRange,
@@ -154,16 +154,14 @@ export function MenuRequirementCalendarWorkspace({
         <p className="nf-description">
           {schoolWeekOnly
             ? 'Оберіть день, щоб переглянути меню-вимоги всіх груп окремо.'
-            : 'Оберіть місяць, потім тиждень і день. Таблиця відкриється окремо й не перевантажуватиме календар.'}
+            : 'Оберіть місяць і сформуйте меню-вимогу за довільний період або перейдіть до конкретного тижня й дня.'}
         </p>
       </header>
 
       <section className="nf-panel">
         <div
           className={`nf-panel-body grid gap-4 ${
-            schoolWeekOnly
-              ? ''
-              : 'lg:grid-cols-[minmax(220px,1.2fr)_140px_minmax(260px,1fr)]'
+            schoolWeekOnly ? '' : 'lg:grid-cols-[minmax(220px,1.2fr)_140px_minmax(260px,1fr)]'
           }`}
         >
           {!schoolWeekOnly && isSchoolUser ? (
@@ -240,7 +238,6 @@ export function MenuRequirementCalendarWorkspace({
               })}
             </div>
           </div>
-
         </div>
       </section>
 

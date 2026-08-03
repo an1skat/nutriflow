@@ -19,7 +19,12 @@ TOTAL_FILL = PatternFill("solid", fgColor="D1FAE5")
 THIN_GRAY = Side(style="thin", color="CBD5E1")
 TABLE_BORDER = Border(left=THIN_GRAY, right=THIN_GRAY, top=THIN_GRAY, bottom=THIN_GRAY)
 MEAL_TYPE_LABELS = {"breakfast": "Сніданок", "lunch": "Обід"}
-GRANULARITY_LABELS = {"day": "день", "week": "тиждень", "month": "місяць"}
+GRANULARITY_LABELS = {
+    "day": "день",
+    "week": "тиждень",
+    "month": "місяць",
+    "range": "довільний період",
+}
 AMOUNT_BASIS_LABELS = {"gross": "Брутто", "net": "Нетто"}
 
 

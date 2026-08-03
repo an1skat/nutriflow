@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  createBlankDay,
   createBlankWeeklyMenuFormValues,
   formValuesToWeeklyMenuPayload,
+  getRemainingWeekdays,
   resolveEffectiveDayDate,
   updateDayDate,
   weeklyMenuFormSchema,
@@ -25,6 +27,13 @@ describe('weekly menu form schema', () => {
     const result = weeklyMenuFormSchema.safeParse(values);
 
     expect(result.success).toBe(false);
+  });
+
+  it('offers only missing Monday-to-Friday days for addition', () => {
+    const values = createBlankWeeklyMenuFormValues();
+    values.days = [values.days[0], values.days[2], createBlankDay('saturday')];
+
+    expect(getRemainingWeekdays(values.days)).toEqual(['tuesday', 'thursday', 'friday']);
   });
 
   it('normalizes payload fields for API submission', () => {

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   generateMenuRequirementsResponseSchema,
   menuRequirementCalendarSchema,
+  menuRequirementReportGranularitySchema,
   menuRequirementReportSchema,
   menuRequirementSchema,
 } from './MenuRequirement';
@@ -66,6 +67,10 @@ const requirement = {
 } as const;
 
 describe('menu requirement contract', () => {
+  it('accepts an arbitrary calendar range report', () => {
+    expect(menuRequirementReportGranularitySchema.parse('range')).toBe('range');
+  });
+
   it('parses decimal values as exact strings', () => {
     const parsed = menuRequirementSchema.parse(requirement);
 
@@ -107,7 +112,7 @@ describe('menu requirement contract', () => {
             missing_days: 0,
             stale_days: 0,
             status: 'complete',
-            days: Array.from({ length: 5 }, (_day, dayIndex) => ({
+            days: Array.from({ length: index === 6 ? 6 : 5 }, (_day, dayIndex) => ({
               service_date: `2026-07-${String(dayIndex + 6).padStart(2, '0')}`,
               expected_requirements: 3,
               generated_requirements: dayIndex === 3 ? 2 : 0,
@@ -142,6 +147,7 @@ describe('menu requirement contract', () => {
       date_to: '2026-07-03',
     });
     expect(parsed.months[6].weeks[0].days[3].generated_requirements).toBe(2);
+    expect(parsed.months[6].weeks[0].days).toHaveLength(6);
   });
 
   it('parses report responses with cell breakdown items', () => {

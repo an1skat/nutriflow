@@ -276,7 +276,7 @@ export function formValuesToWeeklyMenuPayload(values: WeeklyMenuFormValues): Wee
 
 export function getRemainingWeekdays(days: WeeklyMenuFormValues['days']) {
   const usedWeekdays = new Set(days.map((day) => day.weekday));
-  return WEEKDAY_ORDER.filter((weekday) => !usedWeekdays.has(weekday));
+  return DEFAULT_WEEKDAYS.filter((weekday) => !usedWeekdays.has(weekday));
 }
 
 function normalizeOptionalText(value: string | null | undefined) {

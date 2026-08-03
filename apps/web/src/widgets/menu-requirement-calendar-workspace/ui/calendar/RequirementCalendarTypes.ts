@@ -7,7 +7,7 @@ import type {
 export type SelectedRange = {
   dateFrom: string;
   dateTo: string;
-  granularity: 'day' | 'week' | 'month';
+  granularity: 'day' | 'week' | 'month' | 'range';
   label: string;
 };
 

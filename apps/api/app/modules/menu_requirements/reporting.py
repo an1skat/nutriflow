@@ -13,6 +13,7 @@ from app.modules.menu_requirements.access import can_access_school
 from app.modules.menu_requirements.errors import (
     MenuRequirementAccessDeniedError,
     MenuRequirementNotFoundError,
+    MenuRequirementRangeIncompleteError,
     MenuRequirementValidationError,
 )
 from app.modules.menu_requirements.models import MenuRequirement, MenuRequirementDish
@@ -45,6 +46,13 @@ from app.modules.recipe.models import normalize_lookup_text
 
 MAX_REPORT_RANGE_DAYS = 45
 CALENDAR_WEEK_SPILLOVER_DAYS = 4
+AGGREGATE_REPORT_GRANULARITIES = frozenset(
+    {
+        MenuRequirementReportGranularity.WEEK,
+        MenuRequirementReportGranularity.MONTH,
+        MenuRequirementReportGranularity.RANGE,
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -138,7 +146,8 @@ async def get_menu_requirement_report(
     meal_type: MealType | None = None,
     school_group_id: PydanticObjectId | None = None,
 ) -> MenuRequirementReportResponse:
-    _validate_report_range(date_from, date_to)
+    _validate_report_range(date_from, date_to, granularity)
+
     school = await _get_accessible_school(current_user, school_id)
     _ensure_school_group_exists(school, school_group_id)
 
@@ -156,8 +165,29 @@ async def get_menu_requirement_report(
         meal_type=meal_type,
         school_group_id=school_group_id,
     )
+
+    if granularity in AGGREGATE_REPORT_GRANULARITIES:
+        expected_days = {
+            service_date: menu_days
+            for service_date, menu_days in expected_days.items()
+            if _is_weekday(service_date)
+        }
+        requirements = [
+            requirement for requirement in requirements if _is_weekday(requirement.service_date)
+        ]
+
     requirement_statuses = await _requirement_statuses(requirements)
-    if current_user.role != UserRole.OWNER and granularity != MenuRequirementReportGranularity.DAY:
+
+    should_validate_completion = granularity == MenuRequirementReportGranularity.RANGE or (
+        current_user.role != UserRole.OWNER
+        and granularity
+        in {
+            MenuRequirementReportGranularity.WEEK,
+            MenuRequirementReportGranularity.MONTH,
+        }
+    )
+
+    if should_validate_completion:
         day_summaries = _build_calendar_day_summaries(
             expected_days,
             requirements,
@@ -198,19 +228,36 @@ async def get_menu_requirement_report(
         granularity=granularity,
         meal_type=meal_type,
         school_group_id=school_group_id,
-        status=_aggregate_status(missing_dates=missing_dates, stale_dates=stale_dates),
+        status=_aggregate_status(
+            missing_dates=missing_dates,
+            stale_dates=stale_dates,
+        ),
         missing_dates=missing_dates,
         stale_dates=stale_dates,
         groups=groups,
     )
 
 
-def _validate_report_range(date_from: Date, date_to: Date) -> None:
+def _validate_report_range(
+    date_from: Date,
+    date_to: Date,
+    granularity: MenuRequirementReportGranularity,
+) -> None:
     if date_from > date_to:
         raise MenuRequirementValidationError("date_from cannot be after date_to")
-    if (date_to - date_from).days + 1 > MAX_REPORT_RANGE_DAYS:
+
+    range_days = (date_to - date_from).days + 1
+    if range_days > MAX_REPORT_RANGE_DAYS:
         raise MenuRequirementValidationError(
             f"Menu requirement report range cannot exceed {MAX_REPORT_RANGE_DAYS} days"
+        )
+
+    if granularity == MenuRequirementReportGranularity.RANGE and (
+        date_from.year,
+        date_from.month,
+    ) != (date_to.year, date_to.month):
+        raise MenuRequirementValidationError(
+            "Custom menu requirement report range must stay within one calendar month"
         )
 
 
@@ -483,6 +530,16 @@ def _build_calendar_day_summaries(
     return summaries
 
 
+def _is_weekday(service_date: Date) -> bool:
+    return service_date.weekday() < 5
+
+
+def _workdays_in_range(date_from: Date, date_to: Date) -> list[Date]:
+    period_days = (date_to - date_from).days + 1
+    dates = [date_from + timedelta(days=offset) for offset in range(period_days)]
+    return [service_date for service_date in dates if _is_weekday(service_date)]
+
+
 def _validate_complete_aggregate_report(
     granularity: MenuRequirementReportGranularity,
     *,
@@ -493,15 +550,53 @@ def _validate_complete_aggregate_report(
     period_summaries = {
         service_date: summary
         for service_date, summary in day_summaries.items()
-        if date_from <= service_date <= date_to
+        if date_from <= service_date <= date_to and _is_weekday(service_date)
     }
+
+    if granularity == MenuRequirementReportGranularity.RANGE:
+        required_dates = _workdays_in_range(date_from, date_to)
+        if not required_dates:
+            raise MenuRequirementValidationError(
+                "Custom menu requirement report range must include at least one weekday"
+            )
+
+        missing_dates: list[Date] = []
+        stale_dates: list[Date] = []
+
+        for service_date in required_dates:
+            summary = period_summaries.get(service_date)
+            if summary is None:
+                missing_dates.append(service_date)
+                continue
+
+            is_missing = (
+                summary.expected_requirements <= 0
+                or summary.generated_requirements < summary.expected_requirements
+                or summary.missing_requirements > 0
+            )
+            if is_missing:
+                missing_dates.append(service_date)
+
+            if summary.stale_requirements > 0:
+                stale_dates.append(service_date)
+
+        if missing_dates or stale_dates:
+            raise MenuRequirementRangeIncompleteError(
+                missing_dates=missing_dates,
+                stale_dates=stale_dates,
+            )
+        return
 
     if granularity == MenuRequirementReportGranularity.WEEK:
         required_dates = [date_from + timedelta(days=offset) for offset in range(5)]
-        is_complete = date_to == date_from + timedelta(days=4) and all(
-            (summary := period_summaries.get(service_date)) is not None
-            and _is_complete_calendar_day(summary)
-            for service_date in required_dates
+        is_complete = (
+            date_from.weekday() == 0
+            and date_from + timedelta(days=4) <= date_to <= date_from + timedelta(days=6)
+            and all(
+                (summary := period_summaries.get(service_date)) is not None
+                and _is_complete_calendar_day(summary)
+                for service_date in required_dates
+            )
         )
         if not is_complete:
             raise MenuRequirementValidationError(

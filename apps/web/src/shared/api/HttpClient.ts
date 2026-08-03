@@ -1,6 +1,6 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 
-import { detailTranslations } from './ApiMessages';
+import { translateApiDetail } from './ApiMessages';
 
 const apiBasePath = process.env.NEXT_PUBLIC_API_BASE_URL ?? '/api/v1';
 const csrfCookieName = process.env.NEXT_PUBLIC_CSRF_COOKIE_NAME ?? 'nutriflow_csrf';
@@ -192,7 +192,7 @@ export function getApiErrorMessage(
     | undefined;
 
   if (typeof data?.detail === 'string') {
-    return detailTranslations[data.detail] ?? data.detail;
+    return translateApiDetail(data.detail);
   }
 
   if (Array.isArray(data?.detail)) {

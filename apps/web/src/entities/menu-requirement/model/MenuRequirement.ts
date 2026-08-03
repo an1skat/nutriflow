@@ -78,7 +78,7 @@ export const generateMenuRequirementsResponseSchema = z.object({
   items: z.array(menuRequirementSchema).min(1),
 });
 
-export const menuRequirementReportGranularitySchema = z.enum(['day', 'week', 'month']);
+export const menuRequirementReportGranularitySchema = z.enum(['day', 'week', 'month', 'range']);
 
 export const menuRequirementAggregateStatusSchema = z.enum([
   'complete',
@@ -106,7 +106,7 @@ export const menuRequirementCalendarWeekSchema = z.object({
   missing_days: z.number().int().nonnegative(),
   stale_days: z.number().int().nonnegative(),
   status: menuRequirementAggregateStatusSchema,
-  days: z.array(menuRequirementCalendarDaySchema).length(5),
+  days: z.array(menuRequirementCalendarDaySchema).min(5).max(7),
 });
 
 export const menuRequirementCalendarMonthSchema = z.object({

@@ -164,6 +164,32 @@ describe('WeeklyMenuEditorForm', () => {
     vi.clearAllMocks();
   });
 
+  it('never offers Saturday or Sunday as new weekly-menu days', () => {
+    const initialValues = createBlankWeeklyMenuFormValues();
+    initialValues.days = initialValues.days.slice(0, 1);
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <WeeklyMenuEditorForm
+          initialValues={initialValues}
+          mode="backoffice"
+          submitLabel="Зберегти"
+          saving={false}
+          onSubmit={async () => {}}
+          recipeCatalogEnabled={false}
+        />
+      </QueryClientProvider>
+    );
+
+    expect(screen.getByRole('button', { name: 'Додати Вівторок' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Додати П’ятниця' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Додати Субота' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Додати Неділя' })).not.toBeInTheDocument();
+  });
+
   it('renders school readonly mode as text and shows allergens from linked dish card', async () => {
     const initialValues = createBlankWeeklyMenuFormValues();
     initialValues.title = 'Меню школи';
@@ -355,10 +381,9 @@ describe('WeeklyMenuEditorForm', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Зберегти' }));
 
     await screen.findByText('Вкажіть назву страви або продукту');
-    expect(toast.error).toHaveBeenCalledWith(
-      'Є незаповнені дані. Я підсвітив найближче місце.',
-      { id: 'weekly-menu-validation-error' }
-    );
+    expect(toast.error).toHaveBeenCalledWith('Є незаповнені дані. Я підсвітив найближче місце.', {
+      id: 'weekly-menu-validation-error',
+    });
     expect(onSubmit).not.toHaveBeenCalled();
     expect(screen.queryByText(/Форма не збереглась/)).not.toBeInTheDocument();
   });

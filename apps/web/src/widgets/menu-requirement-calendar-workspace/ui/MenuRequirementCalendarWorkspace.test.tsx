@@ -185,6 +185,21 @@ const completeCalendarWeek: MenuRequirementCalendarWeek = {
   })),
 };
 
+const followingCompleteCalendarWeek: MenuRequirementCalendarWeek = {
+  ...completeCalendarWeek,
+  week_index: 3,
+  date_from: '2026-07-13',
+  date_to: '2026-07-17',
+  days: Array.from({ length: 5 }, (_item, index) => ({
+    service_date: `2026-07-${13 + index}`,
+    expected_requirements: 3,
+    generated_requirements: 3,
+    missing_requirements: 0,
+    stale_requirements: 0,
+    status: 'complete',
+  })),
+};
+
 const calendarMonth: MenuRequirementCalendarMonth = {
   month: 7,
   date_from: '2026-07-01',
@@ -206,6 +221,13 @@ const completeCalendarMonth: MenuRequirementCalendarMonth = {
   stale_days: 0,
   status: 'complete',
   weeks: [completeCalendarWeek],
+};
+
+const rangeReadyCalendarMonth: MenuRequirementCalendarMonth = {
+  ...completeCalendarMonth,
+  working_days: 10,
+  generated_days: 10,
+  weeks: [completeCalendarWeek, followingCompleteCalendarWeek],
 };
 
 describe('getCurrentCalendarWeek', () => {
@@ -346,6 +368,9 @@ describe('RequirementPeriodNavigator', () => {
 
     expect(screen.getByRole('heading', { name: 'Місяці · 2026' })).toBeInTheDocument();
     expect(screen.queryByText('Тиждень 2')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /Меню-вимога за довільний період/ })
+    ).not.toBeInTheDocument();
 
     rerender(
       <RequirementPeriodNavigator
@@ -357,6 +382,9 @@ describe('RequirementPeriodNavigator', () => {
 
     expect(screen.getByRole('heading', { name: /Тижні/ })).toBeInTheDocument();
     expect(screen.getByText('Тиждень 2')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Меню-вимога за довільний період/ })
+    ).toBeInTheDocument();
     expect(screen.queryByText('9 липня')).not.toBeInTheDocument();
 
     rerender(
@@ -370,6 +398,67 @@ describe('RequirementPeriodNavigator', () => {
     expect(screen.getByRole('heading', { name: 'Робочі дні · тиждень 2' })).toBeInTheDocument();
     expect(screen.getByText('9 липня')).toBeInTheDocument();
     expect(screen.queryByText('Тиждень 2')).not.toBeInTheDocument();
+  });
+
+  it('shows exact unavailable dates and blocks an incomplete custom range', () => {
+    const onOpenReport = vi.fn();
+    render(
+      <RequirementPeriodNavigator
+        {...defaultProps}
+        selectedMonth={calendarMonth}
+        selectedWeek={null}
+        onOpenReport={onOpenReport}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Меню-вимога за довільний період/ }));
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /^понеділок, 6 липня 2026 р\. — меню-вимоги немає$/i,
+      })
+    );
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /^середа, 8 липня 2026 р\. — меню-вимоги немає$/i,
+      })
+    );
+
+    const warning = screen.getByText(/Немає меню-вимоги за:/);
+    expect(warning).toHaveTextContent(/06.*07.*08/);
+    expect(screen.getByRole('button', { name: 'Сформувати' })).toBeDisabled();
+    expect(onOpenReport).not.toHaveBeenCalled();
+  });
+
+  it('excludes a weekend inside a ready custom range and opens a range report', () => {
+    const onOpenReport = vi.fn();
+    render(
+      <RequirementPeriodNavigator
+        {...defaultProps}
+        selectedMonth={rangeReadyCalendarMonth}
+        selectedWeek={null}
+        onOpenReport={onOpenReport}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Меню-вимога за довільний період/ }));
+
+    expect(screen.getByRole('button', { name: /11 липня 2026.*вихідний/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /12 липня 2026.*вихідний/i })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: /10 липня 2026.*готова/i }));
+    fireEvent.click(screen.getByRole('button', { name: /13 липня 2026.*готова/i }));
+
+    expect(
+      screen.getByText('Робочих днів у звіті: 2. Субота й неділя не враховуються.')
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Сформувати' }));
+
+    expect(onOpenReport).toHaveBeenCalledWith({
+      dateFrom: '2026-07-10',
+      dateTo: '2026-07-13',
+      granularity: 'range',
+      label: expect.stringContaining('10 липня'),
+    });
   });
 
   it('offers norm compliance only for the selected concrete week', () => {

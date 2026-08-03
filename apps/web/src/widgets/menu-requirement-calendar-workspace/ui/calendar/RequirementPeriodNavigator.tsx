@@ -20,6 +20,7 @@ import {
   weekdayName,
 } from './CalendarFormatting';
 import type { SelectedRange } from './RequirementCalendarTypes';
+import { RequirementRangePicker } from './RequirementRangePicker';
 import { CalendarStatusBadge, EmptyStatusBadge, Metric, StatusBadge } from './RequirementStatus';
 
 const incompleteWeekHint =
@@ -67,7 +68,7 @@ export function RequirementPeriodNavigator({
   const description = selectedWeek
     ? 'Оберіть день, щоб переглянути меню-вимоги окремих груп.'
     : selectedMonth
-      ? 'Оберіть тиждень, щоб перейти до його робочих днів.'
+      ? 'Оберіть довільний період у місяці або перейдіть до робочих днів конкретного тижня.'
       : 'Почніть із місяця, за який потрібно переглянути меню-вимоги.';
   const openCurrentReport = () => {
     if (selectedPeriodBlockReason) {
@@ -199,7 +200,14 @@ export function RequirementPeriodNavigator({
             }
           />
         ) : selectedMonth ? (
-          <RequirementWeekGrid weeks={selectedMonth.weeks} onSelect={onSelectWeek} />
+          <>
+            <RequirementRangePicker
+              key={`${selectedMonth.date_from}:${selectedMonth.date_to}`}
+              month={selectedMonth}
+              onOpenReport={onOpenReport}
+            />
+            <RequirementWeekGrid weeks={selectedMonth.weeks} onSelect={onSelectWeek} />
+          </>
         ) : (
           <RequirementMonthGrid months={months} onSelect={onSelectMonth} />
         )}
