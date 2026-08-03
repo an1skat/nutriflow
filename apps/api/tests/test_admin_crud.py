@@ -3,6 +3,8 @@ from pymongo import MongoClient
 
 from app.core.config import get_settings
 
+COMMUNITY = "obukhivska"
+
 
 def login(
     client: TestClient,
@@ -86,6 +88,121 @@ def test_admin_can_list_get_and_update_schools(seeded_client):
 
     assert get_response.status_code == 200
     assert get_response.json()["name"] == "Updated School"
+
+
+def test_admin_can_create_update_and_clear_school_community(seeded_client):
+    client, identities = seeded_client
+
+    login(
+        client,
+        identities.admin.username,
+        identities.admin_password,
+    )
+
+    create_response = client.post(
+        "/api/v1/admin/schools",
+        json={
+            "name": "Community School",
+            "community": COMMUNITY,
+        },
+        headers=csrf_headers(client),
+    )
+
+    assert create_response.status_code == 201
+    assert create_response.json()["community"] == COMMUNITY
+
+    update_response = client.patch(
+        f"/api/v1/admin/schools/{identities.other_school.id}",
+        json={"community": COMMUNITY},
+        headers=csrf_headers(client),
+    )
+
+    assert update_response.status_code == 200
+    assert update_response.json()["community"] == COMMUNITY
+
+    clear_response = client.patch(
+        f"/api/v1/admin/schools/{identities.other_school.id}",
+        json={"community": None},
+        headers=csrf_headers(client),
+    )
+
+    assert clear_response.status_code == 200
+    assert clear_response.json()["community"] is None
+
+
+def test_school_list_filters_and_sorts_by_community(seeded_client):
+    client, identities = seeded_client
+
+    login(
+        client,
+        identities.admin.username,
+        identities.admin_password,
+    )
+
+    for school_id in (identities.own_school.id, identities.other_school.id):
+        response = client.patch(
+            f"/api/v1/admin/schools/{school_id}",
+            json={"community": COMMUNITY},
+            headers=csrf_headers(client),
+        )
+        assert response.status_code == 200
+
+    filtered_response = client.get(f"/api/v1/admin/schools?community={COMMUNITY}")
+
+    assert filtered_response.status_code == 200
+    assert filtered_response.json()["total"] == 2
+    assert {item["id"] for item in filtered_response.json()["items"]} == {
+        str(identities.own_school.id),
+        str(identities.other_school.id),
+    }
+
+    sorted_response = client.get("/api/v1/admin/schools?sort_by=community")
+
+    assert sorted_response.status_code == 200
+    assert [item["name"] for item in sorted_response.json()["items"]] == [
+        "Inactive School",
+        "Other School",
+        "Own School",
+    ]
+
+
+def test_school_community_is_validated_and_scoped_to_lower_admin(seeded_client):
+    client, identities = seeded_client
+
+    login(
+        client,
+        identities.admin.username,
+        identities.admin_password,
+    )
+
+    for school_id in (identities.own_school.id, identities.other_school.id):
+        response = client.patch(
+            f"/api/v1/admin/schools/{school_id}",
+            json={"community": COMMUNITY},
+            headers=csrf_headers(client),
+        )
+        assert response.status_code == 200
+
+    invalid_response = client.patch(
+        f"/api/v1/admin/schools/{identities.own_school.id}",
+        json={"community": "unknown-community"},
+        headers=csrf_headers(client),
+    )
+
+    assert invalid_response.status_code == 422
+
+    login(
+        client,
+        identities.lower_admin.username,
+        identities.lower_admin_password,
+    )
+    response = client.get(f"/api/v1/admin/schools?community={COMMUNITY}")
+
+    assert response.status_code == 200
+    assert response.json()["total"] == 1
+    assert [item["id"] for item in response.json()["items"]] == [
+        str(identities.own_school.id)
+    ]
 
 
 def test_school_deactivation_preserves_data_and_revokes_sessions(seeded_client):

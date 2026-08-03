@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Self
+from typing import Literal, Self
 
 from beanie import PydanticObjectId
 from pydantic import (
@@ -15,6 +15,7 @@ from app.api.responses import PaginatedResponse
 from app.modules.identity.models import (
     AdminPermission,
     AgeGroup,
+    Community,
     School,
     SchoolGroup,
     TrimmedName,
@@ -22,14 +23,18 @@ from app.modules.identity.models import (
     UserRole,
 )
 
+type SchoolListSort = Literal["name", "community"]
+
 
 class CreateSchoolRequest(BaseModel):
     name: TrimmedName
+    community: Community | None = None
     admin_owner_id: PydanticObjectId | None = None
 
 
 class UpdateSchoolRequest(BaseModel):
     name: TrimmedName | None = None
+    community: Community | None = None
     admin_owner_id: PydanticObjectId | None = None
     is_active: bool | None = None
 
@@ -49,6 +54,7 @@ class SchoolResponse(BaseModel):
 
     id: PydanticObjectId
     name: str
+    community: Community | None
     admin_owner_id: PydanticObjectId | None
     is_active: bool
     created_at: datetime

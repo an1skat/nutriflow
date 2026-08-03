@@ -11,6 +11,7 @@ from app.modules.admin.schemas import (
     CreateSchoolUserRequest,
     ResetAdminUserPasswordRequest,
     ResetSchoolUserPasswordRequest,
+    SchoolListSort,
     UpdateAdminUserRequest,
     UpdateSchoolGroupRequest,
     UpdateSchoolRequest,
@@ -19,6 +20,7 @@ from app.modules.admin.schemas import (
 from app.modules.auth.security import hash_password
 from app.modules.identity.models import (
     AdminPermission,
+    Community,
     RefreshRevokeReason,
     RefreshSession,
     School,
@@ -67,16 +69,24 @@ class AdminUserOwnsSchoolsError(ValueError):
 async def list_schools(
     actor: User,
     *,
+    community: Community | None,
+    sort_by: SchoolListSort,
     offset: int,
     limit: int,
 ) -> tuple[list[School], int]:
     filters: dict[str, object] = {}
     if actor.role == UserRole.ADMIN:
         filters["admin_owner_id"] = actor.id
+    if community is not None:
+        filters["community"] = community
+
+    sort_fields = (
+        ("community", "name", "_id") if sort_by == "community" else ("name", "_id")
+    )
 
     query = School.find(filters)
     total = await query.count()
-    schools = await query.sort("name").skip(offset).limit(limit).to_list()
+    schools = await query.sort(*sort_fields).skip(offset).limit(limit).to_list()
     return schools, total
 
 
@@ -102,6 +112,7 @@ async def create_school(actor: User, data: CreateSchoolRequest) -> School:
     admin_owner_id = await _resolve_school_owner(actor, data.admin_owner_id)
     school = School(
         name=data.name,
+        community=data.community,
         admin_owner_id=admin_owner_id,
     )
 
@@ -120,6 +131,8 @@ async def update_school(
 
     if "name" in data.model_fields_set:
         school.name = data.name
+    if "community" in data.model_fields_set:
+        school.community = data.community
     if "admin_owner_id" in data.model_fields_set:
         if actor.role != UserRole.OWNER:
             raise AdminAccessDeniedError("Only owner can reassign schools")

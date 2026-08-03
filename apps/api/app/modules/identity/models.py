@@ -1,12 +1,13 @@
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 
 from beanie import Document, PydanticObjectId
 from pydantic import BaseModel, EmailStr, Field, StringConstraints, field_validator, model_validator
 from pymongo import ASCENDING, IndexModel
 
 TrimmedName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+
 
 def utc_now() -> datetime:
     return datetime.now(UTC)
@@ -32,6 +33,9 @@ class AgeGroup(StrEnum):
     SIX_TO_ELEVEN = "6-11"
     ELEVEN_TO_FOURTEEN = "11-14"
     FOURTEEN_TO_EIGHTEEN = "14-18"
+
+
+type Community = Literal["obukhivska"]
 
 
 class RefreshRevokeReason(StrEnum):
@@ -67,6 +71,7 @@ def default_school_groups() -> list[SchoolGroup]:
 
 class School(Document):
     name: TrimmedName
+    community: Community | None = None
     admin_owner_id: PydanticObjectId | None = None
     groups: list[SchoolGroup] = Field(default_factory=default_school_groups, min_length=1)
     is_active: bool = True
@@ -77,8 +82,25 @@ class School(Document):
         name = "schools"
         indexes = [
             IndexModel(
-                [("admin_owner_id", ASCENDING)],
-                name="ix_school_admin_owner",
+                [("name", ASCENDING), ("_id", ASCENDING)],
+                name="ix_school_name",
+            ),
+            IndexModel(
+                [("community", ASCENDING), ("name", ASCENDING), ("_id", ASCENDING)],
+                name="ix_school_community_name",
+            ),
+            IndexModel(
+                [("admin_owner_id", ASCENDING), ("name", ASCENDING), ("_id", ASCENDING)],
+                name="ix_school_admin_owner_name",
+            ),
+            IndexModel(
+                [
+                    ("admin_owner_id", ASCENDING),
+                    ("community", ASCENDING),
+                    ("name", ASCENDING),
+                    ("_id", ASCENDING),
+                ],
+                name="ix_school_admin_owner_community_name",
             ),
         ]
 

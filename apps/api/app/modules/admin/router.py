@@ -21,6 +21,7 @@ from app.modules.admin.schemas import (
     SchoolGroupListResponse,
     SchoolGroupResponse,
     SchoolListResponse,
+    SchoolListSort,
     SchoolResponse,
     SchoolUserListResponse,
     SchoolUserResponse,
@@ -103,7 +104,7 @@ from app.modules.auth.dependencies import (
     require_owner,
     require_permissions,
 )
-from app.modules.identity.models import AdminPermission, User, UserRole
+from app.modules.identity.models import AdminPermission, Community, User, UserRole
 
 router = APIRouter()
 
@@ -256,11 +257,15 @@ async def reset_admin_user_password(
 )
 async def list_schools(
     admin: SchoolListUser,
+    community: Community | None = None,
+    sort_by: SchoolListSort = "name",
     offset: Offset = 0,
     limit: Limit = 50,
 ) -> SchoolListResponse:
     schools, total = await list_school_records(
         admin,
+        community=community,
+        sort_by=sort_by,
         offset=offset,
         limit=limit,
     )
