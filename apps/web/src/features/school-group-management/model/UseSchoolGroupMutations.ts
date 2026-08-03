@@ -51,19 +51,3 @@ export function useRestoreSchoolGroup(
     },
   });
 }
-
-export function useDeactivateSchoolGroup(schoolId: string, groupId: string) {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: () =>
-      updateAdminSchoolGroup(schoolId, groupId, {
-        is_active: false,
-      }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: schoolGroupQueryKeys.adminLists(schoolId),
-      });
-    },
-  });
-}

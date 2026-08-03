@@ -5,7 +5,6 @@ import { useMemo, useState } from 'react';
 import { useSchoolGroups } from '@/entities/school-group/api/SchoolGroupQueries';
 import { type SchoolGroup, ageGroupLabels } from '@/entities/school-group/model/SchoolGroup';
 import { CreateSchoolGroupForm } from '@/features/school-group-management/ui/CreateSchoolGroupForm';
-import { DeactivateSchoolGroupAction } from '@/features/school-group-management/ui/DeactivateSchoolGroupAction';
 import { EditSchoolGroupForm } from '@/features/school-group-management/ui/EditSchoolGroupForm';
 import { formatDate } from '@/shared/lib/FormatDate';
 import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
@@ -75,13 +74,6 @@ export function SchoolGroupsPanel(props: SchoolGroupsPanelProps) {
                       />
                     </div>
                     <EditSchoolGroupForm schoolId={props.schoolId} group={group} />
-                    <div className="mt-3">
-                      <DeactivateSchoolGroupAction
-                        schoolId={props.schoolId}
-                        groupId={group.id}
-                        disabled={!group.is_active}
-                      />
-                    </div>
                   </div>
                 ))}
               </div>
