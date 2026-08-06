@@ -200,9 +200,7 @@ def test_school_community_is_validated_and_scoped_to_lower_admin(seeded_client):
 
     assert response.status_code == 200
     assert response.json()["total"] == 1
-    assert [item["id"] for item in response.json()["items"]] == [
-        str(identities.own_school.id)
-    ]
+    assert [item["id"] for item in response.json()["items"]] == [str(identities.own_school.id)]
 
 
 def test_school_deactivation_preserves_data_and_revokes_sessions(seeded_client):

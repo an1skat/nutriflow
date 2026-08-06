@@ -5,6 +5,7 @@ import { schoolListSchema, schoolSchema } from './School';
 const school = {
   id: 'school-id',
   name: 'Ліцей №1',
+  community: 'obukhivska',
   admin_owner_id: 'admin-id',
   is_active: true,
   created_at: '2026-07-03T08:00:00Z',
@@ -37,5 +38,9 @@ describe('school schemas', () => {
         is_active: 'yes',
       })
     ).toThrow();
+  });
+
+  it('accepts a school without a community', () => {
+    expect(schoolSchema.parse({ ...school, community: null }).community).toBeNull();
   });
 });

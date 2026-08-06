@@ -7,7 +7,7 @@ from beanie import PydanticObjectId
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from app.api.responses import PaginatedResponse
-from app.modules.identity.models import AgeGroup
+from app.modules.identity.models import AgeGroup, Community
 from app.modules.menu_requirements.models import (
     MenuRequirement,
     MenuRequirementCell,
@@ -256,6 +256,8 @@ class MenuRequirementReportDishResponse(BaseModel):
 class MenuRequirementReportBreakdownItemResponse(BaseModel):
     requirement_id: PydanticObjectId | None
     service_date: Date
+    school_id: PydanticObjectId
+    school_name: str
     school_group_id: PydanticObjectId
     school_group_name: str
     menu_title: str | None
@@ -294,7 +296,8 @@ class MenuRequirementReportIngredientRowResponse(BaseModel):
 
 
 class MenuRequirementReportGroupResponse(BaseModel):
-    school_group_id: PydanticObjectId
+    group_key: str = Field(min_length=1)
+    school_group_id: PydanticObjectId | None
     school_group_name: str
     age_group: AgeGroup
     dishes: list[MenuRequirementReportDishResponse]
@@ -309,6 +312,28 @@ class MenuRequirementReportResponse(BaseModel):
     granularity: MenuRequirementReportGranularity
     meal_type: MealType | None
     school_group_id: PydanticObjectId | None
+    status: MenuRequirementAggregateStatus
+    missing_dates: list[Date]
+    stale_dates: list[Date]
+    groups: list[MenuRequirementReportGroupResponse]
+
+
+class MenuRequirementCommunityResponse(BaseModel):
+    community: Community
+    community_name: str
+    school_count: int = Field(ge=1)
+
+
+class CommunityMenuRequirementCalendarResponse(MenuRequirementCommunityResponse):
+    year: int
+    months: list[MenuRequirementCalendarMonthResponse]
+
+
+class CommunityMenuRequirementReportResponse(MenuRequirementCommunityResponse):
+    date_from: Date
+    date_to: Date
+    granularity: MenuRequirementReportGranularity
+    meal_type: MealType | None
     status: MenuRequirementAggregateStatus
     missing_dates: list[Date]
     stale_dates: list[Date]

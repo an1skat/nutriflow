@@ -191,6 +191,19 @@ def generate_requirement(
     return response.json()["items"][0]
 
 
+def assign_schools_to_community(
+    client: TestClient,
+    *school_ids: PydanticObjectId,
+) -> None:
+    for school_id in school_ids:
+        response = client.patch(
+            f"/api/v1/admin/schools/{school_id}",
+            json={"community": "obukhivska"},
+            headers=csrf_headers(client),
+        )
+        assert response.status_code == 200
+
+
 def test_week_and_custom_range_reports_aggregate_daily_requirements(
     seeded_client,
 ) -> None:
@@ -541,3 +554,261 @@ def test_calendar_access_and_workweek_block(seeded_client) -> None:
         params={"school_id": str(identities.other_school.id), "year": 2026},
     )
     assert technologist_response.status_code == 200
+
+
+def test_community_scope_access_is_all_or_nothing(seeded_client) -> None:
+    client, identities = seeded_client
+
+    login(client, identities.admin.username, identities.admin_password)
+    assign_schools_to_community(
+        client,
+        identities.own_school.id,
+        identities.other_school.id,
+    )
+
+    owner_response = client.get("/api/v1/menu-requirements/communities")
+    assert owner_response.status_code == 200
+    assert owner_response.json() == [
+        {
+            "community": "obukhivska",
+            "community_name": "Обухівська громада",
+            "school_count": 2,
+        }
+    ]
+
+    invalid_community_response = client.get(
+        "/api/v1/menu-requirements/communities/unknown/calendar",
+        params={"year": 2026},
+    )
+    assert invalid_community_response.status_code == 422
+
+    login(
+        client,
+        identities.lower_admin.username,
+        identities.lower_admin_password,
+    )
+    lower_admin_list_response = client.get("/api/v1/menu-requirements/communities")
+    assert lower_admin_list_response.status_code == 200
+    assert lower_admin_list_response.json() == []
+
+    lower_admin_calendar_response = client.get(
+        "/api/v1/menu-requirements/communities/obukhivska/calendar",
+        params={"year": 2026},
+    )
+    assert lower_admin_calendar_response.status_code == 403
+
+    login(
+        client,
+        identities.school_user.username,
+        identities.school_user_password,
+    )
+    school_user_response = client.get("/api/v1/menu-requirements/communities")
+    assert school_user_response.status_code == 403
+
+
+def test_community_calendar_report_and_export_aggregate_schools(
+    seeded_client,
+) -> None:
+    client, identities = seeded_client
+    other_school_password = "other-school-password-123"
+
+    login(client, identities.admin.username, identities.admin_password)
+    assign_schools_to_community(
+        client,
+        identities.own_school.id,
+        identities.other_school.id,
+    )
+
+    other_user_response = client.post(
+        f"/api/v1/admin/schools/{identities.other_school.id}/users",
+        json={
+            "username": "other.school.user",
+            "email": "other.school.user@example.com",
+            "password": other_school_password,
+        },
+        headers=csrf_headers(client),
+    )
+    assert other_user_response.status_code == 201
+
+    ingredient_id, card_id, variant_id = create_confirmed_dish(client)
+    own_menu = publish_school_menu(
+        client,
+        school_id=str(identities.own_school.id),
+        card_id=card_id,
+        variant_id=variant_id,
+        days=[("monday", "2026-07-06")],
+        starts_on="2026-07-06",
+        ends_on="2026-07-06",
+    )
+    other_menu = publish_school_menu(
+        client,
+        school_id=str(identities.other_school.id),
+        card_id=card_id,
+        variant_id=variant_id,
+        days=[("monday", "2026-07-06")],
+        starts_on="2026-07-06",
+        ends_on="2026-07-06",
+    )
+
+    login(
+        client,
+        identities.school_user.username,
+        identities.school_user_password,
+    )
+    own_menu = set_school_menu_counts(
+        client,
+        menu=own_menu,
+        group_id=str(identities.own_school.groups[0].id),
+        counts_by_weekday={"monday": 3},
+    )
+    generate_requirement(
+        client,
+        menu_id=own_menu["id"],
+        weekday="monday",
+        service_date="2026-07-06",
+    )
+
+    login(client, "other.school.user", other_school_password)
+    other_menu = set_school_menu_counts(
+        client,
+        menu=other_menu,
+        group_id=str(identities.other_school.groups[0].id),
+        counts_by_weekday={"monday": 4},
+    )
+
+    login(client, identities.admin.username, identities.admin_password)
+    calendar_response = client.get(
+        "/api/v1/menu-requirements/communities/obukhivska/calendar",
+        params={"year": 2026, "meal_type": "lunch"},
+    )
+    assert calendar_response.status_code == 200
+
+    calendar = calendar_response.json()
+    assert calendar["community"] == "obukhivska"
+    assert calendar["community_name"] == "Обухівська громада"
+    assert calendar["school_count"] == 2
+
+    july = next(month for month in calendar["months"] if month["month"] == 7)
+    monday = next(
+        day
+        for week in july["weeks"]
+        for day in week["days"]
+        if day["service_date"] == "2026-07-06"
+    )
+    assert monday["expected_requirements"] == 2
+    assert monday["generated_requirements"] == 1
+    assert monday["missing_requirements"] == 1
+    assert monday["status"] == "missing"
+    assert july["generated_days"] == 1
+    assert july["missing_days"] == 1
+
+    day_report_params = {
+        "date_from": "2026-07-06",
+        "date_to": "2026-07-06",
+        "granularity": "day",
+        "meal_type": "lunch",
+    }
+    report_response = client.get(
+        "/api/v1/menu-requirements/communities/obukhivska/report",
+        params=day_report_params,
+    )
+    assert report_response.status_code == 200
+
+    report = report_response.json()
+    assert report["status"] == "missing"
+    assert report["missing_dates"] == ["2026-07-06"]
+    assert report["school_count"] == 2
+
+    group = report["groups"][0]
+    assert group["group_key"] == "age-group:6-11"
+    assert group["school_group_id"] is None
+    assert group["school_group_name"] == "6-11"
+    assert group["dishes"][0]["children_count_total"] == 3
+
+    ingredient = next(
+        row
+        for row in group["ingredient_rows"]
+        if row["ingredient_id"] == ingredient_id
+    )
+    cell = ingredient["cells"][0]
+    breakdown_by_school = {
+        item["school_name"]: item
+        for item in cell["breakdown"]
+    }
+    assert set(breakdown_by_school) == {
+        identities.own_school.name,
+        identities.other_school.name,
+    }
+    assert breakdown_by_school[identities.own_school.name]["status"] == "complete"
+    assert breakdown_by_school[identities.own_school.name]["children_count"] == 3
+    assert breakdown_by_school[identities.other_school.name]["status"] == "missing"
+    assert breakdown_by_school[identities.other_school.name]["requirement_id"] is None
+
+    login(client, "other.school.user", other_school_password)
+    generate_requirement(
+        client,
+        menu_id=other_menu["id"],
+        weekday="monday",
+        service_date="2026-07-06",
+    )
+
+    login(client, identities.admin.username, identities.admin_password)
+    range_report_params = {**day_report_params, "granularity": "range"}
+    complete_response = client.get(
+        "/api/v1/menu-requirements/communities/obukhivska/report",
+        params=range_report_params,
+    )
+    assert complete_response.status_code == 200
+
+    complete_report = complete_response.json()
+    assert complete_report["status"] == "complete"
+    assert complete_report["missing_dates"] == []
+    assert complete_report["stale_dates"] == []
+
+    complete_group = complete_report["groups"][0]
+    assert complete_group["dishes"][0]["children_count_total"] == 7
+    complete_ingredient = next(
+        row
+        for row in complete_group["ingredient_rows"]
+        if row["ingredient_id"] == ingredient_id
+    )
+    complete_cell = complete_ingredient["cells"][0]
+    assert Decimal(complete_cell["issue_total_raw_g"]) == Decimal("141.75")
+    assert {item["status"] for item in complete_cell["breakdown"]} == {"complete"}
+    assert {item["school_name"] for item in complete_cell["breakdown"]} == {
+        identities.own_school.name,
+        identities.other_school.name,
+    }
+
+    for granularity, date_to in (
+        ("week", "2026-07-12"),
+        ("month", "2026-07-31"),
+    ):
+        period_response = client.get(
+            "/api/v1/menu-requirements/communities/obukhivska/report",
+            params={
+                "date_from": "2026-07-06",
+                "date_to": date_to,
+                "granularity": granularity,
+                "meal_type": "lunch",
+            },
+        )
+        assert period_response.status_code == 200
+        assert period_response.json()["granularity"] == granularity
+
+    export_response = client.get(
+        "/api/v1/menu-requirements/communities/obukhivska/report/export.xlsx",
+        params=range_report_params,
+    )
+    assert export_response.status_code == 200
+    assert export_response.headers["content-type"].startswith(
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+    workbook = openpyxl.load_workbook(BytesIO(export_response.content))
+    sheet = workbook.active
+    assert sheet["A2"].value == "Громада"
+    assert sheet["B2"].value == "Обухівська громада"
+    assert sheet["A3"].value == "Кількість шкіл"
+    assert sheet["B3"].value == 2
+    assert any(cell.value == "Морква" for row in sheet.iter_rows() for cell in row)

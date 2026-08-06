@@ -102,13 +102,7 @@ export function RequirementReportDialog({
               <MenuRequirementExportButton
                 target={{
                   kind: 'report',
-                  request: {
-                    school_id: report.school_id,
-                    date_from: report.date_from,
-                    date_to: report.date_to,
-                    granularity: report.granularity,
-                    meal_type: report.meal_type ?? undefined,
-                  },
+                  request: getReportExportRequest(report),
                   amountBasis,
                 }}
                 label="Експорт в Excel"
@@ -168,13 +162,14 @@ export function RequirementReportTable({
   compactHeader?: boolean;
 }) {
   const [internalAmountBasis, setInternalAmountBasis] = useState<MenuRequirementAmountBasis>('net');
-  const [selectedGroupId, setSelectedGroupId] = useState(
-    () => report.groups[0]?.school_group_id ?? ''
+  const [selectedGroupKey, setSelectedGroupKey] = useState(
+    () => report.groups[0]?.group_key ?? ''
   );
   const amountBasis = amountBasisProp ?? internalAmountBasis;
   const handleAmountBasisChange = onAmountBasisChange ?? setInternalAmountBasis;
   const selectedGroup =
-    report.groups.find((group) => group.school_group_id === selectedGroupId) ?? report.groups[0];
+    report.groups.find((group) => group.group_key === selectedGroupKey) ?? report.groups[0];
+  const scopeLabel = getReportScopeLabel(report);
 
   if (report.groups.length === 0) {
     return (
@@ -194,7 +189,7 @@ export function RequirementReportTable({
       {compactHeader ? (
         <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
           <p className="text-sm font-semibold text-slate-700">
-            {report.school_name} · Груп: {report.groups.length}
+            {scopeLabel} · Груп: {report.groups.length}
           </p>
           <div className="flex items-center gap-3">
             <MenuRequirementAmountToggle value={amountBasis} onChange={handleAmountBasisChange} />
@@ -204,7 +199,7 @@ export function RequirementReportTable({
       ) : (
         <div className="nf-panel-header items-start">
           <div>
-            <p className="nf-eyebrow">{report.school_name}</p>
+            <p className="nf-eyebrow">{scopeLabel}</p>
             <h2 className="nf-panel-title">{rangeLabel}</h2>
             <p className="mt-1 text-xs text-slate-600">
               {formatDay(report.date_from)} - {formatDay(report.date_to)}
@@ -233,11 +228,11 @@ export function RequirementReportTable({
       <div className="grid gap-4 p-3 pb-5 pr-4 sm:p-4 sm:pb-6 sm:pr-5">
         <div className="flex flex-wrap gap-2" aria-label="Групи">
           {report.groups.map((group) => {
-            const selected = group.school_group_id === selectedGroup?.school_group_id;
+            const selected = group.group_key === selectedGroup?.group_key;
 
             return (
               <button
-                key={group.school_group_id}
+                key={group.group_key}
                 type="button"
                 className={`border px-3 py-2 text-left text-sm font-semibold transition-colors ${
                   selected
@@ -245,7 +240,7 @@ export function RequirementReportTable({
                     : 'border-slate-300 bg-white text-slate-800 hover:border-emerald-500 hover:bg-emerald-50'
                 }`}
                 aria-pressed={selected}
-                onClick={() => setSelectedGroupId(group.school_group_id)}
+                onClick={() => setSelectedGroupKey(group.group_key)}
               >
                 {group.school_group_name}
               </button>
@@ -263,7 +258,7 @@ export function RequirementReportTable({
         ) : null}
 
         {selectedCell &&
-        selectedCell.group.school_group_id === selectedGroup?.school_group_id &&
+        selectedCell.group.group_key === selectedGroup?.group_key &&
         hasMenuRequirementAmount(getReportCellAmount(selectedCell.cell, amountBasis)) ? (
           <CellBreakdownPanel selectedCell={selectedCell} amountBasis={amountBasis} />
         ) : null}
@@ -348,7 +343,7 @@ function ReportGroupTable({
                     const amount = cell ? getReportCellAmount(cell, amountBasis) : null;
                     const issueTotal = cell ? getReportCellIssueTotal(cell, amountBasis) : null;
                     const selected =
-                      selectedCell?.group.school_group_id === group.school_group_id &&
+                      selectedCell?.group.group_key === group.group_key &&
                       selectedCell.cell.dish_key === dish.aggregate_key &&
                       selectedCell.ingredientName === row.ingredient_name;
 
@@ -444,10 +439,11 @@ function CellBreakdownPanel({
         </p>
       </div>
       <div className="overflow-x-auto pb-3 pr-3 scrollbar-gutter-stable">
-        <table className="min-w-190 border-collapse text-xs">
+        <table className="min-w-220 border-collapse text-xs">
           <thead>
             <tr className="bg-slate-100 text-left text-slate-800">
               <th className="border-b border-slate-300 px-2 py-1.5">Дата</th>
+              <th className="border-b border-slate-300 px-2 py-1.5">Школа</th>
               <th className="border-b border-slate-300 px-2 py-1.5">Меню</th>
               <th className="border-b border-slate-300 px-2 py-1.5 text-right">
                 {amountBasis === 'gross' ? 'Брутто' : 'Нетто'}, г
@@ -460,9 +456,9 @@ function CellBreakdownPanel({
             </tr>
           </thead>
           <tbody>
-            {selectedCell.cell.breakdown.map((item) => (
+            {selectedCell.cell.breakdown.map((item, index) => (
               <BreakdownRow
-                key={`${item.service_date}:${item.requirement_id ?? 'missing'}`}
+                key={`${item.service_date}:${item.school_id}:${item.requirement_id ?? 'missing'}:${index}`}
                 item={item}
                 amountBasis={amountBasis}
               />
@@ -490,6 +486,7 @@ function BreakdownRow({
   return (
     <tr className="border-b border-slate-200 last:border-b-0">
       <td className="px-2 py-1.5 font-medium text-slate-900">{formatDay(item.service_date)}</td>
+      <td className="px-2 py-1.5 text-slate-700">{item.school_name}</td>
       <td className="px-2 py-1.5 text-slate-700">
         {item.menu_title ?? 'Денну меню-вимогу не сформовано'}
       </td>
@@ -530,6 +527,28 @@ function getReportCellAmount(
   amountBasis: MenuRequirementAmountBasis
 ): string | null {
   return amountBasis === 'gross' ? cell.gross_per_person_g : cell.net_per_person_g;
+}
+
+function getReportScopeLabel(report: MenuRequirementReport): string {
+  return 'community' in report
+    ? `${report.community_name} · Шкіл: ${report.school_count}`
+    : report.school_name;
+}
+
+function getReportExportRequest(report: MenuRequirementReport) {
+  const common = {
+    date_from: report.date_from,
+    date_to: report.date_to,
+    granularity: report.granularity,
+    meal_type: report.meal_type ?? undefined,
+  };
+
+  return 'community' in report
+    ? { ...common, community: report.community }
+    : {
+        ...common,
+        school_id: report.school_id,
+      };
 }
 
 function getReportCellIssueTotal(

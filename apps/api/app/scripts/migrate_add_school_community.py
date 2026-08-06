@@ -34,9 +34,7 @@ def main() -> None:
             }
         )
         if invalid_count:
-            raise RuntimeError(
-                f"Found {invalid_count} schools with a community outside Community"
-            )
+            raise RuntimeError(f"Found {invalid_count} schools with a community outside Community")
 
         result = collection.update_many(
             {"community": {"$exists": False}},

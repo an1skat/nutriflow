@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   generateMenuRequirementsResponseSchema,
   menuRequirementCalendarSchema,
+  menuRequirementCommunityListSchema,
   menuRequirementReportGranularitySchema,
   menuRequirementReportSchema,
   menuRequirementSchema,
@@ -164,6 +165,7 @@ describe('menu requirement contract', () => {
       stale_dates: ['2026-07-09'],
       groups: [
         {
+          group_key: 'school-group:group-1',
           school_group_id: 'group-1',
           school_group_name: '6-11',
           age_group: '6-11',
@@ -196,6 +198,8 @@ describe('menu requirement contract', () => {
                     {
                       requirement_id: 'requirement-1',
                       service_date: '2026-07-06',
+                      school_id: 'school-1',
+                      school_name: 'Ліцей №1',
                       school_group_id: 'group-1',
                       school_group_name: '6-11',
                       menu_title: 'Меню на тиждень',
@@ -211,6 +215,8 @@ describe('menu requirement contract', () => {
                     {
                       requirement_id: null,
                       service_date: '2026-07-08',
+                      school_id: 'school-1',
+                      school_name: 'Ліцей №1',
                       school_group_id: 'group-1',
                       school_group_name: '6-11',
                       menu_title: 'Меню на тиждень',
@@ -240,5 +246,61 @@ describe('menu requirement contract', () => {
 
     expect(parsed.groups[0].ingredient_rows[0].cells[0].breakdown[1].status).toBe('missing');
     expect(parsed.groups[0].ingredient_rows[0].cells[0].gross_per_person_g).toBe('50');
+  });
+
+  it('parses the available community scope', () => {
+    expect(
+      menuRequirementCommunityListSchema.parse([
+        {
+          community: 'obukhivska',
+          community_name: 'Обухівська громада',
+          school_count: 2,
+        },
+      ])
+    ).toEqual([
+      {
+        community: 'obukhivska',
+        community_name: 'Обухівська громада',
+        school_count: 2,
+      },
+    ]);
+  });
+
+  it('parses community calendar and report responses', () => {
+    const months = Array.from({ length: 12 }, (_item, index) => ({
+      month: index + 1,
+      date_from: `2026-${String(index + 1).padStart(2, '0')}-01`,
+      date_to: `2026-${String(index + 1).padStart(2, '0')}-28`,
+      total_days: 28,
+      working_days: 0,
+      generated_days: 0,
+      missing_days: 0,
+      stale_days: 0,
+      status: 'complete',
+      weeks: [],
+    }));
+    const calendar = menuRequirementCalendarSchema.parse({
+      community: 'obukhivska',
+      community_name: 'Обухівська громада',
+      school_count: 2,
+      year: 2026,
+      months,
+    });
+    const report = menuRequirementReportSchema.parse({
+      community: 'obukhivska',
+      community_name: 'Обухівська громада',
+      school_count: 2,
+      date_from: '2026-07-01',
+      date_to: '2026-07-31',
+      granularity: 'month',
+      meal_type: null,
+      status: 'complete',
+      missing_dates: [],
+      stale_dates: [],
+      groups: [],
+    });
+
+    expect(calendar).toMatchObject({ community: 'obukhivska', school_count: 2 });
+    expect(report).toMatchObject({ community_name: 'Обухівська громада', groups: [] });
   });
 });

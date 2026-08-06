@@ -4,15 +4,13 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { createSchool, updateSchool } from '@/entities/school/api/SchoolApi';
 import { schoolQueryKeys } from '@/entities/school/api/SchoolQueries';
-import type { UpdateSchoolPayload } from '@/entities/school/model/School';
-
-import type { SchoolFormValues } from './SchoolFormSchema';
+import type { CreateSchoolPayload, UpdateSchoolPayload } from '@/entities/school/model/School';
 
 export function useCreateSchool() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (values: SchoolFormValues) => createSchool(values),
+    mutationFn: (payload: CreateSchoolPayload) => createSchool(payload),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: schoolQueryKeys.lists(),

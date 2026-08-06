@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
 import {
+  type SchoolCommunity,
+  schoolCommunitySchema,
+} from '@/entities/school/model/School';
+import {
   ageGroupSchema,
   mealTypeSchema,
   menuItemKindSchema,
@@ -89,6 +93,16 @@ export const menuRequirementAggregateStatusSchema = z.enum([
 
 export const menuRequirementDishKeyReliabilitySchema = z.enum(['stable', 'name_fallback']);
 
+export const menuRequirementCommunityCodeSchema = schoolCommunitySchema;
+
+export const menuRequirementCommunitySchema = z.object({
+  community: menuRequirementCommunityCodeSchema,
+  community_name: z.string().min(1),
+  school_count: z.number().int().positive(),
+});
+
+export const menuRequirementCommunityListSchema = z.array(menuRequirementCommunitySchema);
+
 export const menuRequirementCalendarDaySchema = z.object({
   service_date: z.string().min(1),
   expected_requirements: z.number().int().nonnegative(),
@@ -122,12 +136,23 @@ export const menuRequirementCalendarMonthSchema = z.object({
   weeks: z.array(menuRequirementCalendarWeekSchema),
 });
 
-export const menuRequirementCalendarSchema = z.object({
-  school_id: z.string().min(1),
-  school_name: z.string().min(1),
+const menuRequirementCalendarBaseSchema = z.object({
   year: z.number().int(),
   months: z.array(menuRequirementCalendarMonthSchema).length(12),
 });
+
+export const schoolMenuRequirementCalendarSchema = menuRequirementCalendarBaseSchema.extend({
+  school_id: z.string().min(1),
+  school_name: z.string().min(1),
+});
+
+export const communityMenuRequirementCalendarSchema =
+  menuRequirementCalendarBaseSchema.extend(menuRequirementCommunitySchema.shape);
+
+export const menuRequirementCalendarSchema = z.union([
+  schoolMenuRequirementCalendarSchema,
+  communityMenuRequirementCalendarSchema,
+]);
 
 export const menuRequirementReportDishSchema = z.object({
   aggregate_key: z.string().min(1),
@@ -142,6 +167,8 @@ export const menuRequirementReportDishSchema = z.object({
 export const menuRequirementReportBreakdownItemSchema = z.object({
   requirement_id: z.string().nullable(),
   service_date: z.string().min(1),
+  school_id: z.string().min(1),
+  school_name: z.string().min(1),
   school_group_id: z.string().min(1),
   school_group_name: z.string().min(1),
   menu_title: z.string().nullable(),
@@ -180,26 +207,38 @@ export const menuRequirementReportIngredientRowSchema = z.object({
 });
 
 export const menuRequirementReportGroupSchema = z.object({
-  school_group_id: z.string().min(1),
+  group_key: z.string().min(1),
+  school_group_id: z.string().min(1).nullable(),
   school_group_name: z.string().min(1),
   age_group: ageGroupSchema,
   dishes: z.array(menuRequirementReportDishSchema),
   ingredient_rows: z.array(menuRequirementReportIngredientRowSchema),
 });
 
-export const menuRequirementReportSchema = z.object({
-  school_id: z.string().min(1),
-  school_name: z.string().min(1),
+const menuRequirementReportBaseSchema = z.object({
   date_from: z.string().min(1),
   date_to: z.string().min(1),
   granularity: menuRequirementReportGranularitySchema,
   meal_type: mealTypeSchema.nullable(),
-  school_group_id: z.string().nullable(),
   status: menuRequirementAggregateStatusSchema,
   missing_dates: z.array(z.string().min(1)),
   stale_dates: z.array(z.string().min(1)),
   groups: z.array(menuRequirementReportGroupSchema),
 });
+
+export const schoolMenuRequirementReportSchema = menuRequirementReportBaseSchema.extend({
+  school_id: z.string().min(1),
+  school_name: z.string().min(1),
+  school_group_id: z.string().nullable(),
+});
+
+export const communityMenuRequirementReportSchema =
+  menuRequirementReportBaseSchema.extend(menuRequirementCommunitySchema.shape);
+
+export const menuRequirementReportSchema = z.union([
+  schoolMenuRequirementReportSchema,
+  communityMenuRequirementReportSchema,
+]);
 
 export const updateMenuRequirementPayloadSchema = z.object({
   ingredient_rows: z.array(
@@ -230,6 +269,8 @@ export type MenuRequirementReportGranularity = z.infer<
   typeof menuRequirementReportGranularitySchema
 >;
 export type MenuRequirementAggregateStatus = z.infer<typeof menuRequirementAggregateStatusSchema>;
+export type MenuRequirementCommunityCode = SchoolCommunity;
+export type MenuRequirementCommunity = z.infer<typeof menuRequirementCommunitySchema>;
 export type MenuRequirementCalendar = z.infer<typeof menuRequirementCalendarSchema>;
 export type MenuRequirementCalendarMonth = z.infer<typeof menuRequirementCalendarMonthSchema>;
 export type MenuRequirementCalendarWeek = z.infer<typeof menuRequirementCalendarWeekSchema>;
@@ -258,23 +299,41 @@ export type GenerateMenuRequirementsPayload = {
   service_date: string;
 };
 
-export type MenuRequirementCalendarRequest = {
-  school_id: string;
+type MenuRequirementCalendarRequestBase = {
   year: number;
   meal_type?: z.infer<typeof mealTypeSchema>;
-  school_group_id?: string;
   enabled?: boolean;
 };
 
-export type MenuRequirementReportRequest = {
-  school_id: string;
+export type MenuRequirementCalendarRequest = MenuRequirementCalendarRequestBase &
+  (
+    | {
+        school_id: string;
+        school_group_id?: string;
+      }
+    | {
+        community: MenuRequirementCommunityCode | '';
+      }
+  );
+
+type MenuRequirementReportRequestBase = {
   date_from: string;
   date_to: string;
   granularity: MenuRequirementReportGranularity;
   meal_type?: z.infer<typeof mealTypeSchema>;
-  school_group_id?: string;
   enabled?: boolean;
 };
+
+export type MenuRequirementReportRequest = MenuRequirementReportRequestBase &
+  (
+    | {
+        school_id: string;
+        school_group_id?: string;
+      }
+    | {
+        community: MenuRequirementCommunityCode | '';
+      }
+  );
 
 export function hasMenuRequirementAmount(value: string | null): value is string {
   return value !== null && Number(value) > 0;

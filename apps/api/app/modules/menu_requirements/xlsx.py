@@ -8,9 +8,15 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 from app.modules.menu_requirements.models import MenuRequirement
 from app.modules.menu_requirements.schemas import (
+    CommunityMenuRequirementReportResponse,
     MenuRequirementAmountBasis,
     MenuRequirementReportGroupResponse,
     MenuRequirementReportResponse,
+)
+
+type MenuRequirementReport = (
+    MenuRequirementReportResponse
+    | CommunityMenuRequirementReportResponse
 )
 
 TITLE_FILL = PatternFill("solid", fgColor="166534")
@@ -120,7 +126,7 @@ def build_menu_requirement_workbook(
 
 
 def build_menu_requirement_report_workbook(
-    report: MenuRequirementReportResponse,
+    report: MenuRequirementReport,
     *,
     amount_basis: MenuRequirementAmountBasis = MenuRequirementAmountBasis.NET,
 ) -> bytes:
@@ -148,7 +154,7 @@ def build_menu_requirement_report_workbook(
 
 def _write_report_group(
     sheet: Worksheet,
-    report: MenuRequirementReportResponse,
+    report: MenuRequirementReport,
     group: MenuRequirementReportGroupResponse,
     *,
     amount_basis: MenuRequirementAmountBasis,
@@ -222,13 +228,33 @@ def _write_report_group(
     )
 
 
-def _report_metadata(report: MenuRequirementReportResponse) -> list[tuple[str, Any]]:
-    meal_type = MEAL_TYPE_LABELS[report.meal_type.value] if report.meal_type else "Усі"
+def _report_metadata(
+    report: MenuRequirementReport,
+) -> list[tuple[str, Any]]:
+    meal_type = (
+        MEAL_TYPE_LABELS[report.meal_type.value]
+        if report.meal_type
+        else "Усі"
+    )
+
+    if isinstance(report, CommunityMenuRequirementReportResponse):
+        scope_metadata: list[tuple[str, Any]] = [
+            ("Громада", report.community_name),
+            ("Кількість шкіл", report.school_count),
+        ]
+    else:
+        scope_metadata = [
+            ("Школа", report.school_name),
+        ]
+
     return [
-        ("Школа", report.school_name),
+        *scope_metadata,
         (
             "Період",
-            f"{report.date_from.strftime('%d.%m.%Y')} – {report.date_to.strftime('%d.%m.%Y')}",
+            (
+                f"{report.date_from.strftime('%d.%m.%Y')} – "
+                f"{report.date_to.strftime('%d.%m.%Y')}"
+            ),
         ),
         ("Групування", GRANULARITY_LABELS[report.granularity.value]),
         ("Прийом їжі", meal_type),

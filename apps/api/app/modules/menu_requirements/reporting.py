@@ -8,8 +8,20 @@ from typing import Any
 
 from beanie import PydanticObjectId
 
-from app.modules.identity.models import School, SchoolGroup, User, UserRole
-from app.modules.menu_requirements.access import can_access_school
+from app.modules.identity.models import (
+    COMMUNITY_LABELS,
+    AgeGroup,
+    Community,
+    School,
+    SchoolGroup,
+    User,
+    UserRole,
+)
+from app.modules.menu_requirements.access import (
+    can_access_school,
+    get_accessible_community_schools,
+    list_accessible_communities,
+)
 from app.modules.menu_requirements.errors import (
     MenuRequirementAccessDeniedError,
     MenuRequirementNotFoundError,
@@ -18,11 +30,14 @@ from app.modules.menu_requirements.errors import (
 )
 from app.modules.menu_requirements.models import MenuRequirement, MenuRequirementDish
 from app.modules.menu_requirements.schemas import (
+    CommunityMenuRequirementCalendarResponse,
+    CommunityMenuRequirementReportResponse,
     MenuRequirementAggregateStatus,
     MenuRequirementCalendarDayResponse,
     MenuRequirementCalendarMonthResponse,
     MenuRequirementCalendarResponse,
     MenuRequirementCalendarWeekResponse,
+    MenuRequirementCommunityResponse,
     MenuRequirementDishKeyReliability,
     MenuRequirementReportBreakdownItemResponse,
     MenuRequirementReportCellResponse,
@@ -63,12 +78,22 @@ class AggregateDishKey:
 
 @dataclass(frozen=True)
 class ExpectedMenuDay:
+    school_id: PydanticObjectId
     service_date: Date
     weekly_menu_id: PydanticObjectId
     weekday: Weekday
     meal_type: MealType
     menu_title: str
     day: DailyMenu
+
+
+@dataclass(frozen=True)
+class RequirementKey:
+    service_date: Date
+    school_id: PydanticObjectId
+    weekly_menu_id: PydanticObjectId
+    weekday: Weekday
+    school_group_id: PydanticObjectId
 
 
 async def get_menu_requirement_calendar(
@@ -86,15 +111,16 @@ async def get_menu_requirement_calendar(
     year_date_to = Date(year, 12, 31)
     date_from = year_date_from - timedelta(days=CALENDAR_WEEK_SPILLOVER_DAYS)
     date_to = year_date_to + timedelta(days=CALENDAR_WEEK_SPILLOVER_DAYS)
+    school_ids = [school_id]
     expected_days = await _expected_menu_days(
-        school_id,
+        school_ids,
         date_from=date_from,
         date_to=date_to,
         meal_type=meal_type,
         school_group_id=school_group_id,
     )
     requirements = await _find_requirements_for_report(
-        school_id,
+        school_ids,
         date_from=date_from,
         date_to=date_to,
         meal_type=meal_type,
@@ -102,20 +128,22 @@ async def get_menu_requirement_calendar(
     )
     requirement_statuses = await _requirement_statuses(requirements)
 
+    groups_by_school_id = {school.id: {group.id: group for group in school.groups}}
+    day_summaries, _missing_requirement_keys = _build_scope_day_summaries(
+        expected_days,
+        requirements,
+        requirement_statuses=requirement_statuses,
+        groups_by_school_id=groups_by_school_id,
+        school_group_id=school_group_id,
+    )
+
+    expected_dates = set(expected_days)
     generated_dates = {requirement.service_date for requirement in requirements}
     stale_dates = {
         requirement.service_date
         for requirement in requirements
         if requirement_statuses.get(requirement.id) == MenuRequirementAggregateStatus.STALE
     }
-    expected_dates = set(expected_days)
-    day_summaries = _build_calendar_day_summaries(
-        expected_days,
-        requirements,
-        requirement_statuses=requirement_statuses,
-        school=school,
-        school_group_id=school_group_id,
-    )
 
     months = [
         _build_calendar_month(
@@ -136,6 +164,81 @@ async def get_menu_requirement_calendar(
     )
 
 
+async def get_community_menu_requirement_calendar(
+    community: Community,
+    year: int,
+    current_user: User,
+    *,
+    meal_type: MealType | None = None,
+) -> CommunityMenuRequirementCalendarResponse:
+    schools = await get_accessible_community_schools(current_user, community)
+    school_ids = [school.id for school in schools]
+    groups_by_school_id = {
+        school.id: {group.id: group for group in school.groups}
+        for school in schools
+    }
+
+    year_date_from = Date(year, 1, 1)
+    year_date_to = Date(year, 12, 31)
+    date_from = year_date_from - timedelta(days=CALENDAR_WEEK_SPILLOVER_DAYS)
+    date_to = year_date_to + timedelta(days=CALENDAR_WEEK_SPILLOVER_DAYS)
+
+    expected_days = await _expected_menu_days(
+        school_ids,
+        date_from=date_from,
+        date_to=date_to,
+        meal_type=meal_type,
+    )
+    requirements = await _find_requirements_for_report(
+        school_ids,
+        date_from=date_from,
+        date_to=date_to,
+        meal_type=meal_type,
+    )
+    requirement_statuses = await _requirement_statuses(requirements)
+
+    day_summaries, _missing_requirement_keys = _build_scope_day_summaries(
+        expected_days,
+        requirements,
+        requirement_statuses=requirement_statuses,
+        groups_by_school_id=groups_by_school_id,
+    )
+
+    expected_dates = set(expected_days)
+    generated_dates = {
+        requirement.service_date
+        for requirement in requirements
+    }
+    stale_dates = {
+        requirement.service_date
+        for requirement in requirements
+        if (
+            requirement_statuses.get(requirement.id)
+            == MenuRequirementAggregateStatus.STALE
+        )
+    }
+
+    months = [
+        _build_calendar_month(
+            year,
+            month,
+            expected_dates=expected_dates,
+            generated_dates=generated_dates,
+            stale_dates=stale_dates,
+            day_summaries=day_summaries,
+        )
+        for month in range(1, 13)
+    ]
+
+    return CommunityMenuRequirementCalendarResponse(
+        community=community,
+        community_name=COMMUNITY_LABELS[community],
+        school_count=len(schools),
+        year=year,
+        months=months,
+    )
+
+
 async def get_menu_requirement_report(
     school_id: PydanticObjectId,
     date_from: Date,
@@ -151,15 +254,20 @@ async def get_menu_requirement_report(
     school = await _get_accessible_school(current_user, school_id)
     _ensure_school_group_exists(school, school_group_id)
 
+    school_ids = [school.id]
+    schools_by_id = {school.id: school}
+    groups_by_id = {group.id: group for group in school.groups}
+    groups_by_school_id = {school.id: groups_by_id}
+
     expected_days = await _expected_menu_days(
-        school_id,
+        school_ids,
         date_from=date_from,
         date_to=date_to,
         meal_type=meal_type,
         school_group_id=school_group_id,
     )
     requirements = await _find_requirements_for_report(
-        school_id,
+        school_ids,
         date_from=date_from,
         date_to=date_to,
         meal_type=meal_type,
@@ -178,6 +286,14 @@ async def get_menu_requirement_report(
 
     requirement_statuses = await _requirement_statuses(requirements)
 
+    day_summaries, missing_requirement_keys = _build_scope_day_summaries(
+        expected_days,
+        requirements,
+        requirement_statuses=requirement_statuses,
+        groups_by_school_id=groups_by_school_id,
+        school_group_id=school_group_id,
+    )
+
     should_validate_completion = granularity == MenuRequirementReportGranularity.RANGE or (
         current_user.role != UserRole.OWNER
         and granularity
@@ -188,22 +304,14 @@ async def get_menu_requirement_report(
     )
 
     if should_validate_completion:
-        day_summaries = _build_calendar_day_summaries(
-            expected_days,
-            requirements,
-            requirement_statuses=requirement_statuses,
-            school=school,
-            school_group_id=school_group_id,
-        )
         _validate_complete_aggregate_report(
             granularity,
             date_from=date_from,
             date_to=date_to,
             day_summaries=day_summaries,
         )
-    generated_dates = {requirement.service_date for requirement in requirements}
-    expected_dates = set(expected_days)
-    missing_dates = sorted(expected_dates - generated_dates)
+
+    missing_dates = sorted({key.service_date for key in missing_requirement_keys})
     stale_dates = sorted(
         {
             requirement.service_date
@@ -215,9 +323,10 @@ async def get_menu_requirement_report(
     groups = _build_report_groups(
         requirements,
         requirement_statuses=requirement_statuses,
-        missing_dates=missing_dates,
+        missing_requirement_keys=missing_requirement_keys,
         expected_days=expected_days,
-        school=school,
+        groups_by_id=groups_by_id,
+        schools_by_id=schools_by_id,
     )
 
     return MenuRequirementReportResponse(
@@ -235,6 +344,122 @@ async def get_menu_requirement_report(
         missing_dates=missing_dates,
         stale_dates=stale_dates,
         groups=groups,
+    )
+
+
+async def list_menu_requirement_communities(
+    current_user: User,
+) -> list[MenuRequirementCommunityResponse]:
+    communities = await list_accessible_communities(current_user)
+
+    return [
+        MenuRequirementCommunityResponse(
+            community=community,
+            community_name=COMMUNITY_LABELS[community],
+            school_count=len(schools),
+        )
+        for community, schools in communities
+    ]
+
+
+async def get_community_menu_requirement_report(
+    community: Community,
+    date_from: Date,
+    date_to: Date,
+    granularity: MenuRequirementReportGranularity,
+    current_user: User,
+    *,
+    meal_type: MealType | None = None,
+) -> CommunityMenuRequirementReportResponse:
+    _validate_report_range(date_from, date_to, granularity)
+
+    schools = await get_accessible_community_schools(current_user, community)
+    school_ids = [school.id for school in schools]
+    schools_by_id = {school.id: school for school in schools}
+    groups_by_id = {group.id: group for school in schools for group in school.groups}
+    groups_by_school_id = {
+        school.id: {group.id: group for group in school.groups} for school in schools
+    }
+
+    expected_days = await _expected_menu_days(
+        school_ids,
+        date_from=date_from,
+        date_to=date_to,
+        meal_type=meal_type,
+    )
+    requirements = await _find_requirements_for_report(
+        school_ids,
+        date_from=date_from,
+        date_to=date_to,
+        meal_type=meal_type,
+    )
+
+    if granularity in AGGREGATE_REPORT_GRANULARITIES:
+        expected_days = {
+            service_date: items
+            for service_date, items in expected_days.items()
+            if _is_weekday(service_date)
+        }
+        requirements = [
+            requirement for requirement in requirements if _is_weekday(requirement.service_date)
+        ]
+
+    statuses = await _requirement_statuses(requirements)
+    day_summaries, missing_requirement_keys = _build_scope_day_summaries(
+        expected_days,
+        requirements,
+        requirement_statuses=statuses,
+        groups_by_school_id=groups_by_school_id,
+    )
+
+    should_validate = granularity == MenuRequirementReportGranularity.RANGE or (
+        current_user.role != UserRole.OWNER
+        and granularity
+        in {
+            MenuRequirementReportGranularity.WEEK,
+            MenuRequirementReportGranularity.MONTH,
+        }
+    )
+    if should_validate:
+        _validate_complete_aggregate_report(
+            granularity,
+            date_from=date_from,
+            date_to=date_to,
+            day_summaries=day_summaries,
+        )
+
+    missing_dates = sorted({key.service_date for key in missing_requirement_keys})
+    stale_dates = sorted(
+        {
+            requirement.service_date
+            for requirement in requirements
+            if (statuses.get(requirement.id) == MenuRequirementAggregateStatus.STALE)
+        }
+    )
+
+    return CommunityMenuRequirementReportResponse(
+        community=community,
+        community_name=COMMUNITY_LABELS[community],
+        school_count=len(schools),
+        date_from=date_from,
+        date_to=date_to,
+        granularity=granularity,
+        meal_type=meal_type,
+        status=_aggregate_status(
+            missing_dates=missing_dates,
+            stale_dates=stale_dates,
+        ),
+        missing_dates=missing_dates,
+        stale_dates=stale_dates,
+        groups=_build_report_groups(
+            requirements,
+            requirement_statuses=statuses,
+            missing_requirement_keys=missing_requirement_keys,
+            expected_days=expected_days,
+            groups_by_id=groups_by_id,
+            schools_by_id=schools_by_id,
+            aggregate_by_age_group=True,
+        ),
     )
 
 
@@ -284,15 +509,15 @@ def _ensure_school_group_exists(
 
 
 async def _find_requirements_for_report(
-    school_id: PydanticObjectId,
+    school_ids: list[PydanticObjectId],
     *,
     date_from: Date,
     date_to: Date,
     meal_type: MealType | None,
-    school_group_id: PydanticObjectId | None,
+    school_group_id: PydanticObjectId | None = None,
 ) -> list[MenuRequirement]:
     filters: dict[str, Any] = {
-        "school_id": school_id,
+        "school_id": {"$in": school_ids},
         "service_date": {"$gte": date_from, "$lte": date_to},
     }
     if meal_type is not None:
@@ -304,15 +529,15 @@ async def _find_requirements_for_report(
 
 
 async def _expected_menu_days(
-    school_id: PydanticObjectId,
+    school_ids: list[PydanticObjectId],
     *,
     date_from: Date,
     date_to: Date,
     meal_type: MealType | None,
-    school_group_id: PydanticObjectId | None,
+    school_group_id: PydanticObjectId | None = None,
 ) -> dict[Date, list[ExpectedMenuDay]]:
     filters: dict[str, Any] = {
-        "school_id": school_id,
+        "school_id": {"$in": school_ids},
         "status": WeeklyMenuStatus.PUBLISHED.value,
     }
     if meal_type is not None:
@@ -320,18 +545,25 @@ async def _expected_menu_days(
 
     menus = await WeeklyMenu.find(filters).to_list()
     expected: dict[Date, list[ExpectedMenuDay]] = defaultdict(list)
+
     for menu in menus:
+        if menu.school_id is None:
+            continue
+
         for day in menu.days:
             service_date = _menu_day_service_date(menu, day)
             if service_date is None or service_date < date_from or service_date > date_to:
                 continue
+
             if school_group_id is not None and not _day_has_group_serving(
                 day,
                 school_group_id,
             ):
                 continue
+
             expected[service_date].append(
                 ExpectedMenuDay(
+                    school_id=menu.school_id,
                     service_date=service_date,
                     weekly_menu_id=menu.id,
                     weekday=day.weekday,
@@ -340,6 +572,7 @@ async def _expected_menu_days(
                     day=day,
                 )
             )
+
     return dict(expected)
 
 
@@ -405,9 +638,16 @@ def _build_calendar_month(
     }
     expected = expected_dates & month_dates
     generated = generated_dates & month_dates
-    missing = expected - generated
     stale = stale_dates & month_dates
     resolved_day_summaries = day_summaries or {}
+
+    summary_missing_dates = {
+        service_date
+        for service_date, summary in resolved_day_summaries.items()
+        if summary.missing_requirements > 0
+    }
+
+    missing = (expected - generated) | (summary_missing_dates & month_dates)
 
     weeks = []
     for index, (block_from, block_to) in enumerate(
@@ -426,7 +666,7 @@ def _build_calendar_month(
         resolved_block_to = max(block_dates)
         block_expected = expected_dates & block_dates
         block_generated = generated_dates & block_dates
-        block_missing = block_expected - block_generated
+        block_missing = (block_expected - block_generated) | (summary_missing_dates & block_dates)
         block_stale = stale_dates & block_dates
         weeks.append(
             MenuRequirementCalendarWeekResponse(
@@ -467,55 +707,89 @@ def _build_calendar_month(
     )
 
 
-def _build_calendar_day_summaries(
+def _build_scope_day_summaries(
     expected_days: dict[Date, list[ExpectedMenuDay]],
     requirements: list[MenuRequirement],
     *,
-    requirement_statuses: dict[PydanticObjectId, MenuRequirementAggregateStatus],
-    school: School,
-    school_group_id: PydanticObjectId | None,
-) -> dict[Date, MenuRequirementCalendarDayResponse]:
-    groups_by_id = {group.id: group for group in school.groups}
+    requirement_statuses: dict[
+        PydanticObjectId,
+        MenuRequirementAggregateStatus,
+    ],
+    groups_by_school_id: dict[
+        PydanticObjectId,
+        dict[PydanticObjectId, SchoolGroup],
+    ],
+    school_group_id: PydanticObjectId | None = None,
+) -> tuple[
+    dict[Date, MenuRequirementCalendarDayResponse],
+    set[RequirementKey],
+]:
     expected_keys_by_date: dict[
         Date,
-        set[tuple[PydanticObjectId, Weekday, PydanticObjectId]],
+        set[RequirementKey],
     ] = defaultdict(set)
     generated_keys_by_date: dict[
         Date,
-        set[tuple[PydanticObjectId, Weekday, PydanticObjectId]],
+        set[RequirementKey],
     ] = defaultdict(set)
     stale_keys_by_date: dict[
         Date,
-        set[tuple[PydanticObjectId, Weekday, PydanticObjectId]],
+        set[RequirementKey],
     ] = defaultdict(set)
 
     for service_date, menu_days in expected_days.items():
         for menu_day in menu_days:
-            for group in select_eligible_groups(menu_day.day, groups_by_id):
+            groups_by_id = groups_by_school_id.get(
+                menu_day.school_id,
+                {},
+            )
+
+            for group in select_eligible_groups(
+                menu_day.day,
+                groups_by_id,
+            ):
                 if school_group_id is not None and group.id != school_group_id:
                     continue
+
                 expected_keys_by_date[service_date].add(
-                    (menu_day.weekly_menu_id, menu_day.weekday, group.id)
+                    RequirementKey(
+                        service_date=service_date,
+                        school_id=menu_day.school_id,
+                        weekly_menu_id=menu_day.weekly_menu_id,
+                        weekday=menu_day.weekday,
+                        school_group_id=group.id,
+                    )
                 )
 
     for requirement in requirements:
-        key = (
-            requirement.weekly_menu_id,
-            requirement.weekday,
-            requirement.school_group_id,
+        key = RequirementKey(
+            service_date=requirement.service_date,
+            school_id=requirement.school_id,
+            weekly_menu_id=requirement.weekly_menu_id,
+            weekday=requirement.weekday,
+            school_group_id=requirement.school_group_id,
         )
         generated_keys_by_date[requirement.service_date].add(key)
+
         if requirement_statuses.get(requirement.id) == MenuRequirementAggregateStatus.STALE:
             stale_keys_by_date[requirement.service_date].add(key)
 
-    summaries: dict[Date, MenuRequirementCalendarDayResponse] = {}
-    for service_date in (
-        set(expected_keys_by_date) | set(generated_keys_by_date) | set(stale_keys_by_date)
-    ):
+    summaries: dict[
+        Date,
+        MenuRequirementCalendarDayResponse,
+    ] = {}
+    missing_requirement_keys: set[RequirementKey] = set()
+
+    all_dates = set(expected_keys_by_date) | set(generated_keys_by_date) | set(stale_keys_by_date)
+
+    for service_date in all_dates:
         expected_keys = expected_keys_by_date[service_date]
         generated_keys = generated_keys_by_date[service_date]
         missing_keys = expected_keys - generated_keys
         stale_keys = stale_keys_by_date[service_date]
+
+        missing_requirement_keys.update(missing_keys)
+
         summaries[service_date] = MenuRequirementCalendarDayResponse(
             service_date=service_date,
             expected_requirements=len(expected_keys),
@@ -523,11 +797,12 @@ def _build_calendar_day_summaries(
             missing_requirements=len(missing_keys),
             stale_requirements=len(stale_keys),
             status=_aggregate_status(
-                missing_dates=[service_date] if missing_keys else [],
-                stale_dates=[service_date] if stale_keys else [],
+                missing_dates=([service_date] if missing_keys else []),
+                stale_dates=([service_date] if stale_keys else []),
             ),
         )
-    return summaries
+
+    return summaries, missing_requirement_keys
 
 
 def _is_weekday(service_date: Date) -> bool:
@@ -670,13 +945,42 @@ def _aggregate_status(
 def _build_report_groups(
     requirements: list[MenuRequirement],
     *,
-    requirement_statuses: dict[PydanticObjectId, MenuRequirementAggregateStatus],
-    missing_dates: list[Date],
+    requirement_statuses: dict[
+        PydanticObjectId,
+        MenuRequirementAggregateStatus,
+    ],
+    missing_requirement_keys: set[RequirementKey],
     expected_days: dict[Date, list[ExpectedMenuDay]],
-    school: School,
+    groups_by_id: dict[PydanticObjectId, SchoolGroup],
+    schools_by_id: dict[PydanticObjectId, School],
+    aggregate_by_age_group: bool = False,
 ) -> list[MenuRequirementReportGroupResponse]:
-    groups_by_id = {group.id: group for group in school.groups}
-    group_states: dict[PydanticObjectId, dict[str, Any]] = {}
+    group_states: dict[str, dict[str, Any]] = {}
+
+    def get_group_state(
+        school_group_id: PydanticObjectId,
+        school_group_name: str,
+        age_group: AgeGroup,
+    ) -> dict[str, Any]:
+        group_key = (
+            f"age-group:{age_group.value}"
+            if aggregate_by_age_group
+            else f"school-group:{school_group_id}"
+        )
+
+        return group_states.setdefault(
+            group_key,
+            {
+                "group_key": group_key,
+                "school_group_id": (None if aggregate_by_age_group else school_group_id),
+                "school_group_name": (
+                    age_group.value if aggregate_by_age_group else school_group_name
+                ),
+                "age_group": age_group,
+                "dishes": {},
+                "rows": {},
+            },
+        )
 
     for requirement in sorted(
         requirements,
@@ -686,16 +990,12 @@ def _build_report_groups(
             item.meal_type.value,
         ),
     ):
-        group_state = group_states.setdefault(
+        group_state = get_group_state(
             requirement.school_group_id,
-            {
-                "school_group_id": requirement.school_group_id,
-                "school_group_name": requirement.school_group_name,
-                "age_group": requirement.age_group,
-                "dishes": {},
-                "rows": {},
-            },
+            requirement.school_group_name,
+            requirement.age_group,
         )
+        school = schools_by_id[requirement.school_id]
         dish_keys_by_item_id: dict[PydanticObjectId, str] = {}
 
         for dish in sorted(requirement.dishes, key=lambda item: item.position):
@@ -797,6 +1097,8 @@ def _build_report_groups(
                     MenuRequirementReportBreakdownItemResponse(
                         requirement_id=requirement.id,
                         service_date=requirement.service_date,
+                        school_id=requirement.school_id,
+                        school_name=school.name,
                         school_group_id=requirement.school_group_id,
                         school_group_name=requirement.school_group_name,
                         menu_title=requirement.menu_title,
@@ -811,24 +1113,49 @@ def _build_report_groups(
                     )
                 )
 
-    for group_id, group_state in group_states.items():
-        school_group = groups_by_id.get(group_id)
+    missing_keys_by_group: dict[
+        str,
+        set[RequirementKey],
+    ] = defaultdict(set)
+
+    for missing_key in missing_requirement_keys:
+        school_group = groups_by_id.get(missing_key.school_group_id)
         if school_group is None:
             continue
+
+        group_state = get_group_state(
+            school_group.id,
+            school_group.name,
+            school_group.age_group,
+        )
+        missing_keys_by_group[group_state["group_key"]].add(missing_key)
+
+    for group_key, group_state in group_states.items():
+        group_missing_keys = missing_keys_by_group.get(
+            group_key,
+            set(),
+        )
+
         for row_state in group_state["rows"].values():
             for cell_state in row_state["cells"].values():
                 _append_missing_breakdowns(
                     cell_state,
-                    missing_dates=missing_dates,
+                    missing_requirement_keys=group_missing_keys,
                     expected_days=expected_days,
-                    school_group=school_group,
+                    groups_by_id=groups_by_id,
+                    schools_by_id=schools_by_id,
                 )
+
+    age_group_order = {age_group: index for index, age_group in enumerate(AgeGroup)}
 
     return [
         _report_group_from_state(group_state)
         for group_state in sorted(
             group_states.values(),
-            key=lambda item: item["school_group_name"].casefold(),
+            key=lambda item: (
+                age_group_order[item["age_group"]],
+                item["school_group_name"].casefold(),
+            ),
         )
     ]
 
@@ -876,6 +1203,8 @@ def _report_group_from_state(group_state: dict[str, Any]) -> MenuRequirementRepo
                     cell_state["breakdown"],
                     key=lambda item: (
                         item.service_date,
+                        item.school_name.casefold(),
+                        item.school_group_name.casefold(),
                         item.menu_title or "",
                     ),
                 ),
@@ -919,6 +1248,7 @@ def _report_group_from_state(group_state: dict[str, Any]) -> MenuRequirementRepo
         )
 
     return MenuRequirementReportGroupResponse(
+        group_key=group_state["group_key"],
         school_group_id=group_state["school_group_id"],
         school_group_name=group_state["school_group_name"],
         age_group=group_state["age_group"],
@@ -930,36 +1260,58 @@ def _report_group_from_state(group_state: dict[str, Any]) -> MenuRequirementRepo
 def _append_missing_breakdowns(
     cell_state: dict[str, Any],
     *,
-    missing_dates: list[Date],
+    missing_requirement_keys: set[RequirementKey],
     expected_days: dict[Date, list[ExpectedMenuDay]],
-    school_group: SchoolGroup,
+    groups_by_id: dict[PydanticObjectId, SchoolGroup],
+    schools_by_id: dict[PydanticObjectId, School],
 ) -> None:
-    existing_dates = {
-        item.service_date
-        for item in cell_state["breakdown"]
-        if item.status != MenuRequirementAggregateStatus.MISSING
-    }
-    for missing_date in missing_dates:
-        if missing_date in existing_dates:
+    sorted_missing_keys = sorted(
+        missing_requirement_keys,
+        key=lambda item: (
+            item.service_date,
+            str(item.school_id),
+            str(item.school_group_id),
+            str(item.weekly_menu_id),
+        ),
+    )
+
+    for missing_key in sorted_missing_keys:
+        school = schools_by_id.get(missing_key.school_id)
+        school_group = groups_by_id.get(missing_key.school_group_id)
+        if school is None or school_group is None:
             continue
+
         expected_day = next(
             (
                 item
-                for item in expected_days.get(missing_date, [])
-                if _expected_day_contains_dish(
-                    item,
-                    school_group=school_group,
-                    dish_key=cell_state["dish_key"],
+                for item in expected_days.get(
+                    missing_key.service_date,
+                    [],
+                )
+                if (
+                    item.school_id == missing_key.school_id
+                    and item.weekly_menu_id == missing_key.weekly_menu_id
+                    and item.weekday == missing_key.weekday
                 )
             ),
             None,
         )
         if expected_day is None:
             continue
+
+        if not _expected_day_contains_dish(
+            expected_day,
+            school_group=school_group,
+            dish_key=cell_state["dish_key"],
+        ):
+            continue
+
         cell_state["breakdown"].append(
             MenuRequirementReportBreakdownItemResponse(
                 requirement_id=None,
-                service_date=missing_date,
+                service_date=missing_key.service_date,
+                school_id=school.id,
+                school_name=school.name,
                 school_group_id=school_group.id,
                 school_group_name=school_group.name,
                 menu_title=expected_day.menu_title,

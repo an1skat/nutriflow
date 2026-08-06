@@ -9,11 +9,19 @@ import type {
   MenuRequirementReport,
 } from '@/entities/menu-requirement/model/MenuRequirement';
 import {
+  useMenuRequirementCalendar,
+  useMenuRequirementCommunities,
+  useMenuRequirementReport,
+} from '@/entities/menu-requirement/api/MenuRequirementQueries';
+import { useSchools } from '@/entities/school/api/SchoolQueries';
+import { useCurrentUser } from '@/entities/session/api/SessionQueries';
+import {
   exportMenuRequirementWorkbook,
   triggerMenuRequirementDownload,
 } from '@/features/menu-requirement-export/api/MenuRequirementExportApi';
 
 import {
+  MenuRequirementCalendarWorkspace,
   RequirementPeriodNavigator,
   RequirementReportDialog,
   RequirementReportTable,
@@ -43,6 +51,20 @@ vi.mock('@/features/menu-requirement-export/api/MenuRequirementExportApi', () =>
   triggerMenuRequirementDownload: vi.fn(),
 }));
 
+vi.mock('@/entities/menu-requirement/api/MenuRequirementQueries', () => ({
+  useMenuRequirementCalendar: vi.fn(),
+  useMenuRequirementCommunities: vi.fn(),
+  useMenuRequirementReport: vi.fn(),
+}));
+
+vi.mock('@/entities/school/api/SchoolQueries', () => ({
+  useSchools: vi.fn(),
+}));
+
+vi.mock('@/entities/session/api/SessionQueries', () => ({
+  useCurrentUser: vi.fn(),
+}));
+
 const report: MenuRequirementReport = {
   school_id: 'school-1',
   school_name: 'Ліцей №1',
@@ -56,6 +78,7 @@ const report: MenuRequirementReport = {
   stale_dates: ['2026-07-09'],
   groups: [
     {
+      group_key: 'school-group:group-1',
       school_group_id: 'group-1',
       school_group_name: '6-11',
       age_group: '6-11',
@@ -88,6 +111,8 @@ const report: MenuRequirementReport = {
                 {
                   requirement_id: 'requirement-1',
                   service_date: '2026-07-06',
+                  school_id: 'school-1',
+                  school_name: 'Ліцей №1',
                   school_group_id: 'group-1',
                   school_group_name: '6-11',
                   menu_title: 'Меню на тиждень',
@@ -103,6 +128,8 @@ const report: MenuRequirementReport = {
                 {
                   requirement_id: null,
                   service_date: '2026-07-08',
+                  school_id: 'school-1',
+                  school_name: 'Ліцей №1',
                   school_group_id: 'group-1',
                   school_group_name: '6-11',
                   menu_title: 'Меню на тиждень',
@@ -118,6 +145,8 @@ const report: MenuRequirementReport = {
                 {
                   requirement_id: 'requirement-2',
                   service_date: '2026-07-09',
+                  school_id: 'school-1',
+                  school_name: 'Ліцей №1',
                   school_group_id: 'group-1',
                   school_group_name: '6-11',
                   menu_title: 'Меню на тиждень',
@@ -144,6 +173,24 @@ const report: MenuRequirementReport = {
     },
   ],
 };
+
+function buildCommunityReport(
+  groups: MenuRequirementReport['groups'] = report.groups
+): MenuRequirementReport {
+  return {
+    community: 'obukhivska',
+    community_name: 'Обухівська громада',
+    school_count: 2,
+    date_from: report.date_from,
+    date_to: report.date_to,
+    granularity: report.granularity,
+    meal_type: report.meal_type,
+    status: report.status,
+    missing_dates: report.missing_dates,
+    stale_dates: report.stale_dates,
+    groups,
+  };
+}
 
 const calendarWeek: MenuRequirementCalendarWeek = {
   week_index: 2,
@@ -230,6 +277,84 @@ const rangeReadyCalendarMonth: MenuRequirementCalendarMonth = {
   weeks: [completeCalendarWeek, followingCompleteCalendarWeek],
 };
 
+describe('MenuRequirementCalendarWorkspace', () => {
+  it('switches an owner from a school calendar to a community calendar', () => {
+    vi.mocked(useCurrentUser).mockReturnValue({
+      data: {
+        id: 'owner-1',
+        username: 'owner',
+        email: 'owner@example.com',
+        role: 'OWNER',
+        school_id: null,
+        permissions: [],
+        is_active: true,
+      },
+    } as unknown as ReturnType<typeof useCurrentUser>);
+    vi.mocked(useSchools).mockReturnValue({
+      data: {
+        items: [{ id: 'school-1', name: 'Ліцей №1', community: null, is_active: true }],
+        total: 1,
+        offset: 0,
+        limit: 100,
+      },
+      isPending: false,
+      isError: false,
+    } as ReturnType<typeof useSchools>);
+    vi.mocked(useMenuRequirementCommunities).mockReturnValue({
+      data: [
+        {
+          community: 'obukhivska',
+          community_name: 'Обухівська громада',
+          school_count: 2,
+        },
+      ],
+      isPending: false,
+      isError: false,
+    } as ReturnType<typeof useMenuRequirementCommunities>);
+    vi.mocked(useMenuRequirementCalendar).mockImplementation(
+      (request) =>
+        ({
+          data:
+            'community' in request
+              ? {
+                  school_id: 'school-1',
+                  school_name: 'Ліцей №1',
+                  year: 2026,
+                  months: [calendarMonth],
+                }
+              : undefined,
+          isPending: false,
+          isPlaceholderData: 'community' in request,
+          isError: false,
+        }) as unknown as ReturnType<typeof useMenuRequirementCalendar>
+    );
+    vi.mocked(useMenuRequirementReport).mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isPlaceholderData: false,
+      isError: false,
+    } as unknown as ReturnType<typeof useMenuRequirementReport>);
+
+    render(<MenuRequirementCalendarWorkspace />);
+
+    expect(useMenuRequirementCalendar).toHaveBeenLastCalledWith(
+      expect.objectContaining({ school_id: 'school-1' })
+    );
+    expect(useMenuRequirementCommunities).toHaveBeenLastCalledWith(false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Громада' }));
+
+    expect(useMenuRequirementCommunities).toHaveBeenLastCalledWith(true);
+    expect(useSchools).toHaveBeenLastCalledWith({ offset: 0, limit: 100 }, false);
+    expect(useMenuRequirementCalendar).toHaveBeenLastCalledWith(
+      expect.objectContaining({ community: 'obukhivska', enabled: true })
+    );
+    expect(screen.getByRole('combobox', { name: 'Громада' })).toHaveValue('obukhivska');
+    expect(screen.getByText('Завантажуємо календар…')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Місяці/ })).not.toBeInTheDocument();
+  });
+});
+
 describe('getCurrentCalendarWeek', () => {
   it.each([
     ['2026-07-27', { dateFrom: '2026-07-27', dateTo: '2026-07-31' }],
@@ -254,6 +379,7 @@ describe('RequirementReportTable', () => {
   it('shows one group table at a time', () => {
     const secondGroup = {
       ...report.groups[0],
+      group_key: 'school-group:group-2',
       school_group_id: 'group-2',
       school_group_name: '12-17',
       age_group: '14-18' as const,
@@ -347,6 +473,35 @@ describe('RequirementReportTable', () => {
     });
     expect(links[0]).toHaveAttribute('href', '/menu-requirements?requirement_id=requirement-1');
     expect(within(breakdown as HTMLElement).getByText('Немає')).toBeInTheDocument();
+  });
+
+  it('shows the community scope and identifies schools in the breakdown', () => {
+    const communityReport = buildCommunityReport(
+      report.groups.map((group) => ({
+        ...group,
+        group_key: `age-group:${group.age_group}`,
+        school_group_id: null,
+      }))
+    );
+    const selectedCell = {
+      group: communityReport.groups[0],
+      dish: communityReport.groups[0].dishes[0],
+      ingredientName: 'Морква',
+      cell: communityReport.groups[0].ingredient_rows[0].cells[0],
+    };
+
+    render(
+      <RequirementReportTable
+        report={communityReport}
+        rangeLabel="липень 2026"
+        selectedCell={selectedCell}
+        onSelectCell={() => undefined}
+      />
+    );
+
+    expect(screen.getByText(/Обухівська громада · Шкіл: 2/)).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Школа' })).toBeInTheDocument();
+    expect(screen.getAllByText('Ліцей №1').length).toBeGreaterThan(0);
   });
 });
 
@@ -699,5 +854,54 @@ describe('RequirementReportDialog', () => {
       })
     );
     expect(triggerMenuRequirementDownload).toHaveBeenCalled();
+  });
+
+  it('exports a community report through the community scope', async () => {
+    vi.mocked(exportMenuRequirementWorkbook).mockResolvedValue({
+      blob: new Blob(['xlsx']),
+      filename: 'menu-requirement.xlsx',
+    });
+    const communityReport = buildCommunityReport();
+
+    render(
+      <RequirementReportDialog
+        range={{
+          dateFrom: '2026-07-01',
+          dateTo: '2026-07-31',
+          granularity: 'month',
+          label: 'липень 2026 р.',
+        }}
+        report={communityReport}
+        isPending={false}
+        isError={false}
+        error={null}
+        selectedCell={null}
+        onSelectCell={() => undefined}
+        onRetry={() => undefined}
+        onClose={() => undefined}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Експорт в Excel' }));
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'Оберіть тип ваги для експорту' })).getByRole(
+        'button',
+        { name: 'Нетто' }
+      )
+    );
+
+    await waitFor(() =>
+      expect(exportMenuRequirementWorkbook).toHaveBeenCalledWith({
+        kind: 'report',
+        request: {
+          community: 'obukhivska',
+          date_from: '2026-07-01',
+          date_to: '2026-07-31',
+          granularity: 'month',
+          meal_type: 'lunch',
+        },
+        amountBasis: 'net',
+      })
+    );
   });
 });

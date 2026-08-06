@@ -10,6 +10,7 @@ import type {
 import {
   fetchMenuRequirement,
   fetchMenuRequirementCalendar,
+  fetchMenuRequirementCommunities,
   fetchMenuRequirementReport,
   fetchMenuRequirements,
 } from './MenuRequirementApi';
@@ -21,6 +22,7 @@ export const menuRequirementQueryKeys = {
     [...menuRequirementQueryKeys.lists(), request] as const,
   detail: (requirementId: string) =>
     [...menuRequirementQueryKeys.all, 'detail', requirementId] as const,
+  communities: () => [...menuRequirementQueryKeys.all, 'communities'] as const,
   calendars: () => [...menuRequirementQueryKeys.all, 'calendar'] as const,
   calendar: (request: MenuRequirementCalendarRequest) =>
     [...menuRequirementQueryKeys.calendars(), request] as const,
@@ -46,22 +48,34 @@ export function menuRequirementQueryOptions(requirementId: string) {
   });
 }
 
+export function menuRequirementCommunitiesQueryOptions(enabled = true) {
+  return queryOptions({
+    queryKey: menuRequirementQueryKeys.communities(),
+    queryFn: fetchMenuRequirementCommunities,
+    enabled,
+  });
+}
+
 export function menuRequirementCalendarQueryOptions(request: MenuRequirementCalendarRequest) {
+  const scopeId = 'community' in request ? request.community : request.school_id;
+
   return queryOptions({
     queryKey: menuRequirementQueryKeys.calendar(request),
     queryFn: () => fetchMenuRequirementCalendar(request),
-    enabled: (request.enabled ?? true) && request.school_id.length > 0,
+    enabled: (request.enabled ?? true) && scopeId.length > 0,
     placeholderData: keepPreviousData,
   });
 }
 
 export function menuRequirementReportQueryOptions(request: MenuRequirementReportRequest) {
+  const scopeId = 'community' in request ? request.community : request.school_id;
+
   return queryOptions({
     queryKey: menuRequirementQueryKeys.report(request),
     queryFn: () => fetchMenuRequirementReport(request),
     enabled:
       (request.enabled ?? true) &&
-      request.school_id.length > 0 &&
+      scopeId.length > 0 &&
       request.date_from.length > 0 &&
       request.date_to.length > 0,
     placeholderData: keepPreviousData,
@@ -74,6 +88,10 @@ export function useMenuRequirements(request: MenuRequirementListRequest) {
 
 export function useMenuRequirement(requirementId: string) {
   return useQuery(menuRequirementQueryOptions(requirementId));
+}
+
+export function useMenuRequirementCommunities(enabled = true) {
+  return useQuery(menuRequirementCommunitiesQueryOptions(enabled));
 }
 
 export function useMenuRequirementCalendar(request: MenuRequirementCalendarRequest) {

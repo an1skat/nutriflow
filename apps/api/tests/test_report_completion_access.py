@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 from beanie import PydanticObjectId
 
-from app.modules.identity.models import School, User, UserRole
+from app.modules.identity.models import AgeGroup, School, SchoolGroup, User, UserRole
 from app.modules.menu_requirements import reporting as menu_requirement_reporting
 from app.modules.menu_requirements.errors import (
     MenuRequirementRangeIncompleteError,
@@ -19,6 +19,7 @@ from app.modules.menu_requirements.schemas import (
     MenuRequirementCalendarDayResponse,
     MenuRequirementReportGranularity,
 )
+from app.modules.menus.models import Weekday
 from app.modules.norm_compliance import service as norm_compliance_service
 from app.modules.norm_compliance.service import NormComplianceValidationError
 
@@ -197,6 +198,159 @@ def test_monthly_report_ignores_weekend_summaries() -> None:
     )
 
 
+def test_scope_summary_distinguishes_schools_on_the_same_date(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service_date = date(2026, 7, 6)
+    first_school_id = PydanticObjectId()
+    second_school_id = PydanticObjectId()
+    first_menu_id = PydanticObjectId()
+    second_menu_id = PydanticObjectId()
+    first_group = SchoolGroup(
+        name="6-11 A",
+        age_group=AgeGroup.SIX_TO_ELEVEN,
+    )
+    second_group = SchoolGroup(
+        name="6-11 B",
+        age_group=AgeGroup.SIX_TO_ELEVEN,
+    )
+    generated_requirement = SimpleNamespace(
+        id=PydanticObjectId(),
+        service_date=service_date,
+        school_id=first_school_id,
+        weekly_menu_id=first_menu_id,
+        weekday=Weekday.MONDAY,
+        school_group_id=first_group.id,
+    )
+    expected_days = {
+        service_date: [
+            SimpleNamespace(
+                school_id=first_school_id,
+                weekly_menu_id=first_menu_id,
+                weekday=Weekday.MONDAY,
+                day=object(),
+            ),
+            SimpleNamespace(
+                school_id=second_school_id,
+                weekly_menu_id=second_menu_id,
+                weekday=Weekday.MONDAY,
+                day=object(),
+            ),
+        ]
+    }
+    groups_by_school_id = {
+        first_school_id: {first_group.id: first_group},
+        second_school_id: {second_group.id: second_group},
+    }
+
+    monkeypatch.setattr(
+        menu_requirement_reporting,
+        "select_eligible_groups",
+        lambda _day, groups_by_id: list(groups_by_id.values()),
+    )
+
+    summaries, missing_keys = menu_requirement_reporting._build_scope_day_summaries(
+        expected_days,
+        [generated_requirement],
+        requirement_statuses={
+            generated_requirement.id: MenuRequirementAggregateStatus.COMPLETE,
+        },
+        groups_by_school_id=groups_by_school_id,
+    )
+
+    summary = summaries[service_date]
+    assert summary.expected_requirements == 2
+    assert summary.generated_requirements == 1
+    assert summary.missing_requirements == 1
+    assert summary.status == MenuRequirementAggregateStatus.MISSING
+    assert missing_keys == {
+        menu_requirement_reporting.RequirementKey(
+            service_date=service_date,
+            school_id=second_school_id,
+            weekly_menu_id=second_menu_id,
+            weekday=Weekday.MONDAY,
+            school_group_id=second_group.id,
+        )
+    }
+
+
+def test_missing_breakdowns_keep_multiple_menus_for_one_school_day(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service_date = date(2026, 7, 6)
+    school_id = PydanticObjectId()
+    first_menu_id = PydanticObjectId()
+    second_menu_id = PydanticObjectId()
+    school_group = SchoolGroup(
+        name="6-11",
+        age_group=AgeGroup.SIX_TO_ELEVEN,
+    )
+    school = School.model_construct(
+        id=school_id,
+        name="Community school",
+        groups=[school_group],
+    )
+    missing_keys = {
+        menu_requirement_reporting.RequirementKey(
+            service_date=service_date,
+            school_id=school_id,
+            weekly_menu_id=first_menu_id,
+            weekday=Weekday.MONDAY,
+            school_group_id=school_group.id,
+        ),
+        menu_requirement_reporting.RequirementKey(
+            service_date=service_date,
+            school_id=school_id,
+            weekly_menu_id=second_menu_id,
+            weekday=Weekday.MONDAY,
+            school_group_id=school_group.id,
+        ),
+    }
+    expected_days = {
+        service_date: [
+            SimpleNamespace(
+                school_id=school_id,
+                weekly_menu_id=first_menu_id,
+                weekday=Weekday.MONDAY,
+                menu_title="Breakfast menu",
+            ),
+            SimpleNamespace(
+                school_id=school_id,
+                weekly_menu_id=second_menu_id,
+                weekday=Weekday.MONDAY,
+                menu_title="Lunch menu",
+            ),
+        ]
+    }
+    cell_state = {
+        "dish_key": "dish:test",
+        "breakdown": [],
+    }
+
+    monkeypatch.setattr(
+        menu_requirement_reporting,
+        "_expected_day_contains_dish",
+        lambda *_args, **_kwargs: True,
+    )
+
+    menu_requirement_reporting._append_missing_breakdowns(
+        cell_state,
+        missing_requirement_keys=missing_keys,
+        expected_days=expected_days,
+        groups_by_id={school_group.id: school_group},
+        schools_by_id={school_id: school},
+    )
+
+    assert len(cell_state["breakdown"]) == 2
+    assert {
+        item.menu_title for item in cell_state["breakdown"]
+    } == {"Breakfast menu", "Lunch menu"}
+    assert all(
+        item.status == MenuRequirementAggregateStatus.MISSING
+        for item in cell_state["breakdown"]
+    )
+
+
 @pytest.mark.parametrize(
     "granularity",
     [
@@ -239,6 +393,11 @@ async def test_aggregate_report_data_excludes_weekends_for_owner(
         captured_expected_dates.update(expected_days)
         return []
 
+    def build_scope_day_summaries(expected_days, requirements, **_kwargs):
+        assert set(expected_days) == {friday}
+        assert [requirement.service_date for requirement in requirements] == [friday]
+        return {}, set()
+
     monkeypatch.setattr(menu_requirement_reporting, "_get_accessible_school", get_school)
     monkeypatch.setattr(menu_requirement_reporting, "_expected_menu_days", get_expected_days)
     monkeypatch.setattr(
@@ -247,6 +406,11 @@ async def test_aggregate_report_data_excludes_weekends_for_owner(
         get_requirements,
     )
     monkeypatch.setattr(menu_requirement_reporting, "_requirement_statuses", get_statuses)
+    monkeypatch.setattr(
+        menu_requirement_reporting,
+        "_build_scope_day_summaries",
+        build_scope_day_summaries,
+    )
     monkeypatch.setattr(menu_requirement_reporting, "_build_report_groups", build_groups)
 
     owner = User.model_construct(id=PydanticObjectId(), role=UserRole.OWNER)

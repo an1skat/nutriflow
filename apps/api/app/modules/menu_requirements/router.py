@@ -8,12 +8,15 @@ from fastapi.responses import StreamingResponse
 from app.api.errors import bad_request, forbidden, not_found
 from app.api.responses import xlsx_response
 from app.modules.auth.dependencies import CsrfProtection, CurrentUser, require_roles
-from app.modules.identity.models import User, UserRole
+from app.modules.identity.models import Community, User, UserRole
 from app.modules.menu_requirements.schemas import (
+    CommunityMenuRequirementCalendarResponse,
+    CommunityMenuRequirementReportResponse,
     GenerateMenuRequirementsRequest,
     GenerateMenuRequirementsResponse,
     MenuRequirementAmountBasis,
     MenuRequirementCalendarResponse,
+    MenuRequirementCommunityResponse,
     MenuRequirementListResponse,
     MenuRequirementReportGranularity,
     MenuRequirementReportResponse,
@@ -25,12 +28,16 @@ from app.modules.menu_requirements.service import (
     MenuRequirementNotFoundError,
     MenuRequirementValidationError,
     delete_menu_requirement,
+    export_community_menu_requirement_report_workbook,
     export_menu_requirement_report_workbook,
     export_menu_requirement_workbook,
     generate_menu_requirements,
+    get_community_menu_requirement_calendar,
+    get_community_menu_requirement_report,
     get_menu_requirement,
     get_menu_requirement_calendar,
     get_menu_requirement_report,
+    list_menu_requirement_communities,
     list_menu_requirements,
     update_menu_requirement,
 )
@@ -39,6 +46,16 @@ from app.modules.menus.models import MealType
 router = APIRouter()
 
 SchoolUser = Annotated[User, Depends(require_roles(UserRole.SCHOOL_USER))]
+CommunityUser = Annotated[
+    User,
+    Depends(
+        require_roles(
+            UserRole.OWNER,
+            UserRole.ADMIN,
+            UserRole.TECHNOLOGIST,
+        )
+    ),
+]
 Offset = Annotated[int, Query(ge=0)]
 Limit = Annotated[int, Query(ge=1, le=100)]
 
@@ -114,6 +131,103 @@ async def list_requirements(
         offset=offset,
         limit=limit,
     )
+
+
+@router.get(
+    "/communities",
+    response_model=list[MenuRequirementCommunityResponse],
+)
+async def list_communities(
+    current_user: CommunityUser,
+) -> list[MenuRequirementCommunityResponse]:
+    try:
+        return await list_menu_requirement_communities(current_user)
+    except MenuRequirementAccessDeniedError as exc:
+        raise forbidden(exc) from exc
+
+
+@router.get(
+    "/communities/{community}/calendar",
+    response_model=CommunityMenuRequirementCalendarResponse,
+)
+async def get_community_calendar(
+    current_user: CommunityUser,
+    community: Community,
+    year: int = Query(ge=2000, le=2100),
+    meal_type: MealType | None = None,
+) -> CommunityMenuRequirementCalendarResponse:
+    try:
+        return await get_community_menu_requirement_calendar(
+            community,
+            year,
+            current_user,
+            meal_type=meal_type,
+        )
+    except MenuRequirementNotFoundError as exc:
+        raise not_found(exc) from exc
+    except MenuRequirementAccessDeniedError as exc:
+        raise forbidden(exc) from exc
+
+
+@router.get(
+    "/communities/{community}/report",
+    response_model=CommunityMenuRequirementReportResponse,
+)
+async def get_community_report(
+    current_user: CommunityUser,
+    community: Community,
+    date_from: Date,
+    date_to: Date,
+    granularity: MenuRequirementReportGranularity,
+    meal_type: MealType | None = None,
+) -> CommunityMenuRequirementReportResponse:
+    try:
+        return await get_community_menu_requirement_report(
+            community,
+            date_from,
+            date_to,
+            granularity,
+            current_user,
+            meal_type=meal_type,
+        )
+    except MenuRequirementNotFoundError as exc:
+        raise not_found(exc) from exc
+    except MenuRequirementAccessDeniedError as exc:
+        raise forbidden(exc) from exc
+    except MenuRequirementValidationError as exc:
+        raise bad_request(exc) from exc
+
+
+@router.get("/communities/{community}/report/export.xlsx")
+async def export_community_report(
+    current_user: CommunityUser,
+    community: Community,
+    date_from: Date,
+    date_to: Date,
+    granularity: MenuRequirementReportGranularity,
+    amount_basis: MenuRequirementAmountBasis = MenuRequirementAmountBasis.NET,
+    meal_type: MealType | None = None,
+) -> StreamingResponse:
+    try:
+        filename, content = (
+            await export_community_menu_requirement_report_workbook(
+                community,
+                date_from,
+                date_to,
+                granularity,
+                current_user,
+                amount_basis=amount_basis,
+                meal_type=meal_type,
+            )
+        )
+    except MenuRequirementNotFoundError as exc:
+        raise not_found(exc) from exc
+    except MenuRequirementAccessDeniedError as exc:
+        raise forbidden(exc) from exc
+    except MenuRequirementValidationError as exc:
+        raise bad_request(exc) from exc
+
+    return xlsx_response(filename, content)
 
 
 @router.get("/calendar", response_model=MenuRequirementCalendarResponse)

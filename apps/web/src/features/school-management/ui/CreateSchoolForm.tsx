@@ -3,6 +3,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 
+import { schoolCommunityLabels, schoolCommunitySchema } from '@/entities/school/model/School';
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
 import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 
@@ -15,6 +16,7 @@ export function CreateSchoolForm() {
     resolver: zodResolver(schoolFormSchema),
     defaultValues: {
       name: '',
+      community: '',
     },
   });
 
@@ -22,7 +24,10 @@ export function CreateSchoolForm() {
     form.clearErrors('root');
 
     try {
-      await createSchool.mutateAsync(values);
+      await createSchool.mutateAsync({
+        ...values,
+        community: values.community || null,
+      });
       form.reset();
     } catch (error) {
       form.setError('root', {
@@ -33,7 +38,10 @@ export function CreateSchoolForm() {
   });
 
   return (
-    <form onSubmit={onSubmit} className="grid gap-3 sm:grid-cols-[minmax(220px,1fr)_auto]">
+    <form
+      onSubmit={onSubmit}
+      className="grid gap-3 sm:grid-cols-[minmax(220px,1fr)_minmax(220px,1fr)_auto]"
+    >
       <div>
         <label htmlFor="school-name" className="nf-label">
           Назва школи
@@ -45,6 +53,18 @@ export function CreateSchoolForm() {
           </p>
         ) : null}
       </div>
+
+      <label className="grid gap-1" htmlFor="school-community">
+        <span className="nf-label">Громада</span>
+        <select id="school-community" {...form.register('community')} className="nf-input">
+          <option value="">Не вказана</option>
+          {schoolCommunitySchema.options.map((community) => (
+            <option key={community} value={community}>
+              {schoolCommunityLabels[community]}
+            </option>
+          ))}
+        </select>
+      </label>
 
       <div className="flex flex-col">
         <span className="nf-label invisible hidden sm:block" aria-hidden="true">
@@ -64,12 +84,12 @@ export function CreateSchoolForm() {
       </div>
 
       {form.formState.errors.root ? (
-        <p role="alert" className="nf-error sm:col-span-2">
+        <p role="alert" className="nf-error sm:col-span-3">
           {form.formState.errors.root.message}
         </p>
       ) : null}
       {createSchool.isSuccess ? (
-        <p role="status" className="nf-success sm:col-span-2">
+        <p role="status" className="nf-success sm:col-span-3">
           Школу створено.
         </p>
       ) : null}

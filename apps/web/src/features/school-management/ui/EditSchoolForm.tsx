@@ -5,7 +5,11 @@ import { useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 
-import type { School } from '@/entities/school/model/School';
+import {
+  type School,
+  schoolCommunityLabels,
+  schoolCommunitySchema,
+} from '@/entities/school/model/School';
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
 import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 
@@ -22,6 +26,7 @@ export function EditSchoolForm({ school }: EditSchoolFormProps) {
     resolver: zodResolver(editSchoolFormSchema),
     defaultValues: {
       name: school.name,
+      community: school.community ?? '',
       is_active: school.is_active,
     },
   });
@@ -29,6 +34,7 @@ export function EditSchoolForm({ school }: EditSchoolFormProps) {
   useEffect(() => {
     form.reset({
       name: school.name,
+      community: school.community ?? '',
       is_active: school.is_active,
     });
   }, [form, school]);
@@ -37,7 +43,10 @@ export function EditSchoolForm({ school }: EditSchoolFormProps) {
     form.clearErrors('root');
 
     try {
-      await updateSchool.mutateAsync(values);
+      await updateSchool.mutateAsync({
+        ...values,
+        community: values.community || null,
+      });
     } catch (error) {
       form.setError('root', {
         type: 'server',
@@ -59,6 +68,22 @@ export function EditSchoolForm({ school }: EditSchoolFormProps) {
           </p>
         ) : null}
       </div>
+
+      <label className="grid gap-1" htmlFor="edit-school-community">
+        <span className="nf-label">Громада</span>
+        <select
+          id="edit-school-community"
+          {...form.register('community')}
+          className="nf-input"
+        >
+          <option value="">Не вказана</option>
+          {schoolCommunitySchema.options.map((community) => (
+            <option key={community} value={community}>
+              {schoolCommunityLabels[community]}
+            </option>
+          ))}
+        </select>
+      </label>
 
       <label className="nf-checkbox-row">
         <input type="checkbox" {...form.register('is_active')} className="mt-0.5 size-4" />

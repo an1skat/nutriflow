@@ -5,6 +5,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 
 import { useSchools } from '@/entities/school/api/SchoolQueries';
+import { schoolCommunityLabels } from '@/entities/school/model/School';
 import { CreateSchoolForm } from '@/features/school-management/ui/CreateSchoolForm';
 import { formatDate } from '@/shared/lib/FormatDate';
 import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
@@ -69,6 +70,7 @@ export function SchoolsOverview() {
                 <thead>
                   <tr>
                     <th>Назва</th>
+                    <th className="w-52">Громада</th>
                     <th className="w-40">Статус</th>
                     <th className="w-52">Оновлено</th>
                   </tr>
@@ -80,6 +82,11 @@ export function SchoolsOverview() {
                         <Link href={`/admin/schools/${school.id}`} className="nf-link">
                           {school.name}
                         </Link>
+                      </td>
+                      <td>
+                        {school.community
+                          ? schoolCommunityLabels[school.community]
+                          : 'Не вказана'}
                       </td>
                       <td>
                         <StatusBadge isActive={school.is_active} />

@@ -9,7 +9,7 @@ from typing import Any
 
 from beanie import PydanticObjectId
 
-from app.modules.identity.models import School, SchoolGroup, User, UserRole
+from app.modules.identity.models import Community, School, SchoolGroup, User, UserRole
 from app.modules.menu_requirements.access import (
     allowed_school_ids as _allowed_school_ids,
 )
@@ -31,10 +31,19 @@ from app.modules.menu_requirements.reporting import (
     _menu_day_service_date as _menu_day_service_date,
 )
 from app.modules.menu_requirements.reporting import (
+    get_community_menu_requirement_calendar as get_community_menu_requirement_calendar,
+)
+from app.modules.menu_requirements.reporting import (
+    get_community_menu_requirement_report as get_community_menu_requirement_report,
+)
+from app.modules.menu_requirements.reporting import (
     get_menu_requirement_calendar as get_menu_requirement_calendar,
 )
 from app.modules.menu_requirements.reporting import (
     get_menu_requirement_report as get_menu_requirement_report,
+)
+from app.modules.menu_requirements.reporting import (
+    list_menu_requirement_communities as list_menu_requirement_communities,
 )
 from app.modules.menu_requirements.schemas import (
     MenuRequirementAmountBasis,
@@ -364,6 +373,38 @@ async def export_menu_requirement_report_workbook(
     filename = _xlsx_filename(
         "menu-requirement",
         report.school_name,
+        report.date_from.isoformat(),
+        report.date_to.isoformat(),
+    )
+    return filename, content
+
+
+async def export_community_menu_requirement_report_workbook(
+    community: Community,
+    date_from: Date,
+    date_to: Date,
+    granularity: MenuRequirementReportGranularity,
+    current_user: User,
+    *,
+    amount_basis: MenuRequirementAmountBasis = MenuRequirementAmountBasis.NET,
+    meal_type: MealType | None = None,
+) -> tuple[str, bytes]:
+    report = await get_community_menu_requirement_report(
+        community,
+        date_from,
+        date_to,
+        granularity,
+        current_user,
+        meal_type=meal_type,
+    )
+    content = await asyncio.to_thread(
+        build_menu_requirement_report_workbook,
+        report,
+        amount_basis=amount_basis,
+    )
+    filename = _xlsx_filename(
+        "menu-requirement",
+        report.community_name,
         report.date_from.isoformat(),
         report.date_to.isoformat(),
     )

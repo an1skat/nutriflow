@@ -14,6 +14,7 @@ from app.modules.menu_requirements.models import (
     MenuRequirementIngredientRow,
 )
 from app.modules.menu_requirements.schemas import (
+    CommunityMenuRequirementReportResponse,
     MenuRequirementAmountBasis,
     MenuRequirementReportResponse,
 )
@@ -134,6 +135,7 @@ def test_builds_one_report_sheet_per_school_group() -> None:
             "stale_dates": [],
             "groups": [
                 {
+                    "group_key": f"school-group:{group_name}",
                     "school_group_id": str(PydanticObjectId()),
                     "school_group_name": group_name,
                     "age_group": "6-11",
@@ -189,3 +191,32 @@ def test_builds_one_report_sheet_per_school_group() -> None:
     )
     assert first_ingredient_row[1].value == 608
     assert first_ingredient_row[-1].value == 608
+
+
+def test_builds_community_report_workbook() -> None:
+    report = CommunityMenuRequirementReportResponse.model_validate(
+        {
+            "community": "obukhivska",
+            "community_name": "Обухівська громада",
+            "school_count": 2,
+            "date_from": "2026-07-06",
+            "date_to": "2026-07-10",
+            "granularity": "week",
+            "meal_type": "lunch",
+            "status": "complete",
+            "missing_dates": [],
+            "stale_dates": [],
+            "groups": [],
+        }
+    )
+
+    workbook = openpyxl.load_workbook(
+        BytesIO(build_menu_requirement_report_workbook(report))
+    )
+    sheet = workbook.active
+
+    assert sheet["A2"].value == "Громада"
+    assert sheet["B2"].value == "Обухівська громада"
+    assert sheet["A3"].value == "Кількість шкіл"
+    assert sheet["B3"].value == 2
+    assert sheet["A4"].value == "Період"

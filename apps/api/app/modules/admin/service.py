@@ -80,9 +80,7 @@ async def list_schools(
     if community is not None:
         filters["community"] = community
 
-    sort_fields = (
-        ("community", "name", "_id") if sort_by == "community" else ("name", "_id")
-    )
+    sort_fields = ("community", "name", "_id") if sort_by == "community" else ("name", "_id")
 
     query = School.find(filters)
     total = await query.count()

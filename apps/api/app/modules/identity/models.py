@@ -37,6 +37,10 @@ class AgeGroup(StrEnum):
 
 type Community = Literal["obukhivska"]
 
+COMMUNITY_LABELS: dict[Community, str] = {
+    "obukhivska": "Обухівська громада",
+}
+
 
 class RefreshRevokeReason(StrEnum):
     ROTATED = "rotated"

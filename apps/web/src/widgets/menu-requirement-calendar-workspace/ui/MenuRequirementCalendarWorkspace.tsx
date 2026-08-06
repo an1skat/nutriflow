@@ -6,8 +6,14 @@ import { Eye } from 'lucide-react';
 
 import {
   useMenuRequirementCalendar,
+  useMenuRequirementCommunities,
   useMenuRequirementReport,
 } from '@/entities/menu-requirement/api/MenuRequirementQueries';
+import type {
+  MenuRequirementCalendarRequest,
+  MenuRequirementCommunityCode,
+  MenuRequirementReportRequest,
+} from '@/entities/menu-requirement/model/MenuRequirement';
 import { useSchools } from '@/entities/school/api/SchoolQueries';
 import { useCurrentUser } from '@/entities/session/api/SessionQueries';
 import type { MealType } from '@/entities/weekly-menu/model/WeeklyMenu';
@@ -43,6 +49,8 @@ const mealTypeOptions: Array<{ value: '' | MealType; label: string }> = [
   { value: 'lunch', label: 'Обід' },
 ];
 
+type RequirementScopeKind = 'school' | 'community';
+
 export function getCurrentCalendarWeek(date = new Date()): SelectedWeekRange {
   const monday = new Date(date);
   monday.setDate(date.getDate() - ((date.getDay() + 6) % 7));
@@ -72,6 +80,10 @@ export function MenuRequirementCalendarWorkspace({
     ? currentSchoolRequirementPeriod.year
     : currentDate.getFullYear();
   const [selectedSchoolId, setSelectedSchoolId] = useState('');
+  const [selectedCommunity, setSelectedCommunity] = useState<
+    MenuRequirementCommunityCode | ''
+  >('');
+  const [scopeKind, setScopeKind] = useState<RequirementScopeKind>('school');
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMealType, setSelectedMealType] = useState<'' | MealType>('');
   const [selectedMonthNumber, setSelectedMonthNumber] = useState<number | null>(() =>
@@ -85,22 +97,45 @@ export function MenuRequirementCalendarWorkspace({
 
   const currentUser = useCurrentUser();
   const isSchoolUser = currentUser.data?.role === 'SCHOOL_USER';
-  const schools = useSchools({ offset: 0, limit: 100 }, Boolean(currentUser.data && !isSchoolUser));
+  const effectiveScopeKind: RequirementScopeKind =
+    isSchoolUser || schoolWeekOnly ? 'school' : scopeKind;
+  const schools = useSchools(
+    { offset: 0, limit: 100 },
+    Boolean(currentUser.data && !isSchoolUser && effectiveScopeKind === 'school')
+  );
+  const communities = useMenuRequirementCommunities(
+    Boolean(currentUser.data && !isSchoolUser && effectiveScopeKind === 'community')
+  );
   const ownSchoolId = currentUser.data?.role === 'SCHOOL_USER' ? currentUser.data.school_id : '';
   const effectiveSchoolId = isSchoolUser
     ? ownSchoolId
     : selectedSchoolId || schools.data?.items[0]?.id || '';
+  const effectiveCommunity = selectedCommunity || communities.data?.[0]?.community || '';
+  const scopeReady =
+    effectiveScopeKind === 'community'
+      ? effectiveCommunity.length > 0
+      : effectiveSchoolId.length > 0;
 
-  const calendar = useMenuRequirementCalendar({
-    school_id: effectiveSchoolId,
-    year: selectedYear,
-    meal_type: selectedMealType || undefined,
-    enabled: effectiveSchoolId.length > 0,
-  });
+  const calendarRequest: MenuRequirementCalendarRequest =
+    effectiveScopeKind === 'community'
+      ? {
+          community: effectiveCommunity,
+          year: selectedYear,
+          meal_type: selectedMealType || undefined,
+          enabled: scopeReady,
+        }
+      : {
+          school_id: effectiveSchoolId,
+          year: selectedYear,
+          meal_type: selectedMealType || undefined,
+          enabled: scopeReady,
+        };
+  const calendar = useMenuRequirementCalendar(calendarRequest);
+  const visibleCalendar = calendar.isPlaceholderData ? undefined : calendar.data;
 
   const selectedMonth = useMemo(
-    () => calendar.data?.months.find((month) => month.month === selectedMonthNumber) ?? null,
-    [calendar.data?.months, selectedMonthNumber]
+    () => visibleCalendar?.months.find((month) => month.month === selectedMonthNumber) ?? null,
+    [visibleCalendar?.months, selectedMonthNumber]
   );
 
   const selectedWeek = useMemo(() => {
@@ -115,14 +150,25 @@ export function MenuRequirementCalendarWorkspace({
     );
   }, [selectedMonth, selectedWeekRange]);
 
-  const report = useMenuRequirementReport({
-    school_id: effectiveSchoolId,
-    date_from: reportRange?.dateFrom ?? '',
-    date_to: reportRange?.dateTo ?? '',
-    granularity: reportRange?.granularity ?? 'month',
-    meal_type: selectedMealType || undefined,
-    enabled: Boolean(effectiveSchoolId && reportRange),
-  });
+  const reportRequest: MenuRequirementReportRequest =
+    effectiveScopeKind === 'community'
+      ? {
+          community: effectiveCommunity,
+          date_from: reportRange?.dateFrom ?? '',
+          date_to: reportRange?.dateTo ?? '',
+          granularity: reportRange?.granularity ?? 'month',
+          meal_type: selectedMealType || undefined,
+          enabled: Boolean(scopeReady && reportRange),
+        }
+      : {
+          school_id: effectiveSchoolId,
+          date_from: reportRange?.dateFrom ?? '',
+          date_to: reportRange?.dateTo ?? '',
+          granularity: reportRange?.granularity ?? 'month',
+          meal_type: selectedMealType || undefined,
+          enabled: Boolean(scopeReady && reportRange),
+        };
+  const report = useMenuRequirementReport(reportRequest);
   const selectedWeekBlockReason = selectedWeek ? getWeekReportBlockReason(selectedWeek) : null;
 
   const resetNavigation = () => {
@@ -154,24 +200,65 @@ export function MenuRequirementCalendarWorkspace({
         <p className="nf-description">
           {schoolWeekOnly
             ? 'Оберіть день, щоб переглянути меню-вимоги всіх груп окремо.'
-            : 'Оберіть місяць і сформуйте меню-вимогу за довільний період або перейдіть до конкретного тижня й дня.'}
+            : 'Оберіть школу або громаду, а потім сформуйте меню-вимогу за день, тиждень, місяць чи довільний період.'}
         </p>
       </header>
 
       <section className="nf-panel">
         <div
           className={`nf-panel-body grid gap-4 ${
-            schoolWeekOnly ? '' : 'lg:grid-cols-[minmax(220px,1.2fr)_140px_minmax(260px,1fr)]'
+            schoolWeekOnly
+              ? ''
+              : isSchoolUser
+                ? 'lg:grid-cols-[minmax(220px,1.2fr)_140px_minmax(260px,1fr)]'
+                : 'lg:grid-cols-[170px_minmax(220px,1.2fr)_140px_minmax(260px,1fr)]'
           }`}
         >
+          {!schoolWeekOnly && !isSchoolUser ? (
+            <div className="grid gap-1">
+              <span className="nf-label">Область</span>
+              <div className="grid grid-cols-2 border border-slate-300 bg-white">
+                {(
+                  [
+                    ['school', 'Школа'],
+                    ['community', 'Громада'],
+                  ] as const
+                ).map(([value, label]) => {
+                  const selected = effectiveScopeKind === value;
+
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      className={`min-h-10 px-3 text-sm font-semibold transition-colors ${
+                        selected
+                          ? 'bg-emerald-700 text-white'
+                          : 'text-slate-700 hover:bg-emerald-50'
+                      }`}
+                      aria-pressed={selected}
+                      onClick={() => {
+                        setScopeKind(value);
+                        resetNavigation();
+                      }}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
           {!schoolWeekOnly && isSchoolUser ? (
             <div className="grid gap-1">
               <span className="nf-label">Школа</span>
               <div className="nf-input flex items-center bg-slate-50 text-slate-700">
-                {calendar.data?.school_name ?? 'Ваша школа'}
+                {visibleCalendar && 'school_name' in visibleCalendar
+                  ? visibleCalendar.school_name
+                  : 'Ваша школа'}
               </div>
             </div>
-          ) : !schoolWeekOnly ? (
+          ) : !schoolWeekOnly && effectiveScopeKind === 'school' ? (
             <label className="grid gap-1">
               <span className="nf-label">Школа</span>
               {schools.isPending ? (
@@ -189,6 +276,31 @@ export function MenuRequirementCalendarWorkspace({
                   {(schools.data?.items ?? []).map((school) => (
                     <option key={school.id} value={school.id}>
                       {school.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </label>
+          ) : !schoolWeekOnly ? (
+            <label className="grid gap-1">
+              <span className="nf-label">Громада</span>
+              {communities.isPending ? (
+                <LoadingSpinner size="sm" label="Завантажуємо громади…" />
+              ) : (
+                <select
+                  className="nf-input"
+                  value={effectiveCommunity}
+                  onChange={(event) => {
+                    setSelectedCommunity(
+                      event.target.value as MenuRequirementCommunityCode | ''
+                    );
+                    resetNavigation();
+                  }}
+                >
+                  <option value="">Оберіть громаду</option>
+                  {(communities.data ?? []).map((community) => (
+                    <option key={community.community} value={community.community}>
+                      {community.community_name} · {community.school_count} шкіл
                     </option>
                   ))}
                 </select>
@@ -241,8 +353,12 @@ export function MenuRequirementCalendarWorkspace({
         </div>
       </section>
 
-      {!isSchoolUser && schools.isError ? (
+      {!isSchoolUser && effectiveScopeKind === 'school' && schools.isError ? (
         <RequestError error={schools.error} onRetry={() => void schools.refetch()} />
+      ) : null}
+
+      {!isSchoolUser && effectiveScopeKind === 'community' && communities.isError ? (
+        <RequestError error={communities.error} onRetry={() => void communities.refetch()} />
       ) : null}
 
       {calendar.isError ? (
@@ -250,13 +366,23 @@ export function MenuRequirementCalendarWorkspace({
       ) : null}
 
       <section className="nf-panel overflow-hidden">
-        {calendar.isPending ? (
+        {!scopeReady && !calendar.isError ? (
+          <div className="nf-panel-body">
+            <div className="nf-empty">
+              <p>
+                {effectiveScopeKind === 'community'
+                  ? 'Оберіть громаду для перегляду календаря.'
+                  : 'Оберіть школу для перегляду календаря.'}
+              </p>
+            </div>
+          </div>
+        ) : calendar.isPending || calendar.isPlaceholderData ? (
           <div className="nf-panel-body">
             <LoadingSpinner label="Завантажуємо календар…" />
           </div>
         ) : null}
 
-        {calendar.data && schoolWeekOnly && selectedWeek ? (
+        {visibleCalendar && schoolWeekOnly && selectedWeek ? (
           <>
             <div className="nf-panel-header">
               <div>
@@ -306,15 +432,15 @@ export function MenuRequirementCalendarWorkspace({
               />
             </div>
           </>
-        ) : calendar.data && schoolWeekOnly ? (
+        ) : visibleCalendar && schoolWeekOnly ? (
           <div className="nf-panel-body">
             <div className="nf-empty">
               <p>За поточний тиждень меню-вимог ще немає.</p>
             </div>
           </div>
-        ) : calendar.data ? (
+        ) : visibleCalendar ? (
           <RequirementPeriodNavigator
-            months={calendar.data.months}
+            months={visibleCalendar.months}
             selectedMonth={selectedMonth}
             selectedWeek={selectedWeek}
             year={selectedYear}
@@ -336,7 +462,7 @@ export function MenuRequirementCalendarWorkspace({
             onOpenReport={openReport}
             allowIncompleteReports={currentUser.data?.role === 'OWNER'}
             normComplianceHref={
-              selectedWeek
+              selectedWeek && effectiveScopeKind === 'school'
                 ? buildNormComplianceHref({
                     schoolId: effectiveSchoolId,
                     dateFrom: selectedWeek.date_from,
