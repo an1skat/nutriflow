@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useRouter } from 'next/navigation';
 
@@ -19,6 +19,7 @@ export function LoginForm({ returnTo }: { returnTo: string }) {
   const router = useRouter();
   const currentUser = useCurrentUser();
   const login = useLogin();
+  const [showPassword, setShowPassword] = useState(false);
 
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
@@ -113,12 +114,21 @@ export function LoginForm({ returnTo }: { returnTo: string }) {
         </label>
         <input
           id="password"
-          type="password"
+          type={showPassword ? 'text' : 'password'}
           autoComplete="current-password"
           aria-invalid={form.formState.errors.password ? 'true' : 'false'}
           {...form.register('password')}
           className="nf-input"
         />
+        <label className="flex items-center gap-2 mt-1.5 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={showPassword}
+            onChange={(e) => setShowPassword(e.target.checked)}
+            className="accent-[var(--nf-primary)]"
+          />
+          <span className="text-sm text-[var(--nf-muted)]">Показати пароль</span>
+        </label>
         {form.formState.errors.password ? (
           <p role="alert" className="nf-field-error">
             {form.formState.errors.password.message}
