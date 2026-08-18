@@ -33,6 +33,17 @@ describe('resolvePortionVariantByYield', () => {
     });
   });
 
+  it('sums a composite yield and keeps the exact output variant', () => {
+    const composite = variant('85');
+    composite.portion_grams = '70';
+
+    expect(resolvePortionVariantByYield([composite], '70/15', null)).toMatchObject({
+      factor: 1,
+      isScaled: false,
+      variant: { id: 'portion-85', output_grams: '85' },
+    });
+  });
+
   it('uses the nearest output and prefers the larger output on a tie', () => {
     expect(resolvePortionVariantByYield(variants, '100', null)).toMatchObject({
       isScaled: true,

@@ -9,9 +9,10 @@ export function normalizeGramAmount(value: string | null | undefined): number | 
     .replace(/\s*(?:г|гр|g)\s*$/u, '')
     .replace(',', '.');
 
-  if (!/^\d+(?:\.\d+)?$/.test(normalized)) {
+  const parts = normalized.split('/').map((part) => part.trim());
+  if (parts.some((part) => !/^\d+(?:\.\d+)?$/.test(part))) {
     return null;
   }
 
-  return Number(normalized);
+  return parts.reduce((total, part) => total + Number(part), 0);
 }

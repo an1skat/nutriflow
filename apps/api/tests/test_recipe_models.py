@@ -124,6 +124,10 @@ def test_portion_resolution_uses_exact_or_nearest_larger_variant() -> None:
     ]
 
     exact = resolve_portion_variant_by_yield(variants, "75")
+    composite = resolve_portion_variant_by_yield(
+        [PortionVariant(portion_grams=Decimal("70"), output_grams=Decimal("85"))],
+        "70/15",
+    )
     scaled_100 = resolve_portion_variant_by_yield(variants, "100")
     scaled_225 = resolve_portion_variant_by_yield(variants, "225")
     scaled_preferred = resolve_portion_variant_by_yield(
@@ -143,6 +147,10 @@ def test_portion_resolution_uses_exact_or_nearest_larger_variant() -> None:
     assert exact.variant.output_grams == Decimal("75")
     assert exact.factor == 1
     assert exact.is_scaled is False
+    assert composite is not None
+    assert composite.variant.output_grams == Decimal("85")
+    assert composite.factor == 1
+    assert composite.is_scaled is False
     assert scaled_100 is not None
     assert scaled_100.variant.output_grams == Decimal("120")
     assert scaled_100.factor == Decimal("100") / Decimal("120")

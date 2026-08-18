@@ -161,10 +161,11 @@ def parse_menu_yield_grams(value: str) -> Decimal | None:
     normalized = re.sub(r"\s*(?:г|гр|g)\s*$", "", normalized).strip()
     normalized = normalized.replace(",", ".")
 
-    if not re.fullmatch(r"\d+(?:\.\d+)?", normalized):
+    parts = [part.strip() for part in normalized.split("/")]
+    if any(not re.fullmatch(r"\d+(?:\.\d+)?", part) for part in parts):
         return None
 
-    amount = Decimal(normalized)
+    amount = sum((Decimal(part) for part in parts), Decimal())
     if amount < 0:
         return None
     return amount
