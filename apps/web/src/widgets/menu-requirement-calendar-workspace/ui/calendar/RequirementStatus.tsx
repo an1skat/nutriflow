@@ -32,15 +32,11 @@ export function StatusBadge({ status }: { status: MenuRequirementAggregateStatus
 export function CalendarStatusBadge({
   status,
   generated,
-  missing,
-  stale,
 }: {
   status: MenuRequirementAggregateStatus;
   generated: number;
-  missing: number;
-  stale: number;
 }) {
-  if (generated === 0 && missing === 0 && stale === 0) {
+  if (generated === 0) {
     return <EmptyStatusBadge />;
   }
   return <StatusBadge status={status} />;

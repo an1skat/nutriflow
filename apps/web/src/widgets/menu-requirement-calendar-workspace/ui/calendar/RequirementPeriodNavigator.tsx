@@ -298,14 +298,15 @@ function RequirementMonthGrid({
             <CalendarStatusBadge
               status={month.status}
               generated={month.generated_days}
-              missing={month.missing_days}
-              stale={month.stale_days}
             />
           </span>
           <span className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
-            <Metric label="Днів" value={month.working_days} />
+            <Metric label="Днів" value={month.generated_days === 0 ? 0 : month.working_days} />
             <Metric label="Є" value={month.generated_days} />
-            <Metric label="Пробл." value={month.missing_days + month.stale_days} />
+            <Metric
+              label="Пробл."
+              value={month.generated_days === 0 ? 0 : month.missing_days + month.stale_days}
+            />
           </span>
           <span className="mt-3 flex items-center justify-between text-xs font-bold text-emerald-800">
             Перейти до тижнів
@@ -348,13 +349,11 @@ function RequirementWeekGrid({
             <CalendarStatusBadge
               status={week.status}
               generated={week.generated_days}
-              missing={week.missing_days}
-              stale={week.stale_days}
             />
           </span>
           <span className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
             <Metric label="Є" value={week.generated_days} />
-            <Metric label="Проп." value={week.missing_days} />
+            <Metric label="Проп." value={week.generated_days === 0 ? 0 : week.missing_days} />
             <Metric label="Заст." value={week.stale_days} />
           </span>
           <span className="mt-3 flex items-center justify-between text-xs font-bold text-emerald-800">

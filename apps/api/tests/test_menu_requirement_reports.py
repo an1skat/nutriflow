@@ -461,6 +461,22 @@ def test_calendar_uses_full_workweek_across_month_boundary() -> None:
     )
 
 
+def test_calendar_treats_period_without_requirements_as_empty() -> None:
+    expected_dates = {Date(2026, 8, day) for day in range(17, 22)}
+
+    august = _build_calendar_month(
+        2026,
+        8,
+        expected_dates=expected_dates,
+        generated_dates=set(),
+        stale_dates=set(),
+    )
+
+    week = next(item for item in august.weeks if item.date_from == Date(2026, 8, 17))
+    assert august.missing_days == 0
+    assert week.missing_days == 0
+
+
 def test_calendar_keeps_an_existing_weekend_requirement_visible() -> None:
     generated_date = Date(2026, 7, 12)
 

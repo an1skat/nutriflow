@@ -647,7 +647,11 @@ def _build_calendar_month(
         if summary.missing_requirements > 0
     }
 
-    missing = (expected - generated) | (summary_missing_dates & month_dates)
+    missing = (
+        (expected - generated) | (summary_missing_dates & month_dates)
+        if generated
+        else set()
+    )
 
     weeks = []
     for index, (block_from, block_to) in enumerate(
@@ -666,7 +670,11 @@ def _build_calendar_month(
         resolved_block_to = max(block_dates)
         block_expected = expected_dates & block_dates
         block_generated = generated_dates & block_dates
-        block_missing = (block_expected - block_generated) | (summary_missing_dates & block_dates)
+        block_missing = (
+            (block_expected - block_generated) | (summary_missing_dates & block_dates)
+            if block_generated
+            else set()
+        )
         block_stale = stale_dates & block_dates
         weeks.append(
             MenuRequirementCalendarWeekResponse(
