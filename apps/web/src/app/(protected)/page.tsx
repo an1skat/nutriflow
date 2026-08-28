@@ -32,7 +32,7 @@ export default function HomePage() {
         </p>
       </header>
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
         <section className="nf-panel">
           <div className="nf-panel-header">
             <h2 className="nf-panel-title">Обліковий запис</h2>

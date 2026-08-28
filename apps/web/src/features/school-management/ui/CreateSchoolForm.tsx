@@ -54,7 +54,7 @@ export function CreateSchoolForm() {
         ) : null}
       </div>
 
-      <label className="grid gap-1" htmlFor="school-community">
+      <label htmlFor="school-community">
         <span className="nf-label">Громада</span>
         <select id="school-community" {...form.register('community')} className="nf-input">
           <option value="">Не вказана</option>

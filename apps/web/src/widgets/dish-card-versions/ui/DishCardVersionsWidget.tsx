@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useDishCard, useDishCardVersions } from '@/entities/recipe/api/RecipeQueries';
 import { useCurrentUser } from '@/entities/session/api/SessionQueries';
 import { hasPermission } from '@/features/access/model/AccessPolicy';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 import { RequestError } from '@/shared/ui/RequestError';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -19,6 +20,14 @@ export function DishCardVersionsWidget({ dishCardId }: { dishCardId: string }) {
   const versions = useDishCardVersions(dishCardId);
   const currentUser = useCurrentUser();
   const canManage = Boolean(currentUser.data && hasPermission(currentUser.data, 'recipes.manage'));
+
+  if (dishCard.isPending || versions.isPending) {
+    return (
+      <main className="nf-page">
+        <LoadingSpinner label="Завантажуємо техкарту…" />
+      </main>
+    );
+  }
 
   return (
     <main className="nf-page">
