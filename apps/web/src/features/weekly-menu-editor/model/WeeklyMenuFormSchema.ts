@@ -18,7 +18,8 @@ import { addDaysToLocalIsoDate, toLocalIsoDate } from '@/shared/lib/LocalDate';
 const optionalDecimalInput = z
   .string()
   .trim()
-  .refine((value) => value === '' || /^-?\d+(\.\d+)?$/.test(value), 'Очікуємо десяткове число');
+  .refine((value) => value === '' || /^-?\d+([.,]\d+)?$/.test(value), 'Очікуємо десяткове число')
+  .transform((value) => value.replace(',', '.'));
 
 const optionalDateInput = z
   .string()
