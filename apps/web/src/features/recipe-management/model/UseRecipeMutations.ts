@@ -7,6 +7,7 @@ import {
   createAllergen,
   createDishCardVersion,
   createIngredient,
+  setMainDishCardVersion,
   updateAllergen,
   updateDishCard,
   updateDishCardVersion,
@@ -103,6 +104,16 @@ export function useConfirmDishCardVersion() {
       queryClient.invalidateQueries({
         queryKey: recipeQueryKeys.dishCard(version.dish_card_id),
       });
+    },
+  });
+}
+
+export function useSetMainDishCardVersion() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (versionId: string) => setMainDishCardVersion(versionId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: recipeQueryKeys.all });
     },
   });
 }

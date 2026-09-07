@@ -462,6 +462,22 @@ async def confirm_dish_card_version(version_id: PydanticObjectId) -> DishCardVer
     return version
 
 
+async def set_main_dish_card_version(version_id: PydanticObjectId) -> DishCard:
+    version = await get_dish_card_version(version_id)
+
+    if version.status != DishCardVersionStatus.CONFIRMED:
+        raise DishCardVersionNotConfirmedError("Only confirmed versions can be selected as main")
+
+    dish_card = await get_dish_card(version.dish_card_id)
+    if dish_card.current_version_id == version.id:
+        return dish_card
+
+    dish_card.current_version_id = version.id
+    dish_card.updated_at = datetime.now(UTC)
+    await dish_card.save()
+    return dish_card
+
+
 async def calculate_ingredients(
     version_id: PydanticObjectId,
     data: CalculateIngredientsRequest,

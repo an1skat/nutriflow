@@ -155,3 +155,12 @@ export async function confirmDishCardVersion(versionId: string): Promise<DishCar
   );
   return dishCardVersionSchema.parse(response.data);
 }
+
+export async function setMainDishCardVersion(versionId: string): Promise<DishCard> {
+  const response = await apiClient.put<unknown>(
+    `/recipes/dish-card-versions/${versionId}/main`,
+    undefined,
+    { headers: getCsrfHeaders() }
+  );
+  return dishCardSchema.parse(response.data);
+}

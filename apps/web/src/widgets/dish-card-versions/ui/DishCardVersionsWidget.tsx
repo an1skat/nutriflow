@@ -2,9 +2,13 @@
 
 import Link from 'next/link';
 
+import { toast } from 'sonner';
+
 import { useDishCard, useDishCardVersions } from '@/entities/recipe/api/RecipeQueries';
 import { useCurrentUser } from '@/entities/session/api/SessionQueries';
 import { hasPermission } from '@/features/access/model/AccessPolicy';
+import { useSetMainDishCardVersion } from '@/features/recipe-management/model/UseRecipeMutations';
+import { getApiErrorMessage } from '@/shared/api/HttpClient';
 import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 import { RequestError } from '@/shared/ui/RequestError';
 
@@ -19,7 +23,19 @@ export function DishCardVersionsWidget({ dishCardId }: { dishCardId: string }) {
   const dishCard = useDishCard(dishCardId);
   const versions = useDishCardVersions(dishCardId);
   const currentUser = useCurrentUser();
+  const setMainVersion = useSetMainDishCardVersion();
   const canManage = Boolean(currentUser.data && hasPermission(currentUser.data, 'recipes.manage'));
+  const canSelectMain =
+    currentUser.data?.role === 'OWNER' || currentUser.data?.role === 'TECHNOLOGIST';
+
+  const handleSelectMain = async (versionId: string) => {
+    try {
+      await setMainVersion.mutateAsync(versionId);
+      toast.success('Основну версію змінено.');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
+    }
+  };
 
   if (dishCard.isPending || versions.isPending) {
     return (
@@ -93,6 +109,7 @@ export function DishCardVersionsWidget({ dishCardId }: { dishCardId: string }) {
                     <th className="w-32">Порцій</th>
                     <th className="w-32">Інгредієнтів</th>
                     <th className="w-52">Оновлено</th>
+                    <th className="w-48">Для розрахунків</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -115,6 +132,22 @@ export function DishCardVersionsWidget({ dishCardId }: { dishCardId: string }) {
                         <td className="text-xs text-slate-600">{v.portion_variants.length}</td>
                         <td className="text-xs text-slate-600">{v.ingredient_amounts.length}</td>
                         <td className="whitespace-nowrap text-xs text-slate-600">{v.updated_at}</td>
+                        <td>
+                          {isCurrent ? (
+                            <span className="text-xs font-bold text-emerald-700">Основна</span>
+                          ) : canSelectMain && v.status === 'confirmed' ? (
+                            <button
+                              type="button"
+                              className="nf-button nf-button-secondary"
+                              disabled={setMainVersion.isPending}
+                              onClick={() => void handleSelectMain(v.id)}
+                            >
+                              Зробити основною
+                            </button>
+                          ) : (
+                            <span className="text-xs text-slate-500">—</span>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}
