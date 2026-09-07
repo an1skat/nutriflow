@@ -4,14 +4,16 @@ const decimalString = z
   .string()
   .trim()
   .min(1, 'Введіть значення')
-  .regex(/^-?\d+(\.\d+)?$/, 'Очікуємо десяткове число')
+  .regex(/^-?\d+([.,]\d+)?$/, 'Очікуємо десяткове число')
+  .transform((value) => value.replace(',', '.'))
   .refine((value) => Number(value) >= 0, 'Значення має бути ≥ 0');
 
 // Optional decimal: empty string allowed; converted to null at submit time.
 const optionalDecimalString = z
   .string()
   .trim()
-  .regex(/^-?\d+(\.\d+)?$/, 'Очікуємо десяткове число')
+  .regex(/^-?\d+([.,]\d+)?$/, 'Очікуємо десяткове число')
+  .transform((value) => value.replace(',', '.'))
   .or(z.literal(''));
 
 const allergenFormSchema = z.object({
@@ -25,7 +27,8 @@ const portionFormSchema = z.object({
     .string()
     .trim()
     .min(1, 'Введіть масу порції')
-    .regex(/^-?\d+(\.\d+)?$/, 'Очікуємо число')
+    .regex(/^-?\d+([.,]\d+)?$/, 'Очікуємо число')
+    .transform((value) => value.replace(',', '.'))
     .refine((value) => Number(value) > 0, 'Маса порції має бути > 0'),
   kcal: optionalDecimalString,
   proteins: optionalDecimalString,

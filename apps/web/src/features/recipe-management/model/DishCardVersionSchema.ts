@@ -6,13 +6,15 @@ const decimalString = z
   .string()
   .trim()
   .min(1, 'Введіть значення')
-  .regex(/^-?\d+(\.\d+)?$/, 'Очікуємо десяткове число')
+  .regex(/^-?\d+([.,]\d+)?$/, 'Очікуємо десяткове число')
+  .transform((value) => value.replace(',', '.'))
   .refine((value) => Number(value) >= 0, 'Значення має бути ≥ 0');
 
 const optionalDecimalString = z
   .string()
   .trim()
-  .refine((value) => value === '' || /^-?\d+(\.\d+)?$/.test(value), 'Очікуємо десяткове число')
+  .refine((value) => value === '' || /^-?\d+([.,]\d+)?$/.test(value), 'Очікуємо десяткове число')
+  .transform((value) => value.replace(',', '.'))
   .refine((value) => value === '' || Number(value) >= 0, 'Значення має бути ≥ 0');
 
 const portionFormSchema = z.object({
@@ -22,7 +24,8 @@ const portionFormSchema = z.object({
     .string()
     .trim()
     .min(1, 'Введіть масу порції')
-    .regex(/^-?\d+(\.\d+)?$/, 'Очікуємо число')
+    .regex(/^-?\d+([.,]\d+)?$/, 'Очікуємо число')
+    .transform((value) => value.replace(',', '.'))
     .refine((value) => Number(value) > 0, 'Маса порції має бути > 0'),
   kcal: optionalDecimalString,
   proteins: optionalDecimalString,

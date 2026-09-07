@@ -133,13 +133,11 @@ export function DishCardUploadForm() {
     setSuccess(null);
 
     try {
-      const result = await upload.mutateAsync({
+      await upload.mutateAsync({
         values,
         onProgress: setProgress,
       });
-      setSuccess(
-        `Техкарту збережено та підтверджено. Картка ${result.dishCardId}, версія ${result.versionId}.`
-      );
+      setSuccess('Техкарту збережено та підтверджено.');
       form.reset(defaultValues);
       toast.success('Техкарту завантажено');
     } catch (error) {
@@ -530,11 +528,7 @@ function IngredientRow({ index, portions, register, errors, onRemove }: Ingredie
                 portionTempId={portion.tempId}
                 portionGrams={portion.portion_grams || '?'}
                 register={register}
-                error={
-                  (errors as { amounts?: Record<string, { message?: string }> })?.amounts?.[
-                    portion.tempId
-                  ]?.message
-                }
+                error={amountError(errors, portion.tempId)}
               />
             ))}
           </div>
@@ -542,6 +536,23 @@ function IngredientRow({ index, portions, register, errors, onRemove }: Ingredie
       </div>
     </div>
   );
+}
+
+function amountError(errors: Record<string, unknown> | undefined, portionTempId: string) {
+  const amount = (
+    errors as {
+      amounts?: Record<
+        string,
+        {
+          gross?: { message?: string };
+          net?: { message?: string };
+          message?: string;
+        }
+      >;
+    }
+  )?.amounts?.[portionTempId];
+
+  return amount?.message ?? amount?.gross?.message ?? amount?.net?.message;
 }
 
 type AmountCellProps = {
@@ -561,12 +572,14 @@ function AmountCell({ index, portionTempId, portionGrams, register, error }: Amo
           className="nf-input"
           placeholder="брутто"
           aria-label={`Брутто для порції ${portionGrams}`}
+          aria-invalid={error ? 'true' : undefined}
           {...register(`ingredients.${index}.amounts.${portionTempId}.gross`)}
         />
         <input
           className="nf-input"
           placeholder="нетто"
           aria-label={`Нетто для порції ${portionGrams}`}
+          aria-invalid={error ? 'true' : undefined}
           {...register(`ingredients.${index}.amounts.${portionTempId}.net`)}
         />
       </div>
