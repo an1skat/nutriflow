@@ -4,7 +4,12 @@ from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.api.errors import bad_request, conflict, forbidden, not_found
-from app.modules.auth.dependencies import CsrfProtection, CurrentUser, require_permissions
+from app.modules.auth.dependencies import (
+    CsrfProtection,
+    CurrentUser,
+    require_permissions,
+    require_roles,
+)
 from app.modules.auth.service import user_has_permissions
 from app.modules.identity.models import AdminPermission, User, UserRole
 from app.modules.recipe.models import DishCardVersionStatus
@@ -80,6 +85,9 @@ from app.modules.recipe.service import (
     list_ingredients as list_ingredient_records,
 )
 from app.modules.recipe.service import (
+    set_main_dish_card_version as set_main_dish_card_version_record,
+)
+from app.modules.recipe.service import (
     update_allergen as update_allergen_record,
 )
 from app.modules.recipe.service import (
@@ -100,6 +108,10 @@ router = APIRouter()
 AdminUser = Annotated[
     User,
     Depends(require_permissions(AdminPermission.RECIPES_MANAGE)),
+]
+MainVersionManager = Annotated[
+    User,
+    Depends(require_roles(UserRole.OWNER, UserRole.TECHNOLOGIST)),
 ]
 Offset = Annotated[int, Query(ge=0)]
 Limit = Annotated[int, Query(ge=1, le=100)]
@@ -493,6 +505,25 @@ async def confirm_dish_card_version(
         raise bad_request(exc) from exc
 
     return DishCardVersionResponse.from_version(version)
+
+
+@router.put(
+    "/dish-card-versions/{version_id}/main",
+    response_model=DishCardResponse,
+)
+async def set_main_dish_card_version(
+    version_id: PydanticObjectId,
+    _manager: MainVersionManager,
+    _csrf: CsrfProtection,
+) -> DishCardResponse:
+    try:
+        dish_card = await set_main_dish_card_version_record(version_id)
+    except RecipeNotFoundError as exc:
+        raise not_found(exc) from exc
+    except DishCardVersionNotConfirmedError as exc:
+        raise bad_request(exc) from exc
+
+    return DishCardResponse.from_dish_card(dish_card)
 
 
 @router.post(

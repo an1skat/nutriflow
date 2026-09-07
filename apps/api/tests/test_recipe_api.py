@@ -319,6 +319,123 @@ def test_confirm_sets_current_version_and_makes_immutable(admin_client):
     assert edit_response.status_code == 403
 
 
+def test_owner_can_select_previous_confirmed_version(admin_client):
+    client, _ = admin_client
+    dish_card_id = _create_dish_card(client, number="99.11")
+    version_ids = []
+
+    for ingredient_name in ("Морква", "Картопля"):
+        variant_id = PydanticObjectId()
+        version_id = _create_version(
+            client,
+            dish_card_id=dish_card_id,
+            variant_id=variant_id,
+            amounts=[
+                amount_payload(
+                    name=ingredient_name,
+                    gross="100",
+                    net="80",
+                    variant_id=variant_id,
+                )
+            ],
+        )
+        assert (
+            client.post(
+                f"/api/v1/recipes/dish-card-versions/{version_id}/confirm",
+                headers=csrf_headers(client),
+            ).status_code
+            == 200
+        )
+        version_ids.append(version_id)
+
+    response = client.put(
+        f"/api/v1/recipes/dish-card-versions/{version_ids[0]}/main",
+        headers=csrf_headers(client),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["current_version_id"] == version_ids[0]
+    assert (
+        client.get(f"/api/v1/recipes/dish-cards/{dish_card_id}").json()["current_version_id"]
+        == version_ids[0]
+    )
+
+
+def test_main_version_must_be_confirmed(admin_client):
+    client, _ = admin_client
+    dish_card_id = _create_dish_card(client, number="99.12")
+    variant_id = PydanticObjectId()
+    version_id = _create_version(
+        client,
+        dish_card_id=dish_card_id,
+        variant_id=variant_id,
+        amounts=[amount_payload(name="Морква", gross="100", net="80", variant_id=variant_id)],
+    )
+
+    response = client.put(
+        f"/api/v1/recipes/dish-card-versions/{version_id}/main",
+        headers=csrf_headers(client),
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Only confirmed versions can be selected as main"
+
+
+def test_technologist_can_select_main_version(seeded_client):
+    client, identities = seeded_client
+    login(client, identities.admin.username, identities.admin_password)
+    dish_card_id = _create_dish_card(client, number="99.13")
+    variant_id = PydanticObjectId()
+    version_id = _create_version(
+        client,
+        dish_card_id=dish_card_id,
+        variant_id=variant_id,
+        amounts=[amount_payload(name="Морква", gross="100", net="80", variant_id=variant_id)],
+    )
+    assert (
+        client.post(
+            f"/api/v1/recipes/dish-card-versions/{version_id}/confirm",
+            headers=csrf_headers(client),
+        ).status_code
+        == 200
+    )
+    assert (
+        client.post(
+            "/api/v1/admin/admins",
+            json={
+                "username": "main.version.tech",
+                "email": "main.version.tech@example.com",
+                "password": "tech-password-123",
+                "role": "TECHNOLOGIST",
+                "permissions": [],
+            },
+            headers=csrf_headers(client),
+        ).status_code
+        == 201
+    )
+
+    login(client, "main.version.tech", "tech-password-123")
+    response = client.put(
+        f"/api/v1/recipes/dish-card-versions/{version_id}/main",
+        headers=csrf_headers(client),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["current_version_id"] == version_id
+
+
+def test_admin_cannot_select_main_version(seeded_client):
+    client, identities = seeded_client
+    login(client, identities.lower_admin.username, identities.lower_admin_password)
+
+    response = client.put(
+        "/api/v1/recipes/dish-card-versions/6a4700000000000000000000/main",
+        headers=csrf_headers(client),
+    )
+
+    assert response.status_code == 403
+
+
 def test_admin_endpoints_require_authentication(seeded_client):
     client, _ = seeded_client
     # No login -> every recipe endpoint must reject.
