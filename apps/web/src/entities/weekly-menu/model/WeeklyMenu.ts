@@ -86,6 +86,8 @@ export const dailyMenuItemSchema = z.object({
   portions: z.array(menuPortionSchema).min(1),
   servings: z.array(menuItemServingCountSchema),
   notes: z.string().min(1).nullable(),
+  is_school_added: z.boolean().default(false),
+  is_school_customized: z.boolean().default(false),
 });
 
 export const dailyMenuSchema = z.object({
@@ -220,6 +222,8 @@ export type WeeklyMenuPayload = {
       }>;
       servings?: MenuItemServingCount[];
       notes?: string | null;
+      is_school_added?: boolean;
+      is_school_customized?: boolean;
     }>;
     notes?: string | null;
   }>;

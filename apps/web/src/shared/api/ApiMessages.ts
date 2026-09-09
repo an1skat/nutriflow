@@ -22,6 +22,9 @@ export const detailTranslations: Record<string, string> = {
     'Дата завершення меню не може бути раніше дати початку.',
   'School users cannot change the number of dishes in a day':
     'Користувач школи не може змінювати кількість страв у межах дня.',
+  'School users cannot remove, replace, or reorder existing dishes':
+    'Користувач школи не може видаляти, замінювати або переставляти наявні позиції.',
+  'Daily menu item positions must be unique': 'Позиції страв у меню дня мають бути унікальними.',
   'Only template weekly menus can be published': 'Розсилати можна лише збережені тижневі меню.',
   'Only archived weekly menus can be deleted': 'Повністю видалити можна лише меню з архіву.',
   'Only template weekly menus can be archived': 'Архівувати можна лише шаблони тижневих меню.',

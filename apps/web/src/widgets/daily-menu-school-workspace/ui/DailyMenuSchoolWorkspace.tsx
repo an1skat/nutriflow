@@ -29,6 +29,7 @@ import {
 } from '@/features/weekly-menu-editor/model/UseWeeklyMenuMutations'
 import { getApiErrorMessage } from '@/shared/api/HttpClient'
 import { formatDate } from '@/shared/lib/FormatDate'
+import { normalizeGramAmount } from '@/shared/lib/Portion'
 import { useConfirm } from '@/shared/ui/ConfirmDialog'
 import { LoadingSpinner } from '@/shared/ui/LoadingSpinner'
 import { RequestError } from '@/shared/ui/RequestError'
@@ -39,7 +40,10 @@ import {
   buildDailyMenuUpdatePayload,
   buildDishCardReplacement,
   buildProductMenuItem,
+  createNewDailyMenuItem,
   formatMenuDate,
+  isSchoolAddedDailyMenuItem,
+  resequenceDayItemPositions,
   resolveDayDate,
   sortDays,
 } from './daily-menu/DailyMenuContent'
@@ -168,6 +172,81 @@ export function DailyMenuSchoolWorkspace() {
     setIsDirty(true);
   };
 
+  const addItem = async (selectedItem: CatalogSelection) => {
+    if (!activeDay || activeDay.closed_at) {
+      return;
+    }
+
+    const newItem = createNewDailyMenuItem(activeDay, activeGroups);
+    const resolvedItem =
+      selectedItem.kind === 'product'
+        ? buildProductMenuItem(newItem, selectedItem.ingredient)
+        : await buildDishCardMenuItem(newItem, selectedItem.dishCard);
+
+    if (!resolvedItem) {
+      return;
+    }
+
+    setDays((currentDays) =>
+      currentDays.map((day) =>
+        day.weekday === activeDay.weekday
+          ? resequenceDayItemPositions({ ...day, items: [...day.items, resolvedItem] })
+          : day
+      )
+    );
+    setIsDirty(true);
+  };
+
+  const removeItem = (itemId: string) => {
+    if (!activeDay || activeDay.closed_at) {
+      return;
+    }
+
+    const item = activeDay.items.find((candidate) => candidate.id === itemId);
+    if (!item || !isSchoolAddedDailyMenuItem(item)) {
+      return;
+    }
+
+    setDays((currentDays) =>
+      currentDays.map((day) =>
+        day.weekday === activeDay.weekday
+          ? resequenceDayItemPositions({
+              ...day,
+              items: day.items.filter((candidate) => candidate.id !== itemId),
+            })
+          : day
+      )
+    );
+    setIsDirty(true);
+  };
+
+  const changePortionYield = (itemId: string, portionIndex: number, value: string) => {
+    if (!activeDay || activeDay.closed_at) {
+      return;
+    }
+
+    setDays((currentDays) =>
+      currentDays.map((day) =>
+        day.weekday !== activeDay.weekday
+          ? day
+          : {
+              ...day,
+              items: day.items.map((item) =>
+                item.id !== itemId || !isSchoolAddedDailyMenuItem(item)
+                  ? item
+                  : {
+                      ...item,
+                      portions: item.portions.map((portion, index) =>
+                        index === portionIndex ? { ...portion, yield_amount: value } : portion
+                      ),
+                    }
+              ),
+            }
+      )
+    );
+    setIsDirty(true);
+  };
+
   const buildDishCardMenuItem = async (
     currentItem: DailyMenuItem,
     dishCard: DishCard
@@ -210,6 +289,18 @@ export function DailyMenuSchoolWorkspace() {
 
     if (!menu) {
       return null;
+    }
+
+    for (const day of days) {
+      for (const item of day.items) {
+        for (const portion of item.portions) {
+          const yieldVal = normalizeGramAmount(portion.yield_amount);
+          if (yieldVal === null || yieldVal <= 0) {
+            toast.error('Вкажіть коректний вихід порції для всіх вікових груп перед збереженням.');
+            return null;
+          }
+        }
+      }
     }
 
     const localSavedAt = saveDailyMenuDraft(menu.id, menu.updated_at, days);
@@ -533,6 +624,9 @@ export function DailyMenuSchoolWorkspace() {
               groups={activeGroups}
               readOnly={Boolean(activeDay.closed_at)}
               onDishChange={changeDish}
+              onAddItem={addItem}
+              onRemoveItem={removeItem}
+              onPortionYieldChange={changePortionYield}
               onChildrenCountChange={changeChildrenCount}
             />
           ) : null}

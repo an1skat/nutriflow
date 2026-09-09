@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 
-import { Check, ChevronDown, Filter, Package, Utensils } from 'lucide-react';
+import { Check, ChevronDown, Filter, Package, Trash2, Utensils } from 'lucide-react';
 
 import { useDishCards, useIngredients } from '@/entities/recipe/api/RecipeQueries';
 import type {
@@ -41,12 +41,17 @@ export type CatalogSelection =
       ingredient: Ingredient;
     };
 
+const UNSAVED_ITEM_ID_PREFIX = 'new:';
+
 export function DayMenuPanel({
   day,
   displayDate,
   groups,
   readOnly,
   onDishChange,
+  onAddItem,
+  onRemoveItem,
+  onPortionYieldChange,
   onChildrenCountChange,
 }: {
   day: DailyMenu;
@@ -54,8 +59,13 @@ export function DayMenuPanel({
   groups: SchoolGroup[];
   readOnly: boolean;
   onDishChange: (itemId: string, item: CatalogSelection) => Promise<void>;
+  onAddItem: (item: CatalogSelection) => Promise<void>;
+  onRemoveItem: (itemId: string) => void;
+  onPortionYieldChange: (itemId: string, portionIndex: number, value: string) => void;
   onChildrenCountChange: (group: SchoolGroup, childrenCount: number) => void;
 }) {
+  const [isAddPickerOpen, setIsAddPickerOpen] = useState(false);
+
   return (
     <section className={`nf-panel ${readOnly ? 'border-slate-300 bg-slate-100' : ''}`}>
       <div className="nf-panel-header">
@@ -65,10 +75,34 @@ export function DayMenuPanel({
             {WEEKDAY_LABELS[day.weekday]} · {formatFullMenuDate(displayDate)}
           </h2>
         </div>
-        <span className="text-xs font-bold text-slate-600">
-          {readOnly ? 'Закрито' : `${day.items.length} страв`}
-        </span>
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <span className="text-xs font-bold text-slate-600">
+            {readOnly ? 'Закрито' : `${day.items.length} страв`}
+          </span>
+          {!readOnly ? (
+            <button
+              type="button"
+              className="nf-button nf-button-secondary"
+              onClick={() => setIsAddPickerOpen((current) => !current)}
+            >
+              + Додати позицію
+            </button>
+          ) : null}
+        </div>
       </div>
+      {isAddPickerOpen && !readOnly ? (
+        <div className="border-b border-slate-200 bg-emerald-50/50 p-4">
+          <p className="mb-2 text-sm font-bold text-slate-800">Оберіть нову позицію</p>
+          <DishPicker
+            selectedItem={null}
+            disabled={false}
+            onSelect={(item) => {
+              void onAddItem(item);
+              setIsAddPickerOpen(false);
+            }}
+          />
+        </div>
+      ) : null}
       {day.notes ? (
         <div className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
           {day.notes}
@@ -110,6 +144,12 @@ export function DayMenuPanel({
               item={item}
               readOnly={readOnly}
               onDishChange={(selectedItem) => void onDishChange(item.id, selectedItem)}
+              onRemove={isSchoolAddedDailyMenuItem(item) ? () => onRemoveItem(item.id) : undefined}
+              onPortionYieldChange={
+                isSchoolAddedDailyMenuItem(item)
+                  ? (portionIndex, value) => onPortionYieldChange(item.id, portionIndex, value)
+                  : undefined
+              }
             />
           ))}
       </div>
@@ -136,19 +176,38 @@ function DishRow({
   item,
   readOnly,
   onDishChange,
+  onRemove,
+  onPortionYieldChange,
 }: {
   item: DailyMenuItem;
   readOnly: boolean;
   onDishChange: (item: CatalogSelection) => void;
+  onRemove?: () => void;
+  onPortionYieldChange?: (portionIndex: number, value: string) => void;
 }) {
+  const isSchoolAdded = isSchoolAddedDailyMenuItem(item);
+
   return (
     <article className={`p-4 ${readOnly ? 'bg-slate-100 text-slate-500' : 'bg-white'}`}>
       <div className="min-w-0">
-        <div className="mb-2 flex items-center gap-2 text-xs font-bold text-slate-500">
-          <span className="flex size-6 items-center justify-center border border-slate-300 bg-slate-50 tabular-nums">
-            {item.position}
-          </span>
-          <span>Страва</span>
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
+            <span className="flex size-6 items-center justify-center border border-slate-300 bg-slate-50 tabular-nums">
+              {item.position}
+            </span>
+            <span>{isSchoolAdded ? 'Нова позиція' : 'Страва'}</span>
+          </div>
+          {onRemove && !readOnly ? (
+            <button
+              type="button"
+              className="nf-button nf-button-ghost min-h-9 px-2 text-red-700"
+              aria-label={`Видалити нову позицію ${item.name}`}
+              onClick={onRemove}
+            >
+              <Trash2 className="size-4" aria-hidden />
+              Видалити
+            </button>
+          ) : null}
         </div>
         <DishPicker selectedItem={item} disabled={readOnly} onSelect={onDishChange} />
         <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(140px,0.55fr)_1fr]">
@@ -156,7 +215,10 @@ function DishRow({
             <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Техкарта</p>
             <p className="mt-1 text-sm font-bold text-slate-900">{getTechnicalCardLabel(item)}</p>
           </div>
-          <NutritionSummary portions={item.portions} />
+          <NutritionSummary
+            portions={item.portions}
+            onYieldChange={readOnly ? undefined : onPortionYieldChange}
+          />
         </div>
       </div>
     </article>
@@ -225,7 +287,7 @@ function DishPicker({
   disabled,
   onSelect,
 }: {
-  selectedItem: DailyMenuItem;
+  selectedItem: DailyMenuItem | null;
   disabled: boolean;
   onSelect: (item: CatalogSelection) => void;
 }) {
@@ -279,7 +341,9 @@ function DishPicker({
       >
         <span className="flex min-w-0 items-center gap-2">
           <Utensils className="size-4 shrink-0 text-slate-500" aria-hidden />
-          <span className="truncate font-bold text-slate-950">{selectedItem.name}</span>
+          <span className="truncate font-bold text-slate-950">
+            {selectedItem?.name ?? 'Оберіть техкарту або продукт'}
+          </span>
         </span>
         <ChevronDown className="size-4 shrink-0 text-slate-500" aria-hidden />
       </button>
@@ -334,7 +398,7 @@ function DishPicker({
               <CatalogSectionTitle>Страви з ТК</CatalogSectionTitle>
             ) : null}
             {visibleDishCards.map((dishCard) => {
-              const isSelected = selectedItem.dish_card_id === dishCard.id;
+              const isSelected = selectedItem?.dish_card_id === dishCard.id;
               const canSelect = Boolean(dishCard.current_version_id);
 
               return (
@@ -371,7 +435,7 @@ function DishPicker({
             ) : null}
             {visibleIngredients.map((ingredient) => {
               const isSelected =
-                selectedItem.kind === 'product' &&
+                selectedItem?.kind === 'product' &&
                 selectedItem.product_ingredient_id === ingredient.id;
 
               return (
@@ -445,18 +509,41 @@ function CatalogSectionTitle({ children }: { children: ReactNode }) {
   );
 }
 
-function NutritionSummary({ portions }: { portions: MenuPortion[] }) {
+function NutritionSummary({
+  portions,
+  onYieldChange,
+}: {
+  portions: MenuPortion[];
+  onYieldChange?: (portionIndex: number, value: string) => void;
+}) {
   return (
     <div className="border border-slate-200 bg-slate-50 p-3">
       <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">КБЖВ</p>
       <div className="mt-1.5 space-y-1">
-        {portions.map((portion) => (
+        {portions.map((portion, portionIndex) => (
           <div
             key={portion.age_group}
-            className="flex flex-wrap items-baseline justify-between gap-x-3 text-xs"
+            className="flex flex-wrap items-center justify-between gap-2 text-xs"
           >
             <span className="font-bold text-slate-700">{AGE_GROUP_LABELS[portion.age_group]}</span>
-            <span className="tabular-nums text-slate-600">{displayNutrition(portion)}</span>
+            <span className="flex flex-wrap items-center justify-end gap-2 tabular-nums text-slate-600">
+              {onYieldChange ? (
+                <label className="flex items-center gap-1">
+                  <span>Вихід</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    className="nf-input h-8 w-20 px-2 py-1"
+                    aria-label={`Вихід для ${AGE_GROUP_LABELS[portion.age_group]}`}
+                    value={portion.yield_amount}
+                    onChange={(event) => onYieldChange(portionIndex, event.target.value)}
+                  />
+                </label>
+              ) : (
+                `${portion.yield_amount} г`
+              )}
+              <span>{displayNutrition(portion)}</span>
+            </span>
           </div>
         ))}
       </div>
@@ -530,6 +617,68 @@ export function buildProductMenuItem(
   };
 }
 
+export function createNewDailyMenuItem(day: DailyMenu, groups: SchoolGroup[]): DailyMenuItem {
+  const maxPosition = day.items.length > 0 ? Math.max(...day.items.map((item) => item.position)) : 0;
+  const activeGroups = groups.filter((group) => group.is_active);
+  const relevantGroups = activeGroups.length > 0 ? activeGroups : groups;
+
+  const standardOrder: Array<'6-11' | '11-14' | '14-18'> = ['6-11', '11-14', '14-18'];
+  const dayAgeGroups = day.items.flatMap((item) => item.portions.map((portion) => portion.age_group));
+  const groupAgeGroups = relevantGroups.map((group) => group.age_group);
+  const allAgeGroups = Array.from(new Set([...dayAgeGroups, ...groupAgeGroups]));
+  const sortedAgeGroups = (allAgeGroups.length > 0 ? allAgeGroups : standardOrder).sort(
+    (left, right) => standardOrder.indexOf(left) - standardOrder.indexOf(right)
+  );
+
+  return {
+    id: `${UNSAVED_ITEM_ID_PREFIX}${crypto.randomUUID()}`,
+    position: maxPosition + 1,
+    kind: 'dish_card',
+    source_text: null,
+    recipe_card_number: null,
+    dish_card_id: null,
+    dish_card_version_id: null,
+    product_ingredient_id: null,
+    product_name_snapshot: null,
+    name: 'Нова позиція',
+    allergen_codes: [],
+    portions: sortedAgeGroups.map((ageGroup) => ({
+      age_group: ageGroup,
+      yield_amount: '',
+      dish_card_portion_variant_id: null,
+      calculated_from: null,
+      nutrition: { kcal: null, proteins: null, fats: null, carbs: null },
+    })),
+    servings: relevantGroups.map((group) => ({
+      school_group_id: group.id,
+      age_group: group.age_group,
+      children_count: getGroupChildrenCount(day, group.id) ?? 0,
+    })),
+    notes: null,
+    is_school_added: true,
+    is_school_customized: false,
+  };
+}
+
+export function isSchoolAddedDailyMenuItem(item: DailyMenuItem): boolean {
+  return Boolean(item.is_school_added || isUnsavedDailyMenuItem(item));
+}
+
+export function isUnsavedDailyMenuItem(item: DailyMenuItem): boolean {
+  return item.id.startsWith(UNSAVED_ITEM_ID_PREFIX);
+}
+
+export function resequenceDayItemPositions(day: DailyMenu): DailyMenu {
+  const sortedItems = [...day.items].sort((left, right) => left.position - right.position);
+  return {
+    ...day,
+    items: sortedItems.map((item, index) => ({
+      ...item,
+      position: index + 1,
+    })),
+  };
+}
+
 function findPortionVariant(
   portion: MenuPortion,
   variants: PortionVariant[]
@@ -595,7 +744,7 @@ export function buildDailyMenuUpdatePayload(
         items: [...day.items]
           .sort((left, right) => left.position - right.position)
           .map((item) => ({
-            id: item.id,
+            ...(isUnsavedDailyMenuItem(item) ? {} : { id: item.id }),
             position: item.position,
             kind: item.kind,
             source_text: item.source_text,
@@ -609,6 +758,8 @@ export function buildDailyMenuUpdatePayload(
             portions: item.portions,
             servings: item.servings,
             notes: item.notes,
+            is_school_added: Boolean(item.is_school_added),
+            is_school_customized: Boolean(item.is_school_customized),
           })),
       };
     }),

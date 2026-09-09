@@ -14,6 +14,8 @@ import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 import { RequestError } from '@/shared/ui/RequestError';
 
 const FIELD_LABELS: Record<string, string> = {
+  item_added: 'Додано позицію',
+  item_removed: 'Видалено позицію',
   kind: 'Тип позиції',
   source_text: 'Джерело',
   recipe_card_number: 'Номер техкарти',
@@ -129,20 +131,29 @@ export function MenuChangeRequestDialog({
 
           {request ? (
             <div className="space-y-4">
-              {groupedChanges.map((group) => (
-                <section
-                  key={`${group.weekday}-${group.position}`}
-                  className="border border-amber-200 bg-amber-50/40"
-                >
-                  <div className="border-b border-amber-200 bg-amber-50 px-4 py-3">
-                    <h3 className="text-sm font-bold text-amber-950">
-                      {WEEKDAY_LABELS[group.weekday]} · страва № {group.position}
-                      {group.date ? ` · ${formatDayDate(group.date)}` : ''}
-                    </h3>
-                  </div>
-                  <ChangeComparisonTables changes={group.changes} />
-                </section>
-              ))}
+              {groupedChanges.map((group) => {
+                const addedChange = group.changes.find((change) => change.field === 'item_added');
+                const removedChange = group.changes.find((change) => change.field === 'item_removed');
+
+                return (
+                  <section
+                    key={`${group.weekday}-${group.position}`}
+                    className="border border-amber-200 bg-amber-50/40"
+                  >
+                    <div className="border-b border-amber-200 bg-amber-50 px-4 py-3">
+                      <h3 className="text-sm font-bold text-amber-950">
+                        {removedChange
+                          ? `${WEEKDAY_LABELS[group.weekday]} — видалено: ${String(removedChange.before_value)}`
+                          : addedChange
+                          ? `${WEEKDAY_LABELS[group.weekday]} — додано: ${String(addedChange.after_value)}`
+                          : `${WEEKDAY_LABELS[group.weekday]} · страва № ${group.position}`}
+                        {group.date ? ` · ${formatDayDate(group.date)}` : ''}
+                      </h3>
+                    </div>
+                    <ChangeComparisonTables changes={group.changes} />
+                  </section>
+                );
+              })}
 
               <details className="border border-slate-200 bg-slate-50">
                 <summary className="cursor-pointer px-4 py-3 text-sm font-bold text-slate-800">

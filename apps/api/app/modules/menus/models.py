@@ -107,6 +107,8 @@ class DailyMenuItem(BaseModel):
     portions: list[MenuPortion] = Field(default_factory=list, min_length=1)
     servings: list[MenuItemServingCount] = Field(default_factory=list)
     notes: MenuNote | None = None
+    is_school_added: bool = False
+    is_school_customized: bool = False
 
     @field_validator("recipe_card_number", "source_text", "product_name_snapshot", "notes")
     @classmethod

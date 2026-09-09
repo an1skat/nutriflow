@@ -217,10 +217,30 @@ async def update_weekly_menu(
                 data.days or [],
             )
             converted_days = await _to_daily_menus(data.days or [])
+            previous_items_by_id = {
+                item.id: item for day in previous_days for item in day.items
+            }
+            for day in converted_days:
+                for item in day.items:
+                    if item.id in previous_items_by_id:
+                        prev = previous_items_by_id[item.id]
+                        item.is_school_added = prev.is_school_added
+                        if _school_dish_override(item, prev):
+                            item.is_school_customized = True
+                        else:
+                            item.is_school_customized = prev.is_school_customized
+                    else:
+                        item.is_school_added = True
+                        item.is_school_customized = False
             _ensure_closed_days_are_unchanged(previous_days, converted_days)
             _copy_day_close_metadata(previous_days, converted_days)
     elif "days" in data.model_fields_set:
         converted_days = await _to_daily_menus(data.days or [])
+        if menu.school_id is None and menu.source_menu_id is None:
+            for day in converted_days:
+                for item in day.items:
+                    item.is_school_added = False
+                    item.is_school_customized = False
 
     if "title" in data.model_fields_set:
         menu.title = data.title
@@ -607,16 +627,37 @@ def _merge_distributed_days(
             current_items_by_id = {
                 item.id: item for item in current_day.items if item.id is not None
             }
-            current_items_by_position = {item.position: item for item in current_day.items}
+            matched_current_item_ids: set[PydanticObjectId] = set()
+
             for index, item in enumerate(merged_day.items):
                 current_item = current_items_by_id.get(item.id)
-                if current_item is None:
-                    current_item = current_items_by_position.get(item.position)
                 if current_item is not None:
-                    if _school_dish_override(item, current_item):
-                        merged_day.items[index] = deepcopy(current_item)
+                    matched_current_item_ids.add(current_item.id)
+                    if current_item.is_school_customized:
+                        overridden = deepcopy(current_item)
+                        overridden.position = item.position
+                        merged_day.items[index] = overridden
                     else:
                         item.servings = deepcopy(current_item.servings)
+
+            # Preserve school-added items (items in current_day that did not come from template)
+            unmatched_school_items = [
+                item
+                for item in current_day.items
+                if item.id is not None and item.id not in matched_current_item_ids
+            ]
+            used_positions = {item.position for item in merged_day.items}
+            for school_item in sorted(unmatched_school_items, key=lambda it: it.position):
+                target_position = school_item.position
+                while target_position in used_positions:
+                    target_position += 1
+                used_positions.add(target_position)
+
+                preserved = deepcopy(school_item)
+                preserved.position = target_position
+                merged_day.items.append(preserved)
+
+            merged_day.items.sort(key=lambda it: it.position)
             merged_day.reopened_at = current_day.reopened_at
             merged_day.reopened_by = current_day.reopened_by
         merged_days.append(merged_day)
@@ -1057,6 +1098,8 @@ def _to_daily_menu_item(data: DailyMenuItemPayload) -> DailyMenuItem:
         portions=[_to_menu_portion(portion) for portion in data.portions],
         servings=[_to_serving_count(serving) for serving in data.servings],
         notes=data.notes,
+        is_school_added=data.is_school_added,
+        is_school_customized=data.is_school_customized,
     )
 
 
@@ -1235,6 +1278,15 @@ def _collect_school_dish_changes(
         for item in day.items:
             previous_item = previous_items.get((day.weekday, item.id))
             if previous_item is None:
+                changes.append(
+                    MenuFieldChange(
+                        weekday=day.weekday,
+                        item_id=item.id,
+                        position=item.position,
+                        field="item_added",
+                        after_value=item.name,
+                    )
+                )
                 continue
 
             previous_data = previous_item.model_dump(mode="json")
@@ -1252,6 +1304,26 @@ def _collect_school_dish_changes(
                         field=field,
                         before_value=before_value,
                         after_value=after_value,
+                    )
+                )
+
+    updated_items = {
+        (day.weekday, item.id): item
+        for day in updated_days
+        for item in day.items
+        if item.id is not None
+    }
+    for day in previous_days:
+        for prev_item in day.items:
+            if (day.weekday, prev_item.id) not in updated_items and prev_item.is_school_added:
+                changes.append(
+                    MenuFieldChange(
+                        weekday=day.weekday,
+                        item_id=prev_item.id,
+                        position=prev_item.position,
+                        field="item_removed",
+                        before_value=prev_item.name,
+                        after_value=None,
                     )
                 )
 
@@ -1273,18 +1345,60 @@ def _ensure_school_menu_shape_is_stable(
         if submitted_day.date != current_day.date or submitted_day.notes != current_day.notes:
             raise MenuValidationError("School users cannot change day metadata")
 
-        current_shape = sorted((item.id, item.position) for item in current_day.items)
-        submitted_shape = sorted(
-            (item.id, item.position) for item in submitted_day.items if item.id is not None
-        )
-        if len(submitted_day.items) != len(current_day.items):
+        current_items_by_id = {item.id: item for item in current_day.items}
+        submitted_items_with_id = [
+            item for item in submitted_day.items if item.id is not None
+        ]
+        submitted_ids = [item.id for item in submitted_items_with_id]
+
+        if len(submitted_ids) != len(set(submitted_ids)):
             raise MenuValidationError(
-                "School users cannot change the number of dishes in a day",
+                "School users cannot remove, replace, or reorder existing dishes",
             )
-        if len(submitted_shape) != len(submitted_day.items) or current_shape != submitted_shape:
+
+        if any(item_id not in current_items_by_id for item_id in submitted_ids):
             raise MenuValidationError(
-                "School users cannot add, remove, or reorder dishes",
+                "School users cannot remove, replace, or reorder existing dishes",
             )
+
+        removed_ids = set(current_items_by_id.keys()) - set(submitted_ids)
+        for removed_id in removed_ids:
+            item = current_items_by_id[removed_id]
+            if not item.is_school_added:
+                raise MenuValidationError(
+                    "School users cannot remove, replace, or reorder existing dishes",
+                )
+
+        if current_day.closed_at is not None and (
+            removed_ids or len(submitted_day.items) != len(current_day.items)
+        ):
+            raise MenuValidationError("Closed daily menus cannot be changed")
+
+        expected_surviving_order = [
+            item.id for item in current_day.items if item.id in set(submitted_ids)
+        ]
+        if submitted_ids != expected_surviving_order:
+            raise MenuValidationError(
+                "School users cannot remove, replace, or reorder existing dishes",
+            )
+
+        submitted_item_map = {item.id: item for item in submitted_items_with_id}
+        for item in current_day.items:
+            if not item.is_school_added:
+                submitted_item = submitted_item_map.get(item.id)
+                if submitted_item is None or submitted_item.position != item.position:
+                    raise MenuValidationError(
+                        "School users cannot remove, replace, or reorder existing dishes",
+                    )
+
+        submitted_positions = [item.position for item in submitted_day.items]
+        if len(submitted_positions) != len(set(submitted_positions)):
+            raise MenuValidationError("Daily menu item positions must be unique")
+
+        # Deterministic position resequencing after successful validation
+        submitted_day.items.sort(key=lambda it: it.position)
+        for new_pos, it in enumerate(submitted_day.items, start=1):
+            it.position = new_pos
 
 
 def _ensure_closed_days_are_unchanged(

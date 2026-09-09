@@ -72,6 +72,8 @@ class DailyMenuItemPayload(BaseModel):
     portions: list[MenuPortionPayload] = Field(default_factory=list, min_length=1)
     servings: list[MenuItemServingCountPayload] = Field(default_factory=list)
     notes: str | None = Field(default=None, min_length=1, max_length=2000)
+    is_school_added: bool = False
+    is_school_customized: bool = False
 
     @field_validator(
         "source_text",
@@ -228,6 +230,8 @@ class DailyMenuItemResponse(DailyMenuItemPayload):
                 MenuItemServingCountResponse.from_serving(serving) for serving in item.servings
             ],
             notes=item.notes,
+            is_school_added=item.is_school_added,
+            is_school_customized=item.is_school_customized,
         )
 
 

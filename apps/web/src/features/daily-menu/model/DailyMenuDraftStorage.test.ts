@@ -176,5 +176,7 @@ function createItem({
     ],
     servings,
     notes: null,
+    is_school_added: false,
+    is_school_customized: false,
   };
 }
