@@ -1,3 +1,4 @@
+from copy import deepcopy
 from datetime import UTC, datetime
 from datetime import date as Date
 from io import BytesIO
@@ -528,6 +529,38 @@ def test_school_closes_day_and_admin_reopens_it(
     assert edit_response.status_code == 400
     assert edit_response.json()["detail"] == "Closed daily menus cannot be changed"
 
+    added_days = deepcopy(closed_menu["days"])
+    added_days[0]["items"].append(
+        {
+            "position": 2,
+            "kind": "product",
+            "product_name_snapshot": "Хліб",
+            "name": "Хліб",
+            "allergen_codes": [],
+            "portions": [
+                {
+                    "age_group": "6-11",
+                    "yield_amount": "30",
+                    "nutrition": {},
+                }
+            ],
+            "servings": [
+                {
+                    "school_group_id": group_id,
+                    "age_group": "6-11",
+                    "children_count": 5,
+                }
+            ],
+        }
+    )
+    add_to_closed_day_response = client.patch(
+        f"/api/v1/menus/weekly/{menu['id']}",
+        json={"days": added_days, "revision": closed_menu["revision"]},
+        headers=csrf_headers(client),
+    )
+    assert add_to_closed_day_response.status_code == 400
+    assert add_to_closed_day_response.json()["detail"] == "Closed daily menus cannot be changed"
+
     regenerate_response = client.post(
         "/api/v1/menu-requirements/generate",
         json={
@@ -682,3 +715,168 @@ def test_school_cannot_generate_requirement_for_zero_day(seeded_client) -> None:
     assert response.json()["detail"] == (
         "At least one dish must have a children count greater than zero"
     )
+
+
+def test_school_added_product_is_isolated_and_included_in_requirement(seeded_client) -> None:
+    client, identities = seeded_client
+    login(client, identities.admin.username, identities.admin_password)
+
+    carrot_response = client.post(
+        "/api/v1/recipes/ingredients",
+        json={"name": "Морква", "unit": "g"},
+        headers=csrf_headers(client),
+    )
+    assert carrot_response.status_code == 201
+    bread_response = client.post(
+        "/api/v1/recipes/ingredients",
+        json={"name": "Хліб пшеничний", "unit": "g"},
+        headers=csrf_headers(client),
+    )
+    assert bread_response.status_code == 201
+    bread_id = bread_response.json()["id"]
+    card_id, variant_id = create_confirmed_dish(
+        client,
+        ingredient_id=carrot_response.json()["id"],
+    )
+
+    create_response = client.post(
+        "/api/v1/menus/weekly",
+        json={
+            "title": "Спільний шаблон",
+            "meal_type": "lunch",
+            "starts_on": "2026-07-06",
+            "ends_on": "2026-07-10",
+            "days": [
+                {
+                    "weekday": "monday",
+                    "date": "2026-07-06",
+                    "items": [
+                        {
+                            "position": 1,
+                            "kind": "dish_card",
+                            "recipe_card_number": "REQ-1",
+                            "dish_card_id": card_id,
+                            "name": "Овочевий суп",
+                            "allergen_codes": [],
+                            "portions": [
+                                {
+                                    "age_group": "6-11",
+                                    "yield_amount": "200",
+                                    "dish_card_portion_variant_id": variant_id,
+                                    "nutrition": {},
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        },
+        headers=csrf_headers(client),
+    )
+    assert create_response.status_code == 201
+    template = create_response.json()
+    publish_response = client.post(
+        f"/api/v1/menus/weekly/{template['id']}/publish",
+        json={
+            "school_ids": [
+                str(identities.own_school.id),
+                str(identities.other_school.id),
+            ]
+        },
+        headers=csrf_headers(client),
+    )
+    assert publish_response.status_code == 200
+    own_copy_id, other_copy_id = publish_response.json()["created_menu_ids"]
+    own_copy = client.get(f"/api/v1/menus/weekly/{own_copy_id}").json()
+    original_item_id = own_copy["days"][0]["items"][0]["id"]
+    group = identities.own_school.groups[0]
+    own_copy["days"][0]["items"][0]["servings"] = [
+        {
+            "school_group_id": str(group.id),
+            "age_group": group.age_group.value,
+            "children_count": 3,
+        }
+    ]
+    own_copy["days"][0]["items"].append(
+        {
+            "position": 2,
+            "kind": "product",
+            "product_ingredient_id": bread_id,
+            "product_name_snapshot": "Стара назва",
+            "name": "Хліб пшеничний",
+            "allergen_codes": [],
+            "portions": [
+                {
+                    "age_group": group.age_group.value,
+                    "yield_amount": "30",
+                    "nutrition": {},
+                }
+            ],
+            "servings": [
+                {
+                    "school_group_id": str(group.id),
+                    "age_group": group.age_group.value,
+                    "children_count": 3,
+                }
+            ],
+        }
+    )
+
+    login(client, identities.school_user.username, identities.school_user_password)
+    update_response = client.patch(
+        f"/api/v1/menus/weekly/{own_copy_id}",
+        json={"days": own_copy["days"], "revision": own_copy["revision"]},
+        headers=csrf_headers(client),
+    )
+    assert update_response.status_code == 200, update_response.text
+    updated_menu = update_response.json()
+    assert len(updated_menu["days"][0]["items"]) == 2
+    assert updated_menu["days"][0]["items"][0]["id"] == original_item_id
+    added_item = updated_menu["days"][0]["items"][1]
+    assert added_item["id"] != original_item_id
+    assert added_item["product_ingredient_id"] == bread_id
+    assert added_item["product_name_snapshot"] == "Хліб пшеничний"
+
+    own_get_response = client.get(f"/api/v1/menus/weekly/{own_copy_id}")
+    assert own_get_response.status_code == 200
+    assert [item["name"] for item in own_get_response.json()["days"][0]["items"]] == [
+        "Овочевий суп",
+        "Хліб пшеничний",
+    ]
+
+    generate_response = client.post(
+        "/api/v1/menu-requirements/generate",
+        json={
+            "weekly_menu_id": own_copy_id,
+            "weekday": "monday",
+            "service_date": "2026-07-06",
+        },
+        headers=csrf_headers(client),
+    )
+    assert generate_response.status_code == 200, generate_response.text
+    requirement = generate_response.json()["items"][0]
+    bread_dish = next(dish for dish in requirement["dishes"] if dish["name"] == "Хліб пшеничний")
+    assert bread_dish["menu_item_id"] == added_item["id"]
+    bread_row = next(
+        row for row in requirement["ingredient_rows"] if row["ingredient_id"] == bread_id
+    )
+    assert bread_row["per_person_total_g"] == "30"
+    assert bread_row["issue_total_raw_g"] == "90"
+
+    login(client, identities.admin.username, identities.admin_password)
+    template_after = client.get(f"/api/v1/menus/weekly/{template['id']}").json()
+    other_copy_after = client.get(f"/api/v1/menus/weekly/{other_copy_id}").json()
+    assert [item["name"] for item in template_after["days"][0]["items"]] == ["Овочевий суп"]
+    assert [item["name"] for item in other_copy_after["days"][0]["items"]] == [
+        "Овочевий суп"
+    ]
+
+    requests_response = client.get("/api/v1/menus/change-requests")
+    assert requests_response.status_code == 200
+    added_change = next(
+        change
+        for change in requests_response.json()["items"][0]["changes"]
+        if change["field"] == "item_added"
+    )
+    assert added_change["item_id"] == added_item["id"]
+    assert added_change["after_value"] == "Хліб пшеничний"

@@ -50,6 +50,8 @@ const request: MenuChangeRequest = {
           ],
           servings: [],
           notes: null,
+          is_school_added: false,
+          is_school_customized: false,
         },
       ],
       notes: null,
@@ -99,5 +101,63 @@ describe('MenuChangeRequestDialog', () => {
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Закрити' }));
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('describes a newly added school item in plain language', async () => {
+    render(
+      <MenuChangeRequestDialog
+        open
+        request={{
+          ...request,
+          changes: [
+            {
+              weekday: 'monday',
+              item_id: 'item-2',
+              position: 2,
+              field: 'item_added',
+              before_value: null,
+              after_value: 'Хліб пшеничний',
+            },
+          ],
+        }}
+        loading={false}
+        error={null}
+        onRetry={() => undefined}
+        onClose={() => undefined}
+      />
+    );
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/Понеділок — додано: Хліб пшеничний/)).toBeInTheDocument();
+    expect(within(dialog).getAllByText('Додано позицію')).toHaveLength(2);
+  });
+
+  it('describes a removed school item in plain language', async () => {
+    render(
+      <MenuChangeRequestDialog
+        open
+        request={{
+          ...request,
+          changes: [
+            {
+              weekday: 'wednesday',
+              item_id: 'item-2',
+              position: 2,
+              field: 'item_removed',
+              before_value: 'Хліб пшеничний',
+              after_value: null,
+            },
+          ],
+        }}
+        loading={false}
+        error={null}
+        onRetry={() => undefined}
+        onClose={() => undefined}
+      />
+    );
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/Середа — видалено: Хліб пшеничний/)).toBeInTheDocument();
+    expect(within(dialog).getAllByText('Видалено позицію')).toHaveLength(2);
   });
 });

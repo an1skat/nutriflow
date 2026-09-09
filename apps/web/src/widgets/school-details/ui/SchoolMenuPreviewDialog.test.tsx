@@ -51,6 +51,8 @@ const menu: WeeklyMenu = {
           ],
           servings: [],
           notes: null,
+          is_school_added: false,
+          is_school_customized: false,
         },
       ],
       notes: null,

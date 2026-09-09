@@ -1,3 +1,4 @@
+from copy import deepcopy
 from io import BytesIO
 
 import openpyxl
@@ -347,10 +348,16 @@ def test_template_update_propagates_to_existing_school_copy(seeded_client):
         headers=csrf_headers(client),
     )
     copy_id = publish_response.json()["created_menu_ids"][0]
+    updated_days = deepcopy(create_response.json()["days"])
+    updated_days[0]["items"].append(product_item(position=3))
 
     update_response = client.patch(
         f"/api/v1/menus/weekly/{source_id}",
-        json={"title": "Оновлене меню", "revision": create_response.json()["revision"]},
+        json={
+            "title": "Оновлене меню",
+            "days": updated_days,
+            "revision": create_response.json()["revision"],
+        },
         headers=csrf_headers(client),
     )
 
@@ -358,6 +365,7 @@ def test_template_update_propagates_to_existing_school_copy(seeded_client):
     copy_response = client.get(f"/api/v1/menus/weekly/{copy_id}")
     assert copy_response.status_code == 200
     assert copy_response.json()["title"] == "Оновлене меню"
+    assert len(copy_response.json()["days"][0]["items"]) == 3
 
     repeated_publish_response = client.post(
         f"/api/v1/menus/weekly/{source_id}/publish",
@@ -556,6 +564,15 @@ def test_lower_admin_publishes_menu_only_to_owned_schools(seeded_client):
     )
     assert create_response.status_code == 201
     source_id = create_response.json()["id"]
+    updated_days = deepcopy(create_response.json()["days"])
+    updated_days[0]["items"].append(product_item(position=3))
+    update_response = client.patch(
+        f"/api/v1/menus/weekly/{source_id}",
+        json={"days": updated_days, "revision": create_response.json()["revision"]},
+        headers=csrf_headers(client),
+    )
+    assert update_response.status_code == 200, update_response.text
+    assert len(update_response.json()["days"][0]["items"]) == 3
 
     publish_response = client.post(
         f"/api/v1/menus/weekly/{source_id}/publish",
@@ -702,7 +719,7 @@ def test_school_menu_copy_cannot_be_hard_deleted(seeded_client):
     )
 
 
-def test_school_user_can_edit_content_but_not_change_daily_dish_count(seeded_client):
+def test_school_user_can_edit_content_and_add_product(seeded_client):
     client, identities = seeded_client
     login(client, identities.admin.username, identities.admin_password)
 
@@ -747,16 +764,202 @@ def test_school_user_can_edit_content_but_not_change_daily_dish_count(seeded_cli
     assert edit_response.json()["days"][0]["items"][0]["name"] == "Салат оновлений школою"
     assert edit_response.json()["days"][0]["items"][0]["servings"][0]["children_count"] == 12
 
+    changed_days = edit_response.json()["days"]
+    original_item_id = changed_days[0]["items"][0]["id"]
     changed_days[0]["items"].append(product_item(position=2))
-    forbidden_response = client.patch(
+    add_response = client.patch(
         f"/api/v1/menus/weekly/{menu['id']}",
         json={"days": changed_days, "revision": edit_response.json()["revision"]},
         headers=csrf_headers(client),
     )
-    assert forbidden_response.status_code == 400
-    assert forbidden_response.json()["detail"] == (
-        "School users cannot change the number of dishes in a day"
+    assert add_response.status_code == 200, add_response.text
+    items = add_response.json()["days"][0]["items"]
+    assert len(items) == 2
+    assert items[0]["id"] == original_item_id
+    assert items[1]["id"] != original_item_id
+    assert items[1]["kind"] == "product"
+
+
+def test_school_user_adds_dish_card_with_existing_reference_resolver(seeded_client):
+    client, identities = seeded_client
+    login(client, identities.admin.username, identities.admin_password)
+    dish_card_id, version_id = create_confirmed_dish_card(
+        client,
+        card_number="2.17",
+        allergen_codes=["ГЦ"],
     )
+    create_response = client.post(
+        "/api/v1/menus/weekly",
+        json=weekly_menu_payload(items=[dish_item()]),
+        headers=csrf_headers(client),
+    )
+    source_id = create_response.json()["id"]
+    publish_response = client.post(
+        f"/api/v1/menus/weekly/{source_id}/publish",
+        json={"school_ids": [str(identities.own_school.id)]},
+        headers=csrf_headers(client),
+    )
+    menu_id = publish_response.json()["created_menu_ids"][0]
+    menu = client.get(f"/api/v1/menus/weekly/{menu_id}").json()
+
+    new_item = dish_item(position=2, card_number="2.17", name="Нова страва")
+    new_item["dish_card_id"] = dish_card_id
+    menu["days"][0]["items"].append(new_item)
+
+    login(client, identities.school_user.username, identities.school_user_password)
+    response = client.patch(
+        f"/api/v1/menus/weekly/{menu_id}",
+        json={"days": menu["days"], "revision": menu["revision"]},
+        headers=csrf_headers(client),
+    )
+
+    assert response.status_code == 200, response.text
+    added = response.json()["days"][0]["items"][1]
+    assert added["id"]
+    assert added["dish_card_id"] == dish_card_id
+    assert added["dish_card_version_id"] == version_id
+    assert added["allergen_codes"] == ["ГЦ"]
+
+
+def test_school_user_cannot_remove_or_replace_existing_item_ids(seeded_client):
+    client, identities = seeded_client
+    login(client, identities.admin.username, identities.admin_password)
+    create_response = client.post(
+        "/api/v1/menus/weekly",
+        json=weekly_menu_payload(),
+        headers=csrf_headers(client),
+    )
+    source_id = create_response.json()["id"]
+    publish_response = client.post(
+        f"/api/v1/menus/weekly/{source_id}/publish",
+        json={"school_ids": [str(identities.own_school.id)]},
+        headers=csrf_headers(client),
+    )
+    menu_id = publish_response.json()["created_menu_ids"][0]
+    menu = client.get(f"/api/v1/menus/weekly/{menu_id}").json()
+
+    login(client, identities.school_user.username, identities.school_user_password)
+    removed_days = deepcopy(menu["days"])
+    removed_days[0]["items"].pop()
+    removed_response = client.patch(
+        f"/api/v1/menus/weekly/{menu_id}",
+        json={"days": removed_days, "revision": menu["revision"]},
+        headers=csrf_headers(client),
+    )
+    assert removed_response.status_code == 400
+    assert removed_response.json()["detail"] == (
+        "School users cannot remove, replace, or reorder existing dishes"
+    )
+
+    replaced_days = deepcopy(menu["days"])
+    replaced_days[0]["items"][0]["id"] = str(PydanticObjectId())
+    replaced_response = client.patch(
+        f"/api/v1/menus/weekly/{menu_id}",
+        json={"days": replaced_days, "revision": menu["revision"]},
+        headers=csrf_headers(client),
+    )
+    assert replaced_response.status_code == 400
+    assert replaced_response.json()["detail"] == (
+        "School users cannot remove, replace, or reorder existing dishes"
+    )
+
+    duplicate_position_days = deepcopy(menu["days"])
+    duplicate_position_days[0]["items"].append(product_item(position=1))
+    duplicate_position_response = client.patch(
+        f"/api/v1/menus/weekly/{menu_id}",
+        json={"days": duplicate_position_days, "revision": menu["revision"]},
+        headers=csrf_headers(client),
+    )
+    assert duplicate_position_response.status_code == 400
+    assert duplicate_position_response.json()["detail"] == (
+        "Daily menu item positions must be unique"
+    )
+
+
+def test_school_user_added_item_rejects_foreign_serving_and_stale_revision(seeded_client):
+    client, identities = seeded_client
+    login(client, identities.admin.username, identities.admin_password)
+    create_response = client.post(
+        "/api/v1/menus/weekly",
+        json=weekly_menu_payload(items=[dish_item()]),
+        headers=csrf_headers(client),
+    )
+    source_id = create_response.json()["id"]
+    publish_response = client.post(
+        f"/api/v1/menus/weekly/{source_id}/publish",
+        json={"school_ids": [str(identities.own_school.id)]},
+        headers=csrf_headers(client),
+    )
+    menu_id = publish_response.json()["created_menu_ids"][0]
+    menu = client.get(f"/api/v1/menus/weekly/{menu_id}").json()
+    added_item = product_item(position=2)
+    added_item["servings"] = [
+        {
+            "school_group_id": str(PydanticObjectId()),
+            "age_group": "6-11",
+            "children_count": 10,
+        }
+    ]
+    menu["days"][0]["items"].append(added_item)
+
+    login(client, identities.school_user.username, identities.school_user_password)
+    foreign_serving_response = client.patch(
+        f"/api/v1/menus/weekly/{menu_id}",
+        json={"days": menu["days"], "revision": menu["revision"]},
+        headers=csrf_headers(client),
+    )
+    assert foreign_serving_response.status_code == 400
+    assert foreign_serving_response.json()["detail"] == "School group not found"
+
+    added_item["servings"][0]["school_group_id"] = str(identities.own_school.groups[0].id)
+    valid_response = client.patch(
+        f"/api/v1/menus/weekly/{menu_id}",
+        json={"days": menu["days"], "revision": menu["revision"]},
+        headers=csrf_headers(client),
+    )
+    assert valid_response.status_code == 200, valid_response.text
+
+    stale_response = client.patch(
+        f"/api/v1/menus/weekly/{menu_id}",
+        json={"days": menu["days"], "revision": menu["revision"]},
+        headers=csrf_headers(client),
+    )
+    assert stale_response.status_code == 409
+    assert stale_response.json()["detail"] == "Weekly menu was changed by another user"
+
+
+def test_school_user_cannot_escalate_template_item_to_school_added(seeded_client):
+    client, identities = seeded_client
+    login(client, identities.admin.username, identities.admin_password)
+    create_response = client.post(
+        "/api/v1/menus/weekly",
+        json=weekly_menu_payload(items=[dish_item()]),
+        headers=csrf_headers(client),
+    )
+    source_id = create_response.json()["id"]
+    publish_response = client.post(
+        f"/api/v1/menus/weekly/{source_id}/publish",
+        json={"school_ids": [str(identities.own_school.id)]},
+        headers=csrf_headers(client),
+    )
+    menu_id = publish_response.json()["created_menu_ids"][0]
+    menu = client.get(f"/api/v1/menus/weekly/{menu_id}").json()
+
+    assert menu["days"][0]["items"][0]["is_school_added"] is False
+
+    login(client, identities.school_user.username, identities.school_user_password)
+    malicious_days = deepcopy(menu["days"])
+    malicious_days[0]["items"][0]["is_school_added"] = True
+
+    patch_response = client.patch(
+        f"/api/v1/menus/weekly/{menu_id}",
+        json={"days": malicious_days, "revision": menu["revision"]},
+        headers=csrf_headers(client),
+    )
+    assert patch_response.status_code == 200
+
+    updated_menu = client.get(f"/api/v1/menus/weekly/{menu_id}").json()
+    assert updated_menu["days"][0]["items"][0]["is_school_added"] is False
 
 
 def test_school_user_cannot_read_another_school_menu(seeded_client):
@@ -769,13 +972,22 @@ def test_school_user_cannot_read_another_school_menu(seeded_client):
         headers=csrf_headers(client),
     )
     assert create_response.status_code == 201
-    menu_id = create_response.json()["id"]
+    menu = create_response.json()
+    menu_id = menu["id"]
 
     login(client, identities.school_user.username, identities.school_user_password)
     response = client.get(f"/api/v1/menus/weekly/{menu_id}")
 
     assert response.status_code == 403
     assert response.json()["detail"] == "School access denied"
+
+    update_response = client.patch(
+        f"/api/v1/menus/weekly/{menu_id}",
+        json={"days": menu["days"], "revision": menu["revision"]},
+        headers=csrf_headers(client),
+    )
+    assert update_response.status_code == 403
+    assert update_response.json()["detail"] == "School access denied"
 
 
 def create_confirmed_dish_card(
