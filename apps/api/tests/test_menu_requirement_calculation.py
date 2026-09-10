@@ -8,6 +8,7 @@ from app.modules.menu_requirements.models import MenuRequirementDish
 from app.modules.menu_requirements.service import (
     DishCalculation,
     MenuRequirementValidationError,
+    _product_ingredient_lines,
     _resolve_requirement_portion_variant,
     build_ingredient_rows,
     convert_to_grams,
@@ -15,7 +16,9 @@ from app.modules.menu_requirements.service import (
 )
 from app.modules.menus.models import (
     DailyMenu,
+    DailyMenuItem,
     MenuItemKind,
+    MenuPortion,
     MenuPortionCalculationSource,
     Weekday,
     WeeklyMenu,
@@ -196,3 +199,68 @@ def test_uses_requested_date_when_menu_has_no_persisted_dates() -> None:
         7,
         6,
     )
+
+
+@pytest.mark.parametrize(
+    ("raw_yield", "expected_grams"),
+    [
+        ("40", Decimal("40")),
+        ("40,5", Decimal("40.5")),
+        ("40.5", Decimal("40.5")),
+        ("40 г", Decimal("40")),
+        ("40гр", Decimal("40")),
+        ("40 g", Decimal("40")),
+        ("20/20", Decimal("40")),
+        ("20 / 20 г", Decimal("40")),
+    ],
+)
+async def test_product_ingredient_lines_yield_parsing(
+    raw_yield: str, expected_grams: Decimal
+) -> None:
+    item = DailyMenuItem.model_construct(
+        id=PydanticObjectId(),
+        name="Хліб цільнозерновий",
+        kind=MenuItemKind.PRODUCT,
+        product_ingredient_id=None,
+        product_name_snapshot=None,
+    )
+    portion = MenuPortion.model_construct(
+        yield_amount=raw_yield,
+        normative_contributions=[],
+    )
+    lines, _ = await _product_ingredient_lines(
+        item,
+        portion,
+        catalog_by_id={},
+        catalog_by_name={},
+    )
+    assert len(lines) == 1
+    assert lines[0].net_per_person_g == expected_grams
+    assert lines[0].gross_per_person_g == expected_grams
+    assert lines[0].name == "Хліб цільнозерновий"
+
+
+@pytest.mark.parametrize("invalid_yield", ["invalid", "", "40/abc", "невідомо"])
+async def test_product_ingredient_lines_invalid_yield(invalid_yield: str) -> None:
+    item = DailyMenuItem.model_construct(
+        id=PydanticObjectId(),
+        name="Хліб цільнозерновий",
+        kind=MenuItemKind.PRODUCT,
+        product_ingredient_id=None,
+        product_name_snapshot=None,
+    )
+    portion = MenuPortion.model_construct(
+        yield_amount=invalid_yield,
+        normative_contributions=[],
+    )
+    with pytest.raises(
+        MenuRequirementValidationError,
+        match='Product "Хліб цільнозерновий" must have a single numeric yield in grams',
+    ):
+        await _product_ingredient_lines(
+            item,
+            portion,
+            catalog_by_id={},
+            catalog_by_name={},
+        )
+

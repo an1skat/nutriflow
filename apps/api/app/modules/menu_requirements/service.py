@@ -4,7 +4,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from datetime import date as Date
-from decimal import ROUND_CEILING, Decimal, InvalidOperation
+from decimal import ROUND_CEILING, Decimal
 from typing import Any
 
 from beanie import PydanticObjectId
@@ -868,12 +868,11 @@ async def _product_ingredient_lines(
     catalog_by_id: dict[PydanticObjectId, Ingredient],
     catalog_by_name: dict[str, Ingredient],
 ) -> tuple[list[IngredientLine], list[NormativeContributionSnapshot]]:
-    try:
-        amount = Decimal(portion.yield_amount.strip().replace(",", "."))
-    except InvalidOperation as exc:
+    amount = parse_menu_yield_grams(portion.yield_amount)
+    if amount is None:
         raise MenuRequirementValidationError(
             f'Product "{item.name}" must have a single numeric yield in grams'
-        ) from exc
+        )
     if amount < 0:
         raise MenuRequirementValidationError(f'Product "{item.name}" cannot have a negative yield')
 
