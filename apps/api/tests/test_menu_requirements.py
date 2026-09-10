@@ -880,3 +880,162 @@ def test_school_added_product_is_isolated_and_included_in_requirement(seeded_cli
     )
     assert added_change["item_id"] == added_item["id"]
     assert added_change["after_value"] == "Хліб пшеничний"
+
+
+def test_generate_menu_requirement_for_wholegrain_bread_product_composite_yield(
+    seeded_client,
+) -> None:
+    client, identities = seeded_client
+    login(client, identities.admin.username, identities.admin_password)
+
+    bread_resp = client.post(
+        "/api/v1/recipes/ingredients",
+        json={"name": "Хліб цільнозерновий", "unit": "g"},
+        headers=csrf_headers(client),
+    )
+    assert bread_resp.status_code == 201
+    bread_id = bread_resp.json()["id"]
+
+    create_response = client.post(
+        "/api/v1/menus/weekly",
+        json={
+            "title": "Меню з цільнозерновим хлібом",
+            "meal_type": "lunch",
+            "starts_on": "2026-07-06",
+            "ends_on": "2026-07-10",
+            "days": [
+                {
+                    "weekday": "monday",
+                    "date": "2026-07-06",
+                    "items": [
+                        {
+                            "position": 1,
+                            "kind": "product",
+                            "product_ingredient_id": bread_id,
+                            "product_name_snapshot": "Хліб цільнозерновий",
+                            "name": "Хліб цільнозерновий",
+                            "allergen_codes": [],
+                            "portions": [
+                                {
+                                    "age_group": "6-11",
+                                    "yield_amount": "20/20",
+                                    "nutrition": {},
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        },
+        headers=csrf_headers(client),
+    )
+    assert create_response.status_code == 201
+    template = create_response.json()
+
+    publish_response = client.post(
+        f"/api/v1/menus/weekly/{template['id']}/publish",
+        json={"school_ids": [str(identities.own_school.id)]},
+        headers=csrf_headers(client),
+    )
+    assert publish_response.status_code == 200
+    own_copy_id = publish_response.json()["created_menu_ids"][0]
+    own_copy = client.get(f"/api/v1/menus/weekly/{own_copy_id}").json()
+
+    group = identities.own_school.groups[0]
+    children_count = 12
+    own_copy["days"][0]["items"][0]["servings"] = [
+        {
+            "school_group_id": str(group.id),
+            "age_group": group.age_group.value,
+            "children_count": children_count,
+        }
+    ]
+
+    login(client, identities.school_user.username, identities.school_user_password)
+    update_response = client.patch(
+        f"/api/v1/menus/weekly/{own_copy_id}",
+        json={"days": own_copy["days"], "revision": own_copy["revision"]},
+        headers=csrf_headers(client),
+    )
+    assert update_response.status_code == 200, update_response.text
+
+    generate_response = client.post(
+        "/api/v1/menu-requirements/generate",
+        json={
+            "weekly_menu_id": own_copy_id,
+            "weekday": "monday",
+            "service_date": "2026-07-06",
+        },
+        headers=csrf_headers(client),
+    )
+    assert generate_response.status_code == 200, generate_response.text
+    requirement = generate_response.json()["items"][0]
+
+    bread_dish = next(
+        dish for dish in requirement["dishes"] if dish["name"] == "Хліб цільнозерновий"
+    )
+    assert bread_dish["children_count"] == children_count
+    assert bread_dish["yield_amount"] == "20/20"
+
+    bread_row = next(
+        row for row in requirement["ingredient_rows"] if row["ingredient_id"] == bread_id
+    )
+    assert bread_row["ingredient_name"] == "Хліб цільнозерновий"
+    assert bread_row["per_person_total_g"] == "40"
+    assert bread_row["issue_total_raw_g"] == "480"
+    assert bread_row["gross_per_person_total_g"] == "40"
+    assert bread_row["gross_issue_total_rounded_g"] == 480
+
+    cell = bread_row["cells"][0]
+    assert cell["net_per_person_g"] == "40"
+    assert cell["gross_per_person_g"] == "40"
+
+    updated_menu = update_response.json()
+    updated_menu["days"][0]["items"][0]["portions"][0]["yield_amount"] = "40 г"
+    patch2_resp = client.patch(
+        f"/api/v1/menus/weekly/{own_copy_id}",
+        json={"days": updated_menu["days"], "revision": updated_menu["revision"]},
+        headers=csrf_headers(client),
+    )
+    assert patch2_resp.status_code == 200
+
+    regen_resp = client.post(
+        "/api/v1/menu-requirements/generate",
+        json={
+            "weekly_menu_id": own_copy_id,
+            "weekday": "monday",
+            "service_date": "2026-07-06",
+        },
+        headers=csrf_headers(client),
+    )
+    assert regen_resp.status_code == 200
+    regen_req = regen_resp.json()["items"][0]
+    regen_row = next(
+        row for row in regen_req["ingredient_rows"] if row["ingredient_id"] == bread_id
+    )
+    assert regen_row["per_person_total_g"] == "40"
+    assert regen_row["issue_total_raw_g"] == "480"
+
+    invalid_menu = patch2_resp.json()
+    invalid_menu["days"][0]["items"][0]["portions"][0]["yield_amount"] = "невідомо"
+    patch3_resp = client.patch(
+        f"/api/v1/menus/weekly/{own_copy_id}",
+        json={"days": invalid_menu["days"], "revision": invalid_menu["revision"]},
+        headers=csrf_headers(client),
+    )
+    assert patch3_resp.status_code == 200
+
+    invalid_gen_resp = client.post(
+        "/api/v1/menu-requirements/generate",
+        json={
+            "weekly_menu_id": own_copy_id,
+            "weekday": "monday",
+            "service_date": "2026-07-06",
+        },
+        headers=csrf_headers(client),
+    )
+    assert invalid_gen_resp.status_code == 400
+    assert invalid_gen_resp.json()["detail"] == (
+        'Product "Хліб цільнозерновий" must have a single numeric yield in grams'
+    )
+
