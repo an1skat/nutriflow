@@ -102,6 +102,7 @@ def test_builds_daily_menu_requirement_workbook() -> None:
     ingredient_row = next(row for row in sheet.iter_rows() if row[0].value == "Морква")
     assert ingredient_row[1].value == 20.25
     assert ingredient_row[-1].value == 61
+    assert ingredient_row[-1].number_format == "0.00"
     assert not any(cell.value == "Цукор" for row in sheet.iter_rows() for cell in row)
 
     gross_workbook = openpyxl.load_workbook(

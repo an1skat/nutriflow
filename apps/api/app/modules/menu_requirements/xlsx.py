@@ -309,7 +309,7 @@ def _write_table_row(
             cell.fill = TOTAL_FILL
             cell.font = Font(bold=True)
         if column_number > 1 and value is not None:
-            cell.number_format = "0.######"
+            cell.number_format = "0.00"
 
 
 def _finish_table_sheet(
