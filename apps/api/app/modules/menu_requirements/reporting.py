@@ -9,9 +9,8 @@ from typing import Any
 from beanie import PydanticObjectId
 
 from app.modules.identity.models import (
-    COMMUNITY_LABELS,
     AgeGroup,
-    Community,
+    CommunityCode,
     School,
     SchoolGroup,
     User,
@@ -165,13 +164,16 @@ async def get_menu_requirement_calendar(
 
 
 async def get_community_menu_requirement_calendar(
-    community: Community,
+    community: CommunityCode,
     year: int,
     current_user: User,
     *,
     meal_type: MealType | None = None,
 ) -> CommunityMenuRequirementCalendarResponse:
-    schools = await get_accessible_community_schools(current_user, community)
+    community_record, schools = await get_accessible_community_schools(
+        current_user,
+        community,
+    )
     school_ids = [school.id for school in schools]
     groups_by_school_id = {
         school.id: {group.id: group for group in school.groups}
@@ -232,7 +234,7 @@ async def get_community_menu_requirement_calendar(
 
     return CommunityMenuRequirementCalendarResponse(
         community=community,
-        community_name=COMMUNITY_LABELS[community],
+        community_name=community_record.name,
         school_count=len(schools),
         year=year,
         months=months,
@@ -354,8 +356,8 @@ async def list_menu_requirement_communities(
 
     return [
         MenuRequirementCommunityResponse(
-            community=community,
-            community_name=COMMUNITY_LABELS[community],
+            community=community.code,
+            community_name=community.name,
             school_count=len(schools),
         )
         for community, schools in communities
@@ -363,7 +365,7 @@ async def list_menu_requirement_communities(
 
 
 async def get_community_menu_requirement_report(
-    community: Community,
+    community: CommunityCode,
     date_from: Date,
     date_to: Date,
     granularity: MenuRequirementReportGranularity,
@@ -373,7 +375,10 @@ async def get_community_menu_requirement_report(
 ) -> CommunityMenuRequirementReportResponse:
     _validate_report_range(date_from, date_to, granularity)
 
-    schools = await get_accessible_community_schools(current_user, community)
+    community_record, schools = await get_accessible_community_schools(
+        current_user,
+        community,
+    )
     school_ids = [school.id for school in schools]
     schools_by_id = {school.id: school for school in schools}
     groups_by_id = {group.id: group for school in schools for group in school.groups}
@@ -439,7 +444,7 @@ async def get_community_menu_requirement_report(
 
     return CommunityMenuRequirementReportResponse(
         community=community,
-        community_name=COMMUNITY_LABELS[community],
+        community_name=community_record.name,
         school_count=len(schools),
         date_from=date_from,
         date_to=date_to,

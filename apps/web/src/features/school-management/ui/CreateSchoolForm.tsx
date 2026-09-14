@@ -3,7 +3,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 
-import { schoolCommunityLabels, schoolCommunitySchema } from '@/entities/school/model/School';
+import { useCommunities } from '@/entities/community/api/CommunityQueries';
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
 import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 
@@ -12,6 +12,7 @@ import { useCreateSchool } from '../model/UseSchoolMutations';
 
 export function CreateSchoolForm() {
   const createSchool = useCreateSchool();
+  const communities = useCommunities({ offset: 0, limit: 100 });
   const form = useForm<SchoolFormValues>({
     resolver: zodResolver(schoolFormSchema),
     defaultValues: {
@@ -58,9 +59,9 @@ export function CreateSchoolForm() {
         <span className="nf-label">Громада</span>
         <select id="school-community" {...form.register('community')} className="nf-input">
           <option value="">Не вказана</option>
-          {schoolCommunitySchema.options.map((community) => (
-            <option key={community} value={community}>
-              {schoolCommunityLabels[community]}
+          {communities.data?.items.map((community) => (
+            <option key={community.id} value={community.code}>
+              {community.name}
             </option>
           ))}
         </select>

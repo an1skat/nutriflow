@@ -12,7 +12,14 @@ from app.db.beanie import init_odm
 from app.db.mongo import close_mongo, connect_mongo
 from app.modules.auth.security import hash_password
 from app.modules.auth.service import create_first_admin
-from app.modules.identity.models import AdminPermission, School, User, UserRole
+from app.modules.identity.models import (
+    AdminPermission,
+    Community,
+    School,
+    User,
+    UserRole,
+    community_name_key,
+)
 
 TEST_DATABASE_NAME = "nutriflow_test"
 
@@ -40,7 +47,7 @@ def pytest_configure(config: pytest.Config) -> None:
     os.environ["DATABASE_HEALTH_ENABLED"] = "false"
     os.environ["MONGO_URI"] = os.getenv(
         "TEST_MONGO_URI",
-        "mongodb://nutriflow:nutriflow_dev_password@localhost:27017/?authSource=admin",
+        "mongodb://localhost:27017",
     )
     os.environ["MONGO_DB"] = TEST_DATABASE_NAME
     os.environ["JWT_SECRET_KEY"] = "test-jwt-secret-key-test-jwt-secret-key"
@@ -73,6 +80,7 @@ def clean_collections() -> None:
         for collection_name in (
             "refresh_sessions",
             "users",
+            "communities",
             "schools",
             "menu_import_preview_sessions",
             "menu_change_requests",
@@ -133,6 +141,13 @@ async def seed_identities() -> SeededIdentities:
             created_by_admin_id=admin.id,
         )
         await lower_admin.insert()
+
+        community = Community(
+            code="obukhivska",
+            name="Обухівська громада",
+            name_key=community_name_key("Обухівська громада"),
+        )
+        await community.insert()
 
         own_school = School(
             name="Own School",

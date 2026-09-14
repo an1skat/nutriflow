@@ -1,10 +1,8 @@
 import { z } from 'zod';
 
-export const schoolCommunitySchema = z.enum(['obukhivska']);
+import { communityCodeSchema } from '@/entities/community/model/Community';
 
-export const schoolCommunityLabels = {
-  obukhivska: 'Обухівська громада',
-} as const satisfies Record<SchoolCommunity, string>;
+export const schoolCommunitySchema = communityCodeSchema;
 
 export const schoolSchema = z.object({
   id: z.string().min(1),

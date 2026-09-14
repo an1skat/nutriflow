@@ -2,7 +2,7 @@ from collections import defaultdict
 
 from beanie import PydanticObjectId
 
-from app.modules.identity.models import Community, School, User, UserRole
+from app.modules.identity.models import Community, CommunityCode, School, User, UserRole
 from app.modules.menu_requirements.errors import (
     MenuRequirementAccessDeniedError,
     MenuRequirementNotFoundError,
@@ -35,10 +35,14 @@ async def can_access_school(
 
 async def get_accessible_community_schools(
     current_user: User,
-    community: Community,
-) -> list[School]:
+    community: CommunityCode,
+) -> tuple[Community, list[School]]:
     if current_user.role == UserRole.SCHOOL_USER:
         raise MenuRequirementAccessDeniedError("Community access denied")
+
+    community_record = await Community.find_one(Community.code == community)
+    if community_record is None:
+        raise MenuRequirementNotFoundError("Community not found")
 
     schools = await (
         School.find(School.community == community).sort([("name", 1), ("_id", 1)]).to_list()
@@ -52,7 +56,7 @@ async def get_accessible_community_schools(
         if any(school.id not in allowed for school in schools):
             raise MenuRequirementAccessDeniedError("Community access denied")
 
-    return schools
+    return community_record, schools
 
 
 async def list_accessible_communities(
@@ -67,19 +71,20 @@ async def list_accessible_communities(
         .to_list()
     )
 
-    schools_by_community: dict[Community, list[School]] = defaultdict(list)
+    schools_by_community: dict[CommunityCode, list[School]] = defaultdict(list)
     for school in schools:
         if school.community is not None:
             schools_by_community[school.community].append(school)
 
     school_ids = await allowed_school_ids(current_user)
     allowed = set(school_ids) if school_ids is not None else None
+    communities = await Community.find(
+        {"code": {"$in": list(schools_by_community)}}
+    ).sort("name", "_id").to_list()
 
     return [
-        (community, community_schools)
-        for community, community_schools in sorted(
-            schools_by_community.items(),
-            key=lambda item: item[0],
-        )
-        if allowed is None or all(school.id in allowed for school in community_schools)
+        (community, schools_by_community[community.code])
+        for community in communities
+        if allowed is None
+        or all(school.id in allowed for school in schools_by_community[community.code])
     ]

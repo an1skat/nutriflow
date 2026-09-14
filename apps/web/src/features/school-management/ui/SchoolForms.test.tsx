@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { useCommunities } from '@/entities/community/api/CommunityQueries';
+
 import { useCreateSchool, useUpdateSchool } from '../model/UseSchoolMutations';
 import { CreateSchoolForm } from './CreateSchoolForm';
 import { EditSchoolForm } from './EditSchoolForm';
@@ -8,6 +10,9 @@ import { EditSchoolForm } from './EditSchoolForm';
 vi.mock('../model/UseSchoolMutations', () => ({
   useCreateSchool: vi.fn(),
   useUpdateSchool: vi.fn(),
+}));
+vi.mock('@/entities/community/api/CommunityQueries', () => ({
+  useCommunities: vi.fn(),
 }));
 
 describe('school community fields', () => {
@@ -27,6 +32,25 @@ describe('school community fields', () => {
       mutateAsync: updateSchool,
       isSuccess: false,
     } as unknown as ReturnType<typeof useUpdateSchool>);
+    vi.mocked(useCommunities).mockReturnValue({
+      data: {
+        items: [
+          {
+            id: 'community-1',
+            code: 'obukhivska',
+            name: 'Обухівська громада',
+            admin_owner_id: null,
+            admin_username: null,
+            school_count: 0,
+            created_at: '2026-07-01T10:00:00Z',
+            updated_at: '2026-07-01T10:00:00Z',
+          },
+        ],
+        total: 1,
+        offset: 0,
+        limit: 100,
+      },
+    } as ReturnType<typeof useCommunities>);
   });
 
   it('submits the selected community when creating a school', async () => {

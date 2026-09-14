@@ -11,9 +11,15 @@ from fastapi import (
 
 from app.api.errors import conflict, forbidden, not_found
 from app.modules.admin.schemas import (
+    AddCommunitySchoolRequest,
     AdminUserListResponse,
     AdminUserResponse,
+    CommunityAdminOptionResponse,
+    CommunityListResponse,
+    CommunityResponse,
+    CommunitySchoolOptionResponse,
     CreateAdminUserRequest,
+    CreateCommunityRequest,
     CreateSchoolRequest,
     CreateSchoolUserRequest,
     ResetAdminUserPasswordRequest,
@@ -26,6 +32,7 @@ from app.modules.admin.schemas import (
     SchoolUserListResponse,
     SchoolUserResponse,
     UpdateAdminUserRequest,
+    UpdateCommunityRequest,
     UpdateSchoolGroupRequest,
     UpdateSchoolRequest,
     UpdateSchoolUserRequest,
@@ -35,6 +42,9 @@ from app.modules.admin.service import (
     AdminUserAlreadyExistsError,
     AdminUserNotFoundError,
     AdminUserOwnsSchoolsError,
+    CommunityAlreadyExistsError,
+    CommunityNotFoundError,
+    CommunitySchoolConflictError,
     SchoolGroupNotFoundError,
     SchoolInactiveError,
     SchoolNotFoundError,
@@ -42,7 +52,13 @@ from app.modules.admin.service import (
     SchoolUserNotFoundError,
 )
 from app.modules.admin.service import (
+    add_school_to_community as add_school_to_community_record,
+)
+from app.modules.admin.service import (
     create_admin_user as create_admin_user_record,
+)
+from app.modules.admin.service import (
+    create_community as create_community_record,
 )
 from app.modules.admin.service import (
     create_school as create_school_record,
@@ -60,6 +76,9 @@ from app.modules.admin.service import (
     get_admin_user as get_admin_user_record,
 )
 from app.modules.admin.service import (
+    get_community_with_stats as get_community_with_stats_record,
+)
+from app.modules.admin.service import (
     get_school as get_school_record,
 )
 from app.modules.admin.service import (
@@ -72,6 +91,15 @@ from app.modules.admin.service import (
     list_admin_users as list_admin_user_records,
 )
 from app.modules.admin.service import (
+    list_communities as list_community_records,
+)
+from app.modules.admin.service import (
+    list_community_admin_options as list_community_admin_option_records,
+)
+from app.modules.admin.service import (
+    list_community_school_options as list_community_school_option_records,
+)
+from app.modules.admin.service import (
     list_school_groups as list_school_groups_records,
 )
 from app.modules.admin.service import (
@@ -81,6 +109,9 @@ from app.modules.admin.service import (
     list_schools as list_school_records,
 )
 from app.modules.admin.service import (
+    remove_school_from_community as remove_school_from_community_record,
+)
+from app.modules.admin.service import (
     reset_admin_user_password as reset_admin_user_password_record,
 )
 from app.modules.admin.service import (
@@ -88,6 +119,9 @@ from app.modules.admin.service import (
 )
 from app.modules.admin.service import (
     update_admin_user as update_admin_user_record,
+)
+from app.modules.admin.service import (
+    update_community as update_community_record,
 )
 from app.modules.admin.service import (
     update_school as update_school_record,
@@ -104,13 +138,17 @@ from app.modules.auth.dependencies import (
     require_owner,
     require_permissions,
 )
-from app.modules.identity.models import AdminPermission, Community, User, UserRole
+from app.modules.identity.models import AdminPermission, CommunityCode, User, UserRole
 
 router = APIRouter()
 
 OwnerUser = Annotated[
     User,
     Depends(require_owner()),
+]
+CommunityManagerUser = Annotated[
+    User,
+    Depends(require_permissions(AdminPermission.SCHOOLS_MANAGE)),
 ]
 SchoolManagerUser = Annotated[
     User,
@@ -252,12 +290,177 @@ async def reset_admin_user_password(
 
 
 @router.get(
+    "/communities",
+    response_model=CommunityListResponse,
+)
+async def list_communities(
+    actor: CommunityManagerUser,
+    offset: Offset = 0,
+    limit: Limit = 50,
+) -> CommunityListResponse:
+    communities, total = await list_community_records(actor, offset=offset, limit=limit)
+    return CommunityListResponse(
+        items=[
+            CommunityResponse.from_community(
+                item.community,
+                admin_username=item.admin_username,
+                school_count=item.school_count,
+            )
+            for item in communities
+        ],
+        total=total,
+        offset=offset,
+        limit=limit,
+    )
+
+
+@router.post(
+    "/communities",
+    response_model=CommunityResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_community(
+    payload: CreateCommunityRequest,
+    actor: CommunityManagerUser,
+    _csrf: CsrfProtection,
+) -> CommunityResponse:
+    try:
+        item = await create_community_record(actor, payload)
+    except CommunityAlreadyExistsError as exc:
+        raise conflict(exc) from exc
+    except AdminUserNotFoundError as exc:
+        raise not_found(exc) from exc
+    return CommunityResponse.from_community(
+        item.community,
+        admin_username=item.admin_username,
+        school_count=item.school_count,
+    )
+
+
+@router.get(
+    "/communities/admin-options",
+    response_model=list[CommunityAdminOptionResponse],
+)
+async def list_community_admin_options(
+    _owner: OwnerUser,
+) -> list[CommunityAdminOptionResponse]:
+    admins = await list_community_admin_option_records()
+    return [CommunityAdminOptionResponse(id=admin.id, username=admin.username) for admin in admins]
+
+
+@router.get(
+    "/communities/school-options",
+    response_model=list[CommunitySchoolOptionResponse],
+)
+async def list_community_school_options(
+    actor: CommunityManagerUser,
+) -> list[CommunitySchoolOptionResponse]:
+    schools = await list_community_school_option_records(actor)
+    return [
+        CommunitySchoolOptionResponse(
+            id=school.id,
+            name=school.name,
+            community=school.community,
+        )
+        for school in schools
+    ]
+
+
+@router.get(
+    "/communities/{community_id}",
+    response_model=CommunityResponse,
+)
+async def get_community(
+    community_id: PydanticObjectId,
+    actor: CommunityManagerUser,
+) -> CommunityResponse:
+    try:
+        item = await get_community_with_stats_record(actor, community_id)
+    except CommunityNotFoundError as exc:
+        raise not_found(exc) from exc
+    except AdminAccessDeniedError as exc:
+        raise forbidden(exc) from exc
+    return CommunityResponse.from_community(
+        item.community,
+        admin_username=item.admin_username,
+        school_count=item.school_count,
+    )
+
+
+@router.patch(
+    "/communities/{community_id}",
+    response_model=CommunityResponse,
+)
+async def update_community(
+    community_id: PydanticObjectId,
+    payload: UpdateCommunityRequest,
+    actor: CommunityManagerUser,
+    _csrf: CsrfProtection,
+) -> CommunityResponse:
+    try:
+        item = await update_community_record(actor, community_id, payload)
+    except CommunityNotFoundError as exc:
+        raise not_found(exc) from exc
+    except AdminUserNotFoundError as exc:
+        raise not_found(exc) from exc
+    except CommunityAlreadyExistsError as exc:
+        raise conflict(exc) from exc
+    return CommunityResponse.from_community(
+        item.community,
+        admin_username=item.admin_username,
+        school_count=item.school_count,
+    )
+
+
+@router.post(
+    "/communities/{community_id}/schools",
+    response_model=SchoolResponse,
+)
+async def add_school_to_community(
+    community_id: PydanticObjectId,
+    payload: AddCommunitySchoolRequest,
+    actor: CommunityManagerUser,
+    _csrf: CsrfProtection,
+) -> SchoolResponse:
+    try:
+        school = await add_school_to_community_record(actor, community_id, payload)
+    except (CommunityNotFoundError, SchoolNotFoundError) as exc:
+        raise not_found(exc) from exc
+    except AdminAccessDeniedError as exc:
+        raise forbidden(exc) from exc
+    except CommunitySchoolConflictError as exc:
+        raise conflict(exc) from exc
+    return SchoolResponse.from_school(school)
+
+
+@router.delete(
+    "/communities/{community_id}/schools/{school_id}",
+    response_model=SchoolResponse,
+)
+async def remove_school_from_community(
+    community_id: PydanticObjectId,
+    school_id: PydanticObjectId,
+    actor: CommunityManagerUser,
+    _csrf: CsrfProtection,
+) -> SchoolResponse:
+    try:
+        school = await remove_school_from_community_record(actor, community_id, school_id)
+    except (CommunityNotFoundError, SchoolNotFoundError) as exc:
+        raise not_found(exc) from exc
+    except AdminAccessDeniedError as exc:
+        raise forbidden(exc) from exc
+    except CommunitySchoolConflictError as exc:
+        raise conflict(exc) from exc
+    return SchoolResponse.from_school(school)
+
+
+@router.get(
     "/schools",
     response_model=SchoolListResponse,
 )
 async def list_schools(
     admin: SchoolListUser,
-    community: Community | None = None,
+    community: CommunityCode | None = None,
     sort_by: SchoolListSort = "name",
     offset: Offset = 0,
     limit: Limit = 50,
@@ -289,8 +492,10 @@ async def create_school(
 ) -> SchoolResponse:
     try:
         school = await create_school_record(admin, payload)
-    except (AdminAccessDeniedError, AdminUserNotFoundError) as exc:
+    except AdminAccessDeniedError as exc:
         raise forbidden(exc) from exc
+    except (AdminUserNotFoundError, CommunityNotFoundError) as exc:
+        raise not_found(exc) from exc
 
     return SchoolResponse.from_school(school)
 
@@ -329,8 +534,10 @@ async def update_school(
         school = await update_school_record(admin, school_id, payload)
     except SchoolNotFoundError as exc:
         raise not_found(exc) from exc
-    except (AdminAccessDeniedError, AdminUserNotFoundError) as exc:
+    except AdminAccessDeniedError as exc:
         raise forbidden(exc) from exc
+    except (AdminUserNotFoundError, CommunityNotFoundError) as exc:
+        raise not_found(exc) from exc
 
     return SchoolResponse.from_school(school)
 

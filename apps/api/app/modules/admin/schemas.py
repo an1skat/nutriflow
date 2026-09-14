@@ -16,6 +16,7 @@ from app.modules.identity.models import (
     AdminPermission,
     AgeGroup,
     Community,
+    CommunityCode,
     School,
     SchoolGroup,
     TrimmedName,
@@ -26,15 +27,85 @@ from app.modules.identity.models import (
 type SchoolListSort = Literal["name", "community"]
 
 
+class CreateCommunityRequest(BaseModel):
+    code: CommunityCode
+    name: TrimmedName
+    admin_owner_id: PydanticObjectId | None = None
+
+
+class UpdateCommunityRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: TrimmedName | None = None
+    admin_owner_id: PydanticObjectId | None = None
+
+    @model_validator(mode="after")
+    def validate_patch(self) -> Self:
+        if not self.model_fields_set:
+            raise ValueError("At least one field must be provided")
+        if "name" in self.model_fields_set and self.name is None:
+            raise ValueError("Community name cannot be null")
+        return self
+
+
+class CommunityResponse(BaseModel):
+    id: PydanticObjectId
+    code: CommunityCode
+    name: str
+    admin_owner_id: PydanticObjectId | None
+    admin_username: str | None
+    school_count: int = Field(ge=0)
+    created_at: datetime
+    updated_at: datetime
+
+    @classmethod
+    def from_community(
+        cls,
+        community: Community,
+        *,
+        admin_username: str | None,
+        school_count: int,
+    ) -> "CommunityResponse":
+        return cls(
+            id=community.id,
+            code=community.code,
+            name=community.name,
+            admin_owner_id=community.admin_owner_id,
+            admin_username=admin_username,
+            school_count=school_count,
+            created_at=community.created_at,
+            updated_at=community.updated_at,
+        )
+
+
+class CommunityListResponse(PaginatedResponse[CommunityResponse]):
+    pass
+
+
+class CommunityAdminOptionResponse(BaseModel):
+    id: PydanticObjectId
+    username: str
+
+
+class CommunitySchoolOptionResponse(BaseModel):
+    id: PydanticObjectId
+    name: str
+    community: CommunityCode | None
+
+
+class AddCommunitySchoolRequest(BaseModel):
+    school_id: PydanticObjectId
+
+
 class CreateSchoolRequest(BaseModel):
     name: TrimmedName
-    community: Community | None = None
+    community: CommunityCode | None = None
     admin_owner_id: PydanticObjectId | None = None
 
 
 class UpdateSchoolRequest(BaseModel):
     name: TrimmedName | None = None
-    community: Community | None = None
+    community: CommunityCode | None = None
     admin_owner_id: PydanticObjectId | None = None
     is_active: bool | None = None
 
@@ -54,7 +125,7 @@ class SchoolResponse(BaseModel):
 
     id: PydanticObjectId
     name: str
-    community: Community | None
+    community: CommunityCode | None
     admin_owner_id: PydanticObjectId | None
     is_active: bool
     created_at: datetime

@@ -14,6 +14,7 @@ import {
   FileSpreadsheet,
   LayoutDashboard,
   LogOut,
+  MapPinned,
   Menu,
   ShieldCheck,
   UsersRound,
@@ -49,6 +50,12 @@ const navigation: NavigationItem[] = [
     href: '/admin/schools',
     label: 'Школи',
     icon: Building2,
+    requiredPermission: 'schools.manage',
+  },
+  {
+    href: '/admin/communities',
+    label: 'Громади',
+    icon: MapPinned,
     requiredPermission: 'schools.manage',
   },
   {
@@ -244,9 +251,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </>
             )}
           </button>
-          <p className="px-2.5 pt-2 text-[10px] text-slate-500">
-            NutriFlow · шкільне харчування
-          </p>
+          <p className="px-2.5 pt-2 text-[10px] text-slate-500">NutriFlow · шкільне харчування</p>
         </div>
       </aside>
 

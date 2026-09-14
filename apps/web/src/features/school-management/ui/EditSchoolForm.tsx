@@ -5,11 +5,8 @@ import { useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 
-import {
-  type School,
-  schoolCommunityLabels,
-  schoolCommunitySchema,
-} from '@/entities/school/model/School';
+import { useCommunities } from '@/entities/community/api/CommunityQueries';
+import { type School } from '@/entities/school/model/School';
 import { getApiErrorMessage } from '@/shared/api/HttpClient';
 import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 
@@ -22,6 +19,7 @@ type EditSchoolFormProps = {
 
 export function EditSchoolForm({ school }: EditSchoolFormProps) {
   const updateSchool = useUpdateSchool(school.id);
+  const communities = useCommunities({ offset: 0, limit: 100 });
   const form = useForm<EditSchoolFormValues>({
     resolver: zodResolver(editSchoolFormSchema),
     defaultValues: {
@@ -71,15 +69,11 @@ export function EditSchoolForm({ school }: EditSchoolFormProps) {
 
       <label className="grid gap-1" htmlFor="edit-school-community">
         <span className="nf-label">Громада</span>
-        <select
-          id="edit-school-community"
-          {...form.register('community')}
-          className="nf-input"
-        >
+        <select id="edit-school-community" {...form.register('community')} className="nf-input">
           <option value="">Не вказана</option>
-          {schoolCommunitySchema.options.map((community) => (
-            <option key={community} value={community}>
-              {schoolCommunityLabels[community]}
+          {communities.data?.items.map((community) => (
+            <option key={community.id} value={community.code}>
+              {community.name}
             </option>
           ))}
         </select>

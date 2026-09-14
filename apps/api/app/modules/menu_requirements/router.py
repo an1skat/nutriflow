@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from app.api.errors import bad_request, forbidden, not_found
 from app.api.responses import xlsx_response
 from app.modules.auth.dependencies import CsrfProtection, CurrentUser, require_roles
-from app.modules.identity.models import Community, User, UserRole
+from app.modules.identity.models import CommunityCode, User, UserRole
 from app.modules.menu_requirements.schemas import (
     CommunityMenuRequirementCalendarResponse,
     CommunityMenuRequirementReportResponse,
@@ -152,7 +152,7 @@ async def list_communities(
 )
 async def get_community_calendar(
     current_user: CommunityUser,
-    community: Community,
+    community: CommunityCode,
     year: int = Query(ge=2000, le=2100),
     meal_type: MealType | None = None,
 ) -> CommunityMenuRequirementCalendarResponse:
@@ -175,7 +175,7 @@ async def get_community_calendar(
 )
 async def get_community_report(
     current_user: CommunityUser,
-    community: Community,
+    community: CommunityCode,
     date_from: Date,
     date_to: Date,
     granularity: MenuRequirementReportGranularity,
@@ -201,7 +201,7 @@ async def get_community_report(
 @router.get("/communities/{community}/report/export.xlsx")
 async def export_community_report(
     current_user: CommunityUser,
-    community: Community,
+    community: CommunityCode,
     date_from: Date,
     date_to: Date,
     granularity: MenuRequirementReportGranularity,

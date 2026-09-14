@@ -596,7 +596,7 @@ def test_community_scope_access_is_all_or_nothing(seeded_client) -> None:
         "/api/v1/menu-requirements/communities/unknown/calendar",
         params={"year": 2026},
     )
-    assert invalid_community_response.status_code == 422
+    assert invalid_community_response.status_code == 404
 
     login(
         client,
@@ -620,6 +620,114 @@ def test_community_scope_access_is_all_or_nothing(seeded_client) -> None:
     )
     school_user_response = client.get("/api/v1/menu-requirements/communities")
     assert school_user_response.status_code == 403
+
+
+def test_reports_and_calendars_isolate_two_communities(seeded_client) -> None:
+    client, identities = seeded_client
+    other_school_password = "other-community-school-password-123"
+
+    login(client, identities.admin.username, identities.admin_password)
+    assign_schools_to_community(client, identities.own_school.id)
+    community_b_response = client.post(
+        "/api/v1/admin/communities",
+        json={"code": "community-b", "name": "Громада Б"},
+        headers=csrf_headers(client),
+    )
+    assert community_b_response.status_code == 201
+    assign_b_response = client.patch(
+        f"/api/v1/admin/schools/{identities.other_school.id}",
+        json={"community": "community-b"},
+        headers=csrf_headers(client),
+    )
+    assert assign_b_response.status_code == 200
+
+    other_user_response = client.post(
+        f"/api/v1/admin/schools/{identities.other_school.id}/users",
+        json={
+            "username": "community.b.school",
+            "email": "community.b.school@example.com",
+            "password": other_school_password,
+        },
+        headers=csrf_headers(client),
+    )
+    assert other_user_response.status_code == 201
+
+    _ingredient_id, card_id, variant_id = create_confirmed_dish(client)
+    own_menu = publish_school_menu(
+        client,
+        school_id=str(identities.own_school.id),
+        card_id=card_id,
+        variant_id=variant_id,
+        days=[("monday", "2026-07-06")],
+        starts_on="2026-07-06",
+        ends_on="2026-07-06",
+    )
+    other_menu = publish_school_menu(
+        client,
+        school_id=str(identities.other_school.id),
+        card_id=card_id,
+        variant_id=variant_id,
+        days=[("monday", "2026-07-06")],
+        starts_on="2026-07-06",
+        ends_on="2026-07-06",
+    )
+
+    login(client, identities.school_user.username, identities.school_user_password)
+    own_menu = set_school_menu_counts(
+        client,
+        menu=own_menu,
+        group_id=str(identities.own_school.groups[0].id),
+        counts_by_weekday={"monday": 3},
+    )
+    generate_requirement(
+        client,
+        menu_id=own_menu["id"],
+        weekday="monday",
+        service_date="2026-07-06",
+    )
+
+    login(client, "community.b.school", other_school_password)
+    other_menu = set_school_menu_counts(
+        client,
+        menu=other_menu,
+        group_id=str(identities.other_school.groups[0].id),
+        counts_by_weekday={"monday": 4},
+    )
+    generate_requirement(
+        client,
+        menu_id=other_menu["id"],
+        weekday="monday",
+        service_date="2026-07-06",
+    )
+
+    login(client, identities.admin.username, identities.admin_password)
+    expected = {
+        "obukhivska": (identities.own_school.name, 3),
+        "community-b": (identities.other_school.name, 4),
+    }
+    for code, (school_name, children_count) in expected.items():
+        calendar_response = client.get(
+            f"/api/v1/menu-requirements/communities/{code}/calendar",
+            params={"year": 2026, "meal_type": "lunch"},
+        )
+        assert calendar_response.status_code == 200
+        assert calendar_response.json()["school_count"] == 1
+
+        report_response = client.get(
+            f"/api/v1/menu-requirements/communities/{code}/report",
+            params={
+                "date_from": "2026-07-06",
+                "date_to": "2026-07-06",
+                "granularity": "day",
+                "meal_type": "lunch",
+            },
+        )
+        assert report_response.status_code == 200
+        report = report_response.json()
+        assert report["school_count"] == 1
+        assert report["groups"][0]["dishes"][0]["children_count_total"] == children_count
+        breakdown = report["groups"][0]["ingredient_rows"][0]["cells"][0]["breakdown"]
+        assert {item["school_name"] for item in breakdown} == {school_name}
 
 
 def test_community_calendar_report_and_export_aggregate_schools(

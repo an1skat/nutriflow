@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Annotated, Literal, Self
+from typing import Annotated, Self
 
 from beanie import Document, PydanticObjectId
 from pydantic import BaseModel, EmailStr, Field, StringConstraints, field_validator, model_validator
@@ -35,11 +35,20 @@ class AgeGroup(StrEnum):
     FOURTEEN_TO_EIGHTEEN = "14-18"
 
 
-type Community = Literal["obukhivska"]
+CommunityCode = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        to_lower=True,
+        min_length=1,
+        max_length=80,
+        pattern=r"^[a-z0-9][a-z0-9-]*$",
+    ),
+]
 
-COMMUNITY_LABELS: dict[Community, str] = {
-    "obukhivska": "Обухівська громада",
-}
+
+def community_name_key(name: str) -> str:
+    return " ".join(name.split()).casefold()
 
 
 class RefreshRevokeReason(StrEnum):
@@ -73,9 +82,37 @@ def default_school_groups() -> list[SchoolGroup]:
     ]
 
 
+class Community(Document):
+    code: CommunityCode
+    name: TrimmedName
+    name_key: str
+    admin_owner_id: PydanticObjectId | None = None
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+    class Settings:
+        name = "communities"
+        indexes = [
+            IndexModel(
+                [("code", ASCENDING)],
+                unique=True,
+                name="uq_community_code",
+            ),
+            IndexModel(
+                [("name_key", ASCENDING)],
+                unique=True,
+                name="uq_community_name_key",
+            ),
+            IndexModel(
+                [("admin_owner_id", ASCENDING), ("name", ASCENDING), ("_id", ASCENDING)],
+                name="ix_community_admin_owner_name",
+            ),
+        ]
+
+
 class School(Document):
     name: TrimmedName
-    community: Community | None = None
+    community: CommunityCode | None = None
     admin_owner_id: PydanticObjectId | None = None
     groups: list[SchoolGroup] = Field(default_factory=default_school_groups, min_length=1)
     is_active: bool = True

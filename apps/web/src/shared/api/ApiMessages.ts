@@ -6,6 +6,15 @@ export const detailTranslations: Record<string, string> = {
   'Insufficient permissions': 'Недостатньо прав для виконання операції.',
   'School access denied': 'Немає доступу до даних цієї школи.',
   'School not found': 'Школу не знайдено.',
+  'Community not found': 'Громаду не знайдено.',
+  'Community access denied': 'Немає доступу до цієї громади.',
+  'A community with this code or name already exists':
+    'Громада з таким кодом або назвою вже існує.',
+  'School already belongs to community': 'Школа вже належить цій громаді.',
+  'School already belongs to another community': 'Школа вже належить іншій громаді.',
+  'School does not belong to community': 'Школа не належить цій громаді.',
+  'School administrator must match community administrator':
+    'Адміністратор школи має збігатися з адміністратором громади.',
   'Admin password confirmation required': 'Потрібно підтвердити пароль адміністратора.',
   'Invalid admin password': 'Неправильний пароль адміністратора.',
   'Cannot create users for an inactive school':

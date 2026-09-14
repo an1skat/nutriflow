@@ -7,7 +7,7 @@ from beanie import PydanticObjectId
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from app.api.responses import PaginatedResponse
-from app.modules.identity.models import AgeGroup, Community
+from app.modules.identity.models import AgeGroup, CommunityCode
 from app.modules.menu_requirements.models import (
     MenuRequirement,
     MenuRequirementCell,
@@ -319,7 +319,7 @@ class MenuRequirementReportResponse(BaseModel):
 
 
 class MenuRequirementCommunityResponse(BaseModel):
-    community: Community
+    community: CommunityCode
     community_name: str
     school_count: int = Field(ge=1)
 

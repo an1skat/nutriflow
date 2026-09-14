@@ -4,7 +4,7 @@ from typing import Any
 from beanie import Document, init_beanie
 
 from app.db.mongo import get_database
-from app.modules.identity.models import RefreshSession, School, User
+from app.modules.identity.models import Community, RefreshSession, School, User
 from app.modules.menu_requirements.models import MenuRequirement
 from app.modules.menus.models import MenuChangeRequest, MenuImportPreviewSession, WeeklyMenu
 from app.modules.recipe.models import (
@@ -20,6 +20,7 @@ MENU_IMPORT_PREVIEW_TTL_SECONDS = 0
 
 def get_document_models() -> list[type[Document]]:
     return [
+        Community,
         School,
         User,
         RefreshSession,

@@ -9,7 +9,7 @@ from typing import Any
 
 from beanie import PydanticObjectId
 
-from app.modules.identity.models import Community, School, SchoolGroup, User, UserRole
+from app.modules.identity.models import CommunityCode, School, SchoolGroup, User, UserRole
 from app.modules.menu_requirements.access import (
     allowed_school_ids as _allowed_school_ids,
 )
@@ -380,7 +380,7 @@ async def export_menu_requirement_report_workbook(
 
 
 async def export_community_menu_requirement_report_workbook(
-    community: Community,
+    community: CommunityCode,
     date_from: Date,
     date_to: Date,
     granularity: MenuRequirementReportGranularity,

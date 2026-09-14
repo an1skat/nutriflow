@@ -1,3 +1,4 @@
+from beanie import PydanticObjectId
 from fastapi.testclient import TestClient
 from pymongo import MongoClient
 
@@ -189,7 +190,7 @@ def test_school_community_is_validated_and_scoped_to_lower_admin(seeded_client):
         headers=csrf_headers(client),
     )
 
-    assert invalid_response.status_code == 422
+    assert invalid_response.status_code == 404
 
     login(
         client,
@@ -201,6 +202,240 @@ def test_school_community_is_validated_and_scoped_to_lower_admin(seeded_client):
     assert response.status_code == 200
     assert response.json()["total"] == 1
     assert [item["id"] for item in response.json()["items"]] == [str(identities.own_school.id)]
+
+
+def test_owner_updates_community_without_changing_code_or_school(seeded_client):
+    client, identities = seeded_client
+
+    login(client, identities.admin.username, identities.admin_password)
+    owner_response = client.post(
+        "/api/v1/admin/communities",
+        json={
+            "code": "community-a",
+            "name": "Бориспільська громада",
+            "admin_owner_id": str(identities.lower_admin.id),
+        },
+        headers=csrf_headers(client),
+    )
+
+    assert owner_response.status_code == 201
+    assert owner_response.json()["school_count"] == 0
+    assert owner_response.json()["admin_owner_id"] == str(identities.lower_admin.id)
+
+    duplicate_code = client.post(
+        "/api/v1/admin/communities",
+        json={"code": "community-a", "name": "Інша громада"},
+        headers=csrf_headers(client),
+    )
+    duplicate_name = client.post(
+        "/api/v1/admin/communities",
+        json={"code": "other", "name": "  БОРИСПІЛЬСЬКА ГРОМАДА  "},
+        headers=csrf_headers(client),
+    )
+
+    assert duplicate_code.status_code == 409
+    assert duplicate_name.status_code == 409
+
+    add_response = client.post(
+        f"/api/v1/admin/communities/{owner_response.json()['id']}/schools",
+        json={"school_id": str(identities.other_school.id)},
+        headers=csrf_headers(client),
+    )
+    assert add_response.status_code == 200
+    assert add_response.json()["community"] == "community-a"
+    assert add_response.json()["admin_owner_id"] == str(identities.lower_admin.id)
+
+    update_response = client.patch(
+        f"/api/v1/admin/communities/{owner_response.json()['id']}",
+        json={"name": "Бориспільська міська громада"},
+        headers=csrf_headers(client),
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["code"] == "community-a"
+
+    school_response = client.get(f"/api/v1/admin/schools/{identities.other_school.id}")
+    assert school_response.status_code == 200
+    assert school_response.json()["community"] == "community-a"
+    assert school_response.json()["admin_owner_id"] == str(identities.lower_admin.id)
+
+    immutable_code_response = client.patch(
+        f"/api/v1/admin/communities/{owner_response.json()['id']}",
+        json={"code": "community-b"},
+        headers=csrf_headers(client),
+    )
+    assert immutable_code_response.status_code == 422
+
+
+def test_admin_with_schools_manage_can_manage_own_community(seeded_client):
+    client, identities = seeded_client
+
+    login(client, identities.lower_admin.username, identities.lower_admin_password)
+    create_response = client.post(
+        "/api/v1/admin/communities",
+        json={"code": "admin-community", "name": "Громада адміністратора"},
+        headers=csrf_headers(client),
+    )
+    assert create_response.status_code == 201
+    assert create_response.json()["admin_owner_id"] == str(identities.lower_admin.id)
+    community_id = create_response.json()["id"]
+
+    update_response = client.patch(
+        f"/api/v1/admin/communities/{community_id}",
+        json={"name": "Оновлена громада адміністратора"},
+        headers=csrf_headers(client),
+    )
+    assert update_response.status_code == 200
+
+    add_response = client.post(
+        f"/api/v1/admin/communities/{community_id}/schools",
+        json={"school_id": str(identities.other_school.id)},
+        headers=csrf_headers(client),
+    )
+    assert add_response.status_code == 200
+    assert add_response.json()["admin_owner_id"] == str(identities.lower_admin.id)
+
+
+def test_community_mutations_require_schools_manage(seeded_client):
+    client, identities = seeded_client
+
+    login(client, identities.admin.username, identities.admin_password)
+    community_response = client.post(
+        "/api/v1/admin/communities",
+        json={"code": "permission-target", "name": "Громада для перевірки прав"},
+        headers=csrf_headers(client),
+    )
+    assert community_response.status_code == 201
+    community_id = community_response.json()["id"]
+
+    no_permission_password = "no-permission-password-123"
+    no_permission_admin = client.post(
+        "/api/v1/admin/admins",
+        json={
+            "username": "no.community.permission",
+            "email": "no.community.permission@example.com",
+            "password": no_permission_password,
+            "role": "ADMIN",
+            "permissions": [],
+        },
+        headers=csrf_headers(client),
+    )
+    assert no_permission_admin.status_code == 201
+
+    technologist_password = "technologist-password-123"
+    technologist = client.post(
+        "/api/v1/admin/admins",
+        json={
+            "username": "community.tech",
+            "email": "community.tech@example.com",
+            "password": technologist_password,
+            "role": "TECHNOLOGIST",
+        },
+        headers=csrf_headers(client),
+    )
+    assert technologist.status_code == 201
+
+    denied_users = (
+        ("no.community.permission", no_permission_password),
+        ("community.tech", technologist_password),
+        (identities.school_user.username, identities.school_user_password),
+    )
+    for index, (username, password) in enumerate(denied_users):
+        login(client, username, password)
+        headers = csrf_headers(client)
+        assert client.get("/api/v1/admin/communities").status_code == 403
+        assert (
+            client.post(
+                "/api/v1/admin/communities",
+                json={"code": f"forbidden-{index}", "name": f"Заборонена громада {index}"},
+                headers=headers,
+            ).status_code
+            == 403
+        )
+        assert (
+            client.patch(
+                f"/api/v1/admin/communities/{community_id}",
+                json={"name": "Заборонене оновлення"},
+                headers=headers,
+            ).status_code
+            == 403
+        )
+        assert (
+            client.post(
+                f"/api/v1/admin/communities/{community_id}/schools",
+                json={"school_id": str(identities.other_school.id)},
+                headers=headers,
+            ).status_code
+            == 403
+        )
+
+
+def test_assigned_admin_adds_school_with_membership_validation(seeded_client):
+    client, identities = seeded_client
+    missing_id = PydanticObjectId()
+
+    login(client, identities.admin.username, identities.admin_password)
+    community_response = client.post(
+        "/api/v1/admin/communities",
+        json={
+            "code": "bucharayonna",
+            "name": "Бучанська громада",
+            "admin_owner_id": str(identities.lower_admin.id),
+        },
+        headers=csrf_headers(client),
+    )
+    assert community_response.status_code == 201
+    community_id = community_response.json()["id"]
+
+    unassigned_response = client.post(
+        "/api/v1/admin/communities",
+        json={"code": "unassigned", "name": "Громада без адміністратора"},
+        headers=csrf_headers(client),
+    )
+    assert unassigned_response.status_code == 201
+
+    login(client, identities.lower_admin.username, identities.lower_admin_password)
+    add_response = client.post(
+        f"/api/v1/admin/communities/{community_id}/schools",
+        json={"school_id": str(identities.other_school.id)},
+        headers=csrf_headers(client),
+    )
+
+    assert add_response.status_code == 200
+    assert add_response.json()["community"] == "bucharayonna"
+    assert add_response.json()["admin_owner_id"] == str(identities.lower_admin.id)
+
+    duplicate_response = client.post(
+        f"/api/v1/admin/communities/{community_id}/schools",
+        json={"school_id": str(identities.other_school.id)},
+        headers=csrf_headers(client),
+    )
+    missing_school_response = client.post(
+        f"/api/v1/admin/communities/{community_id}/schools",
+        json={"school_id": str(missing_id)},
+        headers=csrf_headers(client),
+    )
+    missing_community_response = client.post(
+        f"/api/v1/admin/communities/{PydanticObjectId()}/schools",
+        json={"school_id": str(identities.own_school.id)},
+        headers=csrf_headers(client),
+    )
+    forbidden_community_response = client.post(
+        f"/api/v1/admin/communities/{unassigned_response.json()['id']}/schools",
+        json={"school_id": str(identities.own_school.id)},
+        headers=csrf_headers(client),
+    )
+
+    assert duplicate_response.status_code == 409
+    assert missing_school_response.status_code == 404
+    assert missing_community_response.status_code == 404
+    assert forbidden_community_response.status_code == 403
+
+    remove_response = client.delete(
+        f"/api/v1/admin/communities/{community_id}/schools/{identities.other_school.id}",
+        headers=csrf_headers(client),
+    )
+    assert remove_response.status_code == 200
+    assert remove_response.json()["community"] is None
 
 
 def test_school_deactivation_preserves_data_and_revokes_sessions(seeded_client):

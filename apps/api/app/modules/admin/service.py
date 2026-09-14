@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from beanie import PydanticObjectId
@@ -6,13 +7,16 @@ from pymongo.errors import DuplicateKeyError
 
 from app.db.mongo import get_mongo_client
 from app.modules.admin.schemas import (
+    AddCommunitySchoolRequest,
     CreateAdminUserRequest,
+    CreateCommunityRequest,
     CreateSchoolRequest,
     CreateSchoolUserRequest,
     ResetAdminUserPasswordRequest,
     ResetSchoolUserPasswordRequest,
     SchoolListSort,
     UpdateAdminUserRequest,
+    UpdateCommunityRequest,
     UpdateSchoolGroupRequest,
     UpdateSchoolRequest,
     UpdateSchoolUserRequest,
@@ -21,12 +25,14 @@ from app.modules.auth.security import hash_password
 from app.modules.identity.models import (
     AdminPermission,
     Community,
+    CommunityCode,
     RefreshRevokeReason,
     RefreshSession,
     School,
     SchoolGroup,
     User,
     UserRole,
+    community_name_key,
 )
 
 
@@ -66,10 +72,200 @@ class AdminUserOwnsSchoolsError(ValueError):
     """The requested lower administrator still owns schools."""
 
 
+class CommunityAlreadyExistsError(ValueError):
+    """A community with the same code or name already exists."""
+
+
+class CommunityNotFoundError(ValueError):
+    """The requested community does not exist."""
+
+
+class CommunitySchoolConflictError(ValueError):
+    """The school cannot be added to or removed from the community."""
+
+
+@dataclass(frozen=True)
+class CommunityWithStats:
+    community: Community
+    admin_username: str | None
+    school_count: int
+
+
+async def list_communities(
+    actor: User,
+    *,
+    offset: int,
+    limit: int,
+) -> tuple[list[CommunityWithStats], int]:
+    filters: dict[str, object] = {}
+    if actor.role == UserRole.ADMIN:
+        filters["admin_owner_id"] = actor.id
+
+    query = Community.find(filters)
+    total = await query.count()
+    communities = await query.sort("name", "_id").skip(offset).limit(limit).to_list()
+    return [await _community_with_stats(item) for item in communities], total
+
+
+async def get_community_for_actor(
+    actor: User,
+    community_id: PydanticObjectId,
+) -> Community:
+    community = await Community.get(community_id)
+    if community is None:
+        raise CommunityNotFoundError("Community not found")
+    _ensure_community_access(actor, community)
+    return community
+
+
+async def get_community_with_stats(
+    actor: User,
+    community_id: PydanticObjectId,
+) -> CommunityWithStats:
+    return await _community_with_stats(await get_community_for_actor(actor, community_id))
+
+
+async def create_community(actor: User, data: CreateCommunityRequest) -> CommunityWithStats:
+    admin_owner_id = await _resolve_school_owner(actor, data.admin_owner_id)
+    community = Community(
+        code=data.code,
+        name=data.name,
+        name_key=community_name_key(data.name),
+        admin_owner_id=admin_owner_id,
+    )
+
+    try:
+        await community.insert()
+    except DuplicateKeyError as exc:
+        raise CommunityAlreadyExistsError(
+            "A community with this code or name already exists"
+        ) from exc
+
+    return await _community_with_stats(community)
+
+
+async def update_community(
+    actor: User,
+    community_id: PydanticObjectId,
+    data: UpdateCommunityRequest,
+) -> CommunityWithStats:
+    community = await get_community_for_actor(actor, community_id)
+
+    if "name" in data.model_fields_set:
+        community.name = data.name
+        community.name_key = community_name_key(data.name)
+    if "admin_owner_id" in data.model_fields_set:
+        community.admin_owner_id = await _resolve_school_owner(actor, data.admin_owner_id)
+
+    community.updated_at = datetime.now(UTC)
+    try:
+        await community.save()
+    except DuplicateKeyError as exc:
+        raise CommunityAlreadyExistsError(
+            "A community with this code or name already exists"
+        ) from exc
+
+    return await _community_with_stats(community)
+
+
+async def list_community_admin_options() -> list[User]:
+    return await User.find(
+        {
+            "role": UserRole.ADMIN.value,
+            "is_active": True,
+        }
+    ).sort("username", "_id").to_list()
+
+
+async def list_community_school_options(actor: User) -> list[School]:
+    filters: dict[str, object] = {}
+    if actor.role == UserRole.ADMIN:
+        filters["$or"] = [
+            {"admin_owner_id": actor.id},
+            {"community": None, "admin_owner_id": None},
+        ]
+    return await School.find(filters).sort("name", "_id").to_list()
+
+
+async def add_school_to_community(
+    actor: User,
+    community_id: PydanticObjectId,
+    data: AddCommunitySchoolRequest,
+) -> School:
+    community = await get_community_for_actor(actor, community_id)
+    school = await get_school(data.school_id)
+
+    if school.community == community.code:
+        raise CommunitySchoolConflictError("School already belongs to community")
+    if school.community is not None:
+        raise CommunitySchoolConflictError("School already belongs to another community")
+    if actor.role == UserRole.ADMIN and school.admin_owner_id not in {None, actor.id}:
+        raise AdminAccessDeniedError("School access denied")
+
+    updated_at = datetime.now(UTC)
+    updates: dict[str, object] = {
+        "community": community.code,
+        "updated_at": updated_at,
+    }
+    if community.admin_owner_id is not None:
+        updates["admin_owner_id"] = community.admin_owner_id
+
+    result = await School.get_pymongo_collection().update_one(
+        {
+            "_id": school.id,
+            "community": None,
+            "admin_owner_id": school.admin_owner_id,
+        },
+        {"$set": updates},
+    )
+    if result.matched_count != 1:
+        raise CommunitySchoolConflictError("School community changed concurrently")
+
+    school.community = community.code
+    if community.admin_owner_id is not None:
+        school.admin_owner_id = community.admin_owner_id
+    school.updated_at = updated_at
+    return school
+
+
+async def remove_school_from_community(
+    actor: User,
+    community_id: PydanticObjectId,
+    school_id: PydanticObjectId,
+) -> School:
+    community = await get_community_for_actor(actor, community_id)
+    school = await get_school(school_id)
+    if school.community != community.code:
+        raise CommunitySchoolConflictError("School does not belong to community")
+    if actor.role == UserRole.ADMIN and school.admin_owner_id != actor.id:
+        raise AdminAccessDeniedError("School access denied")
+
+    updated_at = datetime.now(UTC)
+    result = await School.get_pymongo_collection().update_one(
+        {
+            "_id": school.id,
+            "community": community.code,
+            "admin_owner_id": school.admin_owner_id,
+        },
+        {
+            "$set": {
+                "community": None,
+                "updated_at": updated_at,
+            }
+        },
+    )
+    if result.matched_count != 1:
+        raise CommunitySchoolConflictError("School community changed concurrently")
+
+    school.community = None
+    school.updated_at = updated_at
+    return school
+
+
 async def list_schools(
     actor: User,
     *,
-    community: Community | None,
+    community: CommunityCode | None,
     sort_by: SchoolListSort,
     offset: int,
     limit: int,
@@ -107,10 +303,19 @@ async def get_school_for_actor(
 
 
 async def create_school(actor: User, data: CreateSchoolRequest) -> School:
+    community = await _resolve_community(actor, data.community)
     admin_owner_id = await _resolve_school_owner(actor, data.admin_owner_id)
+    if community is not None and community.admin_owner_id is not None:
+        admin_owner_id = community.admin_owner_id
+    if (
+        community is not None
+        and data.admin_owner_id is not None
+        and data.admin_owner_id != admin_owner_id
+    ):
+        raise AdminAccessDeniedError("School administrator must match community administrator")
     school = School(
         name=data.name,
-        community=data.community,
+        community=community.code if community is not None else None,
         admin_owner_id=admin_owner_id,
     )
 
@@ -130,11 +335,21 @@ async def update_school(
     if "name" in data.model_fields_set:
         school.name = data.name
     if "community" in data.model_fields_set:
-        school.community = data.community
+        community = await _resolve_community(actor, data.community)
+        school.community = community.code if community is not None else None
+        if community is not None and community.admin_owner_id is not None:
+            school.admin_owner_id = community.admin_owner_id
     if "admin_owner_id" in data.model_fields_set:
         if actor.role != UserRole.OWNER:
             raise AdminAccessDeniedError("Only owner can reassign schools")
-        school.admin_owner_id = await _resolve_school_owner(actor, data.admin_owner_id)
+        admin_owner_id = await _resolve_school_owner(actor, data.admin_owner_id)
+        if school.community is not None:
+            community = await _get_community_by_code(school.community)
+            if admin_owner_id != community.admin_owner_id:
+                raise AdminAccessDeniedError(
+                    "School administrator must match community administrator"
+                )
+        school.admin_owner_id = admin_owner_id
     if "is_active" in data.model_fields_set:
         school.is_active = bool(data.is_active)
 
@@ -428,8 +643,9 @@ async def update_admin_user(
 
     if user.role == UserRole.ADMIN and next_role == UserRole.TECHNOLOGIST:
         owned_school = await School.find_one(School.admin_owner_id == user.id)
-        if owned_school is not None:
-            raise AdminUserOwnsSchoolsError("Administrator owns schools")
+        owned_community = await Community.find_one(Community.admin_owner_id == user.id)
+        if owned_school is not None or owned_community is not None:
+            raise AdminUserOwnsSchoolsError("Administrator owns schools or communities")
 
     if "username" in data.model_fields_set:
         user.username = data.username
@@ -485,9 +701,10 @@ async def reset_admin_user_password(
 async def delete_admin_user(user_id: PydanticObjectId) -> None:
     await get_admin_user(user_id)
     owned_school = await School.find_one(School.admin_owner_id == user_id)
+    owned_community = await Community.find_one(Community.admin_owner_id == user_id)
 
-    if owned_school is not None:
-        raise AdminUserOwnsSchoolsError("Administrator owns schools")
+    if owned_school is not None or owned_community is not None:
+        raise AdminUserOwnsSchoolsError("Administrator owns schools or communities")
 
     async def purge_admin(session: AsyncClientSession) -> None:
         user = await User.get_pymongo_collection().find_one(
@@ -523,6 +740,45 @@ def _dedupe_permissions(
     permissions: list[AdminPermission],
 ) -> list[AdminPermission]:
     return list(dict.fromkeys(permissions))
+
+
+async def _community_with_stats(community: Community) -> CommunityWithStats:
+    admin = (
+        await User.get(community.admin_owner_id)
+        if community.admin_owner_id is not None
+        else None
+    )
+    return CommunityWithStats(
+        community=community,
+        admin_username=admin.username if admin is not None else None,
+        school_count=await School.find(School.community == community.code).count(),
+    )
+
+
+def _ensure_community_access(actor: User, community: Community) -> None:
+    if actor.role == UserRole.OWNER:
+        return
+    if actor.role == UserRole.ADMIN and community.admin_owner_id == actor.id:
+        return
+    raise AdminAccessDeniedError("Community access denied")
+
+
+async def _get_community_by_code(code: CommunityCode) -> Community:
+    community = await Community.find_one(Community.code == code)
+    if community is None:
+        raise CommunityNotFoundError("Community not found")
+    return community
+
+
+async def _resolve_community(
+    actor: User,
+    code: CommunityCode | None,
+) -> Community | None:
+    if code is None:
+        return None
+    community = await _get_community_by_code(code)
+    _ensure_community_access(actor, community)
+    return community
 
 
 def _ensure_school_access(actor: User, school: School) -> None:

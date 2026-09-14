@@ -43,11 +43,11 @@ describe('school form schemas', () => {
     ).toBe('');
   });
 
-  it('rejects an unknown community', () => {
+  it('rejects an invalid community code', () => {
     expect(
       schoolFormSchema.safeParse({
         name: 'Ліцей №1',
-        community: 'unknown',
+        community: 'Unknown community',
       }).success
     ).toBe(false);
   });

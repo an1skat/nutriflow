@@ -4,8 +4,8 @@ import { useState } from 'react';
 
 import Link from 'next/link';
 
+import { useCommunities } from '@/entities/community/api/CommunityQueries';
 import { useSchools } from '@/entities/school/api/SchoolQueries';
-import { schoolCommunityLabels } from '@/entities/school/model/School';
 import { CreateSchoolForm } from '@/features/school-management/ui/CreateSchoolForm';
 import { formatDate } from '@/shared/lib/FormatDate';
 import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
@@ -21,6 +21,10 @@ export function SchoolsOverview() {
     offset,
     limit: PAGE_SIZE,
   });
+  const communities = useCommunities({ offset: 0, limit: 100 });
+  const communityNames = new Map(
+    communities.data?.items.map((community) => [community.code, community.name])
+  );
 
   return (
     <main className="nf-page">
@@ -85,7 +89,7 @@ export function SchoolsOverview() {
                       </td>
                       <td>
                         {school.community
-                          ? schoolCommunityLabels[school.community]
+                          ? (communityNames.get(school.community) ?? school.community)
                           : 'Не вказана'}
                       </td>
                       <td>
