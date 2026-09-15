@@ -7,7 +7,8 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
-import { adminUsersQueryOptions } from '@/entities/admin-user/api/AdminUserQueries';
+import { useCommunities } from '@/entities/community/api/CommunityQueries';
+import { menuRequirementCommunitiesQueryOptions } from '@/entities/menu-requirement/api/MenuRequirementQueries';
 import { schoolsQueryOptions } from '@/entities/school/api/SchoolQueries';
 import { useCurrentUser } from '@/entities/session/api/SessionQueries';
 import { useWeeklyMenus } from '@/entities/weekly-menu/api/WeeklyMenuQueries';
@@ -35,6 +36,7 @@ import { useConfirm } from '@/shared/ui/ConfirmDialog';
 import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
 import { RequestError } from '@/shared/ui/RequestError';
 
+import { groupByCommunity } from '../model/GroupByCommunity';
 import { WeeklyMenuPicker } from './WeeklyMenuPicker';
 
 export function WeeklyMenuAdminWorkspace() {
@@ -142,13 +144,13 @@ export function WeeklyMenuAdminWorkspace() {
     enabled: canInspectSchools,
   });
 
-  const adminUsers = useQuery({
-    ...adminUsersQueryOptions({
-      offset: 0,
-      limit: 100,
-    }),
-    enabled: user?.role === 'OWNER',
-  });
+  const communities = useCommunities(
+    { offset: 0, limit: 100 },
+    Boolean(user && hasPermission(user, 'schools.manage'))
+  );
+  const requirementCommunities = useQuery(
+    menuRequirementCommunitiesQueryOptions(user?.role === 'TECHNOLOGIST')
+  );
 
   const activeSchools = useMemo(
     () => schools.data?.items.filter((school) => school.is_active) ?? [],
@@ -167,45 +169,19 @@ export function WeeklyMenuAdminWorkspace() {
     [activeSchoolIds, selectedSchoolIds]
   );
 
-  const ownerSchoolGroups = useMemo(() => {
-    if (user?.role !== 'OWNER') {
-      return [];
-    }
-
-    const adminLabelById = new Map(
-      (adminUsers.data?.items ?? []).map((admin) => [admin.id, admin.username])
+  const communityNames = useMemo(() => {
+    const names = new Map(
+      (communities.data?.items ?? []).map((community) => [community.code, community.name])
     );
-    const groups = new Map<
-      string,
-      {
-        key: string;
-        label: string;
-        schools: typeof activeSchools;
-      }
-    >();
-
-    for (const school of activeSchools) {
-      const key = school.admin_owner_id ?? 'unassigned';
-      const label =
-        school.admin_owner_id === null
-          ? 'Без закріпленого адміністратора'
-          : (adminLabelById.get(school.admin_owner_id) ?? `Адміністратор ${school.admin_owner_id}`);
-      const existing = groups.get(key);
-
-      if (existing) {
-        existing.schools.push(school);
-        continue;
-      }
-
-      groups.set(key, {
-        key,
-        label,
-        schools: [school],
-      });
+    for (const community of requirementCommunities.data ?? []) {
+      names.set(community.community, community.community_name);
     }
-
-    return [...groups.values()].sort((left, right) => left.label.localeCompare(right.label, 'uk'));
-  }, [activeSchools, adminUsers.data?.items, user?.role]);
+    return names;
+  }, [communities.data?.items, requirementCommunities.data]);
+  const publishSchoolGroups = useMemo(
+    () => groupByCommunity(activeSchools, (school) => school.community, communityNames),
+    [activeSchools, communityNames]
+  );
 
   const revokableMenuCopies = useMemo(() => {
     const copies = [
@@ -219,44 +195,12 @@ export function WeeklyMenuAdminWorkspace() {
   }, [archivedMenuCopies.data?.items, publishedMenuCopies.data?.items]);
 
   const revokeSchoolGroups = useMemo(() => {
-    const adminLabelById = new Map(
-      (adminUsers.data?.items ?? []).map((admin) => [admin.id, admin.username])
+    return groupByCommunity(
+      revokableMenuCopies,
+      (copy) => (copy.school_id ? schoolById.get(copy.school_id)?.community : undefined),
+      communityNames
     );
-    const groups = new Map<
-      string,
-      {
-        key: string;
-        label: string;
-        copies: WeeklyMenu[];
-      }
-    >();
-
-    for (const copy of revokableMenuCopies) {
-      const school = copy.school_id ? schoolById.get(copy.school_id) : undefined;
-      const key = user?.role === 'OWNER' ? (school?.admin_owner_id ?? 'unassigned') : 'schools';
-      const label =
-        user?.role === 'OWNER'
-          ? school?.admin_owner_id === null || school?.admin_owner_id === undefined
-            ? 'Без закріпленого адміністратора'
-            : (adminLabelById.get(school.admin_owner_id) ??
-              `Адміністратор ${school.admin_owner_id}`)
-          : 'Школи з цим меню';
-      const existing = groups.get(key);
-
-      if (existing) {
-        existing.copies.push(copy);
-        continue;
-      }
-
-      groups.set(key, {
-        key,
-        label,
-        copies: [copy],
-      });
-    }
-
-    return [...groups.values()].sort((left, right) => left.label.localeCompare(right.label, 'uk'));
-  }, [adminUsers.data?.items, revokableMenuCopies, schoolById, user?.role]);
+  }, [communityNames, revokableMenuCopies, schoolById]);
 
   const effectiveSelectedRevokeCopyIds = useMemo(() => {
     const revokableIds = new Set(revokableMenuCopies.map((copy) => copy.id));
@@ -522,7 +466,7 @@ export function WeeklyMenuAdminWorkspace() {
                       </button>
                     </div>
 
-                    {schools.isPending || (user.role === 'OWNER' && adminUsers.isPending) ? (
+                    {schools.isPending ? (
                       <LoadingSpinner label="Завантажуємо школи для розсилки…" />
                     ) : null}
 
@@ -530,23 +474,7 @@ export function WeeklyMenuAdminWorkspace() {
                       <RequestError error={schools.error} onRetry={() => void schools.refetch()} />
                     ) : null}
 
-                    {user.role === 'OWNER' && adminUsers.isError ? (
-                      <RequestError
-                        error={adminUsers.error}
-                        onRetry={() => void adminUsers.refetch()}
-                      />
-                    ) : null}
-
-                    {(user.role === 'OWNER'
-                      ? ownerSchoolGroups
-                      : [
-                          {
-                            key: 'all-schools',
-                            label: 'Усі активні школи',
-                            schools: activeSchools,
-                          },
-                        ]
-                    ).map((group) => (
+                    {publishSchoolGroups.map((group) => (
                       <div key={group.key} className="space-y-2">
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-xs font-bold uppercase tracking-wide text-slate-600">
@@ -554,7 +482,7 @@ export function WeeklyMenuAdminWorkspace() {
                           </p>
                         </div>
                         <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-                          {group.schools.map((school) => (
+                          {group.items.map((school) => (
                             <label key={school.id} className="nf-checkbox-row">
                               <input
                                 type="checkbox"
@@ -579,13 +507,18 @@ export function WeeklyMenuAdminWorkspace() {
                     <p className="text-sm text-slate-700">
                       Меню буде розіслано у всі активні школи, які закріплені за вашим акаунтом.
                     </p>
-                    <ul className="grid gap-1 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-3">
-                      {schools.data.items
-                        .filter((school) => school.is_active)
-                        .map((school) => (
-                          <li key={school.id}>{school.name}</li>
-                        ))}
-                    </ul>
+                    {publishSchoolGroups.map((group) => (
+                      <div key={group.key} className="space-y-1">
+                        <p className="text-xs font-bold uppercase tracking-wide text-slate-600">
+                          {group.label}
+                        </p>
+                        <ul className="grid gap-1 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-3">
+                          {group.items.map((school) => (
+                            <li key={school.id}>{school.name}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   <p className="text-sm text-slate-700">
@@ -659,7 +592,7 @@ export function WeeklyMenuAdminWorkspace() {
                       {group.label}
                     </p>
                     <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-                      {group.copies.map((copy) => {
+                      {group.items.map((copy) => {
                         const school = copy.school_id ? schoolById.get(copy.school_id) : undefined;
 
                         return (
