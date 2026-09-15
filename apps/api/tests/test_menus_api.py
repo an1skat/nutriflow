@@ -2,12 +2,15 @@ from copy import deepcopy
 from io import BytesIO
 
 import openpyxl
+import pytest
 from beanie import PydanticObjectId
 from fastapi.testclient import TestClient
 from pymongo import MongoClient
 
 from app.core.config import get_settings
-from app.modules.menus.models import MealType
+from app.modules.menus import service as menu_service
+from app.modules.menus.models import MealType, WeeklyMenu
+from app.modules.menus.schemas import UpdateWeeklyMenuRequest
 from app.modules.menus.service import parse_weekly_menu_workbook
 
 
@@ -100,6 +103,23 @@ def weekly_menu_payload(
     if school_id is not None:
         payload["school_id"] = school_id
     return payload
+
+
+@pytest.mark.parametrize("items", [[], None], ids=["empty", "omitted"])
+def test_create_weekly_menu_requires_nonempty_items_at_api_boundary(seeded_client, items):
+    client, identities = seeded_client
+    login(client, identities.admin.username, identities.admin_password)
+    payload = weekly_menu_payload()
+    if items is None:
+        payload["days"][0].pop("items")
+    else:
+        payload["days"][0]["items"] = items
+
+    response = client.post(
+        "/api/v1/menus/weekly", json=payload, headers=csrf_headers(client)
+    )
+    assert response.status_code == 422
+    assert any(error["loc"] == ["body", "days", 0, "items"] for error in response.json()["detail"])
 
 
 def import_workbook_bytes() -> bytes:
@@ -378,6 +398,59 @@ def test_template_update_propagates_to_existing_school_copy(seeded_client):
     assert repeated_publish_response.json()["skipped_existing_school_ids"] == [
         str(identities.own_school.id)
     ]
+
+
+def test_template_update_rejects_copy_changed_after_merge_read(seeded_client, monkeypatch):
+    client, identities = seeded_client
+    login(client, identities.admin.username, identities.admin_password)
+    source = client.post(
+        "/api/v1/menus/weekly",
+        json=weekly_menu_payload(),
+        headers=csrf_headers(client),
+    ).json()
+    copy_id = client.post(
+        f"/api/v1/menus/weekly/{source['id']}/publish",
+        json={"school_ids": [str(identities.own_school.id)]},
+        headers=csrf_headers(client),
+    ).json()["created_menu_ids"][0]
+    before = client.get(f"/api/v1/menus/weekly/{copy_id}").json()
+    removed_id = before["days"][0]["items"][0]["id"]
+    original_replace = menu_service._replace_weekly_menu_if_current
+    injected = False
+
+    async def replace_with_concurrent_school_save(menu, expected_revision, *, session=None):
+        nonlocal injected
+        if str(menu.id) == source["id"] and not injected:
+            injected = True
+            school_copy = await WeeklyMenu.get(copy_id)
+            days = school_copy.model_dump(mode="json")["days"]
+            days[0]["items"].pop(0)
+            for position, item in enumerate(days[0]["items"], start=1):
+                item["position"] = position
+            await menu_service.update_weekly_menu(
+                school_copy.id,
+                UpdateWeeklyMenuRequest.model_validate(
+                    {"days": days, "revision": school_copy.revision}
+                ),
+                identities.school_user,
+            )
+        await original_replace(menu, expected_revision, session=session)
+
+    monkeypatch.setattr(
+        menu_service, "_replace_weekly_menu_if_current", replace_with_concurrent_school_save
+    )
+    response = client.patch(
+        f"/api/v1/menus/weekly/{source['id']}",
+        json={"title": "Новая версия шаблона", "revision": source["revision"]},
+        headers=csrf_headers(client),
+    )
+
+    assert injected
+    assert response.status_code == 409, response.text
+    after = client.get(f"/api/v1/menus/weekly/{copy_id}").json()
+    assert after["revision"] == before["revision"] + 1
+    assert removed_id not in [item["id"] for item in after["days"][0]["items"]]
+    assert client.get(f"/api/v1/menus/weekly/{source['id']}").json()["title"] == source["title"]
 
 
 def test_weekly_menu_update_rejects_stale_revision(seeded_client):
@@ -821,7 +894,7 @@ def test_school_user_adds_dish_card_with_existing_reference_resolver(seeded_clie
     assert added["allergen_codes"] == ["ГЦ"]
 
 
-def test_school_user_cannot_remove_or_replace_existing_item_ids(seeded_client):
+def test_school_user_can_remove_existing_item_but_cannot_empty_day_or_forge_ids(seeded_client):
     client, identities = seeded_client
     login(client, identities.admin.username, identities.admin_password)
     create_response = client.post(
@@ -839,35 +912,68 @@ def test_school_user_cannot_remove_or_replace_existing_item_ids(seeded_client):
     menu = client.get(f"/api/v1/menus/weekly/{menu_id}").json()
 
     login(client, identities.school_user.username, identities.school_user_password)
+    reordered_days = deepcopy(menu["days"])
+    reordered_days[0]["items"][0]["position"] = 2
+    reordered_days[0]["items"][1]["position"] = 1
+    reordered_response = client.patch(
+        f"/api/v1/menus/weekly/{menu_id}",
+        json={"days": reordered_days, "revision": menu["revision"]},
+        headers=csrf_headers(client),
+    )
+    assert reordered_response.status_code == 400
+    assert reordered_response.json()["detail"] == (
+        "School users cannot replace or reorder existing dish IDs"
+    )
+
     removed_days = deepcopy(menu["days"])
-    removed_days[0]["items"].pop()
+    removed_days[0]["items"].pop(0)
+    removed_days[0]["items"][0]["position"] = 1
     removed_response = client.patch(
         f"/api/v1/menus/weekly/{menu_id}",
         json={"days": removed_days, "revision": menu["revision"]},
         headers=csrf_headers(client),
     )
-    assert removed_response.status_code == 400
-    assert removed_response.json()["detail"] == (
-        "School users cannot remove, replace, or reorder existing dishes"
-    )
+    assert removed_response.status_code == 200, removed_response.text
+    updated_menu = removed_response.json()
+    assert len(updated_menu["days"][0]["items"]) == 1
+    assert updated_menu["days"][0]["items"][0]["id"] == menu["days"][0]["items"][1]["id"]
+    assert updated_menu["days"][0]["items"][0]["position"] == 1
 
-    replaced_days = deepcopy(menu["days"])
+    empty_days = deepcopy(updated_menu["days"])
+    empty_days[0]["items"] = []
+    empty_response = client.patch(
+        f"/api/v1/menus/weekly/{menu_id}",
+        json={"days": empty_days, "revision": updated_menu["revision"]},
+        headers=csrf_headers(client),
+    )
+    assert empty_response.status_code == 422
+
+    omitted_days = deepcopy(updated_menu["days"])
+    del omitted_days[0]["items"]
+    omitted_response = client.patch(
+        f"/api/v1/menus/weekly/{menu_id}",
+        json={"days": omitted_days, "revision": updated_menu["revision"]},
+        headers=csrf_headers(client),
+    )
+    assert omitted_response.status_code == 422
+
+    replaced_days = deepcopy(updated_menu["days"])
     replaced_days[0]["items"][0]["id"] = str(PydanticObjectId())
     replaced_response = client.patch(
         f"/api/v1/menus/weekly/{menu_id}",
-        json={"days": replaced_days, "revision": menu["revision"]},
+        json={"days": replaced_days, "revision": updated_menu["revision"]},
         headers=csrf_headers(client),
     )
     assert replaced_response.status_code == 400
     assert replaced_response.json()["detail"] == (
-        "School users cannot remove, replace, or reorder existing dishes"
+        "School users cannot replace or reorder existing dish IDs"
     )
 
-    duplicate_position_days = deepcopy(menu["days"])
+    duplicate_position_days = deepcopy(updated_menu["days"])
     duplicate_position_days[0]["items"].append(product_item(position=1))
     duplicate_position_response = client.patch(
         f"/api/v1/menus/weekly/{menu_id}",
-        json={"days": duplicate_position_days, "revision": menu["revision"]},
+        json={"days": duplicate_position_days, "revision": updated_menu["revision"]},
         headers=csrf_headers(client),
     )
     assert duplicate_position_response.status_code == 400

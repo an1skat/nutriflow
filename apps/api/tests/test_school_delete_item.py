@@ -1,7 +1,10 @@
+import os
 from copy import deepcopy
 
 from fastapi.testclient import TestClient
+from pymongo import MongoClient
 
+from app.modules.menus import service
 from tests.conftest import SeededIdentities
 from tests.test_school_add_item_downstream import create_dish, csrf_headers, login
 
@@ -155,71 +158,41 @@ def test_persisted_school_added_item_can_be_deleted(seeded_client):
     assert len(menu_b_final["days"][0]["items"]) == 5
 
 
-def test_template_item_cannot_be_deleted(seeded_client):
+def test_template_item_can_be_deleted_without_changing_other_schools(seeded_client):
     client, identities = seeded_client
-    _, menu_a_id, _, _ = _setup_template_and_schools(client, identities)
+    template_id, menu_a_id, menu_b_id, _ = _setup_template_and_schools(client, identities)
 
     login(client, identities.school_user.username, identities.school_user_password)
     menu_a = client.get(f"/api/v1/menus/weekly/{menu_a_id}").json()
-    orig_revision = menu_a["revision"]
+    removed_id = menu_a["days"][0]["items"][0]["id"]
 
-    # Try removing template item 0
-    malicious_days = deepcopy(menu_a["days"])
-    malicious_days[0]["items"].pop(0)
+    changed_days = deepcopy(menu_a["days"])
+    changed_days[0]["items"].pop(0)
+    for position, item in enumerate(changed_days[0]["items"], start=1):
+        item["position"] = position
 
-    reject_resp = client.patch(
+    save_resp = client.patch(
         f"/api/v1/menus/weekly/{menu_a_id}",
-        json={"days": malicious_days, "revision": orig_revision},
+        json={"days": changed_days, "revision": menu_a["revision"]},
         headers=csrf_headers(client),
     )
-    assert reject_resp.status_code == 400
-    assert (
-        reject_resp.json()["detail"]
-        == "School users cannot remove, replace, or reorder existing dishes"
-    )
+    assert save_resp.status_code == 200, save_resp.text
+    assert [item["position"] for item in save_resp.json()["days"][0]["items"]] == [1, 2, 3, 4]
 
-    # Verify menu is completely unchanged
-    menu_after = client.get(f"/api/v1/menus/weekly/{menu_a_id}").json()
-    assert len(menu_after["days"][0]["items"]) == 5
-    assert menu_after["revision"] == orig_revision
-
-
-def test_cannot_forge_deletion_permission(seeded_client):
-    client, identities = seeded_client
-    _, menu_a_id, _, _ = _setup_template_and_schools(client, identities)
-
-    login(client, identities.school_user.username, identities.school_user_password)
-    menu_a = client.get(f"/api/v1/menus/weekly/{menu_a_id}").json()
-
-    # Attempt to forge is_school_added=True on template item, then delete it
-    malicious_days = deepcopy(menu_a["days"])
-    malicious_days[0]["items"][0]["is_school_added"] = True
-
-    # Save attempt with is_school_added=True (server will ignore client value)
-    patch_resp = client.patch(
-        f"/api/v1/menus/weekly/{menu_a_id}",
-        json={"days": malicious_days, "revision": menu_a["revision"]},
+    login(client, identities.admin.username, identities.admin_password)
+    template = client.get(f"/api/v1/menus/weekly/{template_id}").json()
+    update_resp = client.patch(
+        f"/api/v1/menus/weekly/{template_id}",
+        json={"title": "Оновлене типове меню", "revision": template["revision"]},
         headers=csrf_headers(client),
     )
-    assert patch_resp.status_code == 200
-    menu_a = patch_resp.json()
-    # Confirm server kept is_school_added as False
-    assert menu_a["days"][0]["items"][0]["is_school_added"] is False
+    assert update_resp.status_code == 200, update_resp.text
 
-    # Now attempt to delete this template item
-    del_days = deepcopy(menu_a["days"])
-    del_days[0]["items"].pop(0)
-
-    del_resp = client.patch(
-        f"/api/v1/menus/weekly/{menu_a_id}",
-        json={"days": del_days, "revision": menu_a["revision"]},
-        headers=csrf_headers(client),
-    )
-    assert del_resp.status_code == 400
-    assert (
-        del_resp.json()["detail"]
-        == "School users cannot remove, replace, or reorder existing dishes"
-    )
+    menu_a_after = client.get(f"/api/v1/menus/weekly/{menu_a_id}").json()
+    menu_b_after = client.get(f"/api/v1/menus/weekly/{menu_b_id}").json()
+    assert removed_id not in [item["id"] for item in menu_a_after["days"][0]["items"]]
+    assert len(menu_a_after["days"][0]["items"]) == 4
+    assert len(menu_b_after["days"][0]["items"]) == 5
 
 
 def test_delete_one_of_multiple_local_items_resequences_positions(seeded_client):
@@ -559,9 +532,9 @@ def test_closed_day_blocks_item_removal(seeded_client):
     menu_closed = close_resp.json()
     assert menu_closed["days"][0]["closed_at"] is not None
 
-    # Attempt to delete bread from closed day
+    # Attempt to delete a template dish from the closed day
     del_days = deepcopy(menu_closed["days"])
-    del_days[0]["items"].pop(5)
+    del_days[0]["items"].pop(0)
 
     del_closed_resp = client.patch(
         f"/api/v1/menus/weekly/{menu_a_id}",
@@ -570,3 +543,79 @@ def test_closed_day_blocks_item_removal(seeded_client):
     )
     assert del_closed_resp.status_code == 400
     assert del_closed_resp.json()["detail"] == "Closed daily menus cannot be changed"
+
+
+def test_template_update_does_not_overwrite_newer_school_revision(seeded_client, monkeypatch):
+    client, identities = seeded_client
+    template_id, menu_a_id, menu_b_id, _ = _setup_template_and_schools(client, identities)
+
+    login(client, identities.school_user.username, identities.school_user_password)
+    menu_a = client.get(f"/api/v1/menus/weekly/{menu_a_id}").json()
+    deleted_item_id = menu_a["days"][0]["items"][0]["id"]
+    assert menu_a["revision"] == 1
+
+    orig_apply = service._apply_template_update_to_copy
+    race_triggered = False
+
+    def hooked_apply(source, target, previous_source_days, *, actor, now):
+        nonlocal race_triggered
+        res = orig_apply(source, target, previous_source_days, actor=actor, now=now)
+        if not race_triggered and str(target.id) == menu_a_id:
+            race_triggered = True
+            # Concurrently, School A's document in DB is updated to revision 2 with item 0 deleted
+            sync_client = MongoClient(os.environ["MONGO_URI"])
+            try:
+                sync_db = sync_client[os.environ.get("MONGO_DB", "nutriflow_test")]
+                doc = sync_db["weekly_menus"].find_one({"_id": target.id})
+                assert doc is not None
+                doc["days"][0]["items"].pop(0)
+                for position, item in enumerate(doc["days"][0]["items"], start=1):
+                    item["position"] = position
+                doc["revision"] = 2
+                sync_db["weekly_menus"].replace_one({"_id": target.id}, doc)
+            finally:
+                sync_client.close()
+        return res
+
+    monkeypatch.setattr(service, "_apply_template_update_to_copy", hooked_apply)
+
+    login(client, identities.admin.username, identities.admin_password)
+    template = client.get(f"/api/v1/menus/weekly/{template_id}").json()
+    update_resp = client.patch(
+        f"/api/v1/menus/weekly/{template_id}",
+        json={"title": "Шаблон після оновлення", "revision": template["revision"]},
+        headers=csrf_headers(client),
+    )
+    assert update_resp.status_code == 409
+    assert update_resp.json()["detail"] == "Weekly menu was changed by another user"
+    assert race_triggered is True
+
+    menu_a_after = client.get(f"/api/v1/menus/weekly/{menu_a_id}").json()
+    assert menu_a_after["revision"] == 2
+    assert deleted_item_id not in [item["id"] for item in menu_a_after["days"][0]["items"]]
+    assert len(menu_a_after["days"][0]["items"]) == 4
+
+    menu_b_after = client.get(f"/api/v1/menus/weekly/{menu_b_id}").json()
+    assert menu_b_after["revision"] == 1
+    assert len(menu_b_after["days"][0]["items"]) == 5
+
+    template_after = client.get(f"/api/v1/menus/weekly/{template_id}").json()
+    assert template_after["revision"] == template["revision"]
+
+
+def test_replace_weekly_menu_if_current_rejects_stale_revision(seeded_client):
+    client, identities = seeded_client
+    _, menu_a_id, _, _ = _setup_template_and_schools(client, identities)
+
+    login(client, identities.school_user.username, identities.school_user_password)
+    menu_a = client.get(f"/api/v1/menus/weekly/{menu_a_id}").json()
+
+    # Attempting to save with wrong/stale revision returns 409
+    resp = client.patch(
+        f"/api/v1/menus/weekly/{menu_a_id}",
+        json={"days": menu_a["days"], "revision": menu_a["revision"] + 42},
+        headers=csrf_headers(client),
+    )
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == "Weekly menu was changed by another user"
+

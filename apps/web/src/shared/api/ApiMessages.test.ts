@@ -5,8 +5,8 @@ import { translateApiDetail } from './ApiMessages';
 describe('translateApiDetail', () => {
   it('translates the school menu shape guard', () => {
     expect(
-      translateApiDetail('School users cannot remove, replace, or reorder existing dishes')
-    ).toBe('Користувач школи не може видаляти, замінювати або переставляти наявні позиції.');
+      translateApiDetail('School users cannot replace or reorder existing dish IDs')
+    ).toBe('Школа не може підміняти ідентифікатори або змінювати порядок наявних страв.');
   });
 
   it('translates unique positions error', () => {

@@ -29,10 +29,8 @@ export const detailTranslations: Record<string, string> = {
   'Menu access denied': 'Немає доступу до цього меню.',
   'Weekly menu end date cannot be before start date':
     'Дата завершення меню не може бути раніше дати початку.',
-  'School users cannot change the number of dishes in a day':
-    'Користувач школи не може змінювати кількість страв у межах дня.',
-  'School users cannot remove, replace, or reorder existing dishes':
-    'Користувач школи не може видаляти, замінювати або переставляти наявні позиції.',
+  'School users cannot replace or reorder existing dish IDs':
+    'Школа не може підміняти ідентифікатори або змінювати порядок наявних страв.',
   'Daily menu item positions must be unique': 'Позиції страв у меню дня мають бути унікальними.',
   'Only template weekly menus can be published': 'Розсилати можна лише збережені тижневі меню.',
   'Only archived weekly menus can be deleted': 'Повністю видалити можна лише меню з архіву.',

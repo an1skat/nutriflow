@@ -4,7 +4,7 @@ from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from beanie import BulkWriter, PydanticObjectId
+from beanie import PydanticObjectId
 from beanie.odm.utils.dump import get_dict
 from fastapi import UploadFile
 from pymongo import ReturnDocument
@@ -217,9 +217,7 @@ async def update_weekly_menu(
                 data.days or [],
             )
             converted_days = await _to_daily_menus(data.days or [])
-            previous_items_by_id = {
-                item.id: item for day in previous_days for item in day.items
-            }
+            previous_items_by_id = {item.id: item for day in previous_days for item in day.items}
             for day in converted_days:
                 for item in day.items:
                     if item.id in previous_items_by_id:
@@ -272,7 +270,7 @@ async def update_weekly_menu(
         and menu.school_id is None
         and menu.source_menu_id is None
     ):
-        await _save_template_and_propagate(menu, current_user, data.revision)
+        await _save_template_and_propagate(menu, current_user, data.revision, previous_days)
     elif change_request is None:
         await _replace_weekly_menu_if_current(menu, data.revision)
     else:
@@ -538,6 +536,7 @@ async def _save_template_and_propagate(
     source: WeeklyMenu,
     actor: User,
     expected_revision: int,
+    previous_source_days: list[DailyMenu],
 ) -> None:
     if source.id is None:
         raise RuntimeError("Persisted weekly menu is required")
@@ -547,17 +546,14 @@ async def _save_template_and_propagate(
         {"status": {"$ne": WeeklyMenuStatus.REVOKED.value}},
     ).to_list()
     now = datetime.now(UTC)
+    copy_revisions = [copy.revision for copy in copies]
     for copy in copies:
-        _apply_template_update_to_copy(source, copy, actor=actor, now=now)
-        copy.revision += 1
+        _apply_template_update_to_copy(source, copy, previous_source_days, actor=actor, now=now)
 
     async def save_source_and_copies(session: Any) -> None:
         await _replace_weekly_menu_if_current(source, expected_revision, session=session)
-        if not copies:
-            return
-        async with BulkWriter(session=session, ordered=False) as bulk_writer:
-            for copy in copies:
-                await copy.replace(session=session, bulk_writer=bulk_writer)
+        for copy, revision in zip(copies, copy_revisions, strict=True):
+            await _replace_weekly_menu_if_current(copy, revision, session=session)
 
     async with get_mongo_client().start_session() as session:
         await session.with_transaction(save_source_and_copies)
@@ -592,6 +588,7 @@ async def _replace_weekly_menu_if_current(
 def _apply_template_update_to_copy(
     source: WeeklyMenu,
     target: WeeklyMenu,
+    previous_source_days: list[DailyMenu],
     *,
     actor: User,
     now: datetime,
@@ -601,7 +598,7 @@ def _apply_template_update_to_copy(
     target.cycle_week = source.cycle_week
     target.starts_on = source.starts_on
     target.ends_on = source.ends_on
-    target.days = _merge_distributed_days(source.days, target.days)
+    target.days = _merge_distributed_days(source.days, target.days, previous_source_days)
     target.notes = source.notes
     target.source_file_name = source.source_file_name
     target.source_sheet_name = source.source_sheet_name
@@ -612,8 +609,12 @@ def _apply_template_update_to_copy(
 def _merge_distributed_days(
     source_days: list[DailyMenu],
     current_days: list[DailyMenu],
+    previous_source_days: list[DailyMenu],
 ) -> list[DailyMenu]:
     current_by_weekday = {day.weekday: day for day in current_days}
+    previous_item_ids_by_weekday = {
+        day.weekday: {item.id for item in day.items} for day in previous_source_days
+    }
     merged_days: list[DailyMenu] = []
 
     for source_day in source_days:
@@ -627,6 +628,12 @@ def _merge_distributed_days(
             current_items_by_id = {
                 item.id: item for item in current_day.items if item.id is not None
             }
+            previous_item_ids = previous_item_ids_by_weekday.get(source_day.weekday, set())
+            merged_day.items = [
+                item
+                for item in merged_day.items
+                if item.id not in previous_item_ids or item.id in current_items_by_id
+            ]
             matched_current_item_ids: set[PydanticObjectId] = set()
 
             for index, item in enumerate(merged_day.items):
@@ -640,7 +647,7 @@ def _merge_distributed_days(
                     else:
                         item.servings = deepcopy(current_item.servings)
 
-            # Preserve school-added items (items in current_day that did not come from template)
+            # Preserve unmatched school items, including items removed from the template.
             unmatched_school_items = [
                 item
                 for item in current_day.items
@@ -658,6 +665,8 @@ def _merge_distributed_days(
                 merged_day.items.append(preserved)
 
             merged_day.items.sort(key=lambda it: it.position)
+            for position, item in enumerate(merged_day.items, start=1):
+                item.position = position
             merged_day.reopened_at = current_day.reopened_at
             merged_day.reopened_by = current_day.reopened_by
         merged_days.append(merged_day)
@@ -1315,7 +1324,7 @@ def _collect_school_dish_changes(
     }
     for day in previous_days:
         for prev_item in day.items:
-            if (day.weekday, prev_item.id) not in updated_items and prev_item.is_school_added:
+            if (day.weekday, prev_item.id) not in updated_items:
                 changes.append(
                     MenuFieldChange(
                         weekday=day.weekday,
@@ -1337,6 +1346,8 @@ def _ensure_school_menu_shape_is_stable(
     current_days = {day.weekday: day for day in current_menu.days}
     submitted_days = {day.weekday: day for day in new_days}
 
+    if len(submitted_days) != len(new_days):
+        raise MenuValidationError("Weekly menu days must be unique")
     if current_days.keys() != submitted_days.keys():
         raise MenuValidationError("School users cannot add or remove menu days")
 
@@ -1346,28 +1357,27 @@ def _ensure_school_menu_shape_is_stable(
             raise MenuValidationError("School users cannot change day metadata")
 
         current_items_by_id = {item.id: item for item in current_day.items}
-        submitted_items_with_id = [
-            item for item in submitted_day.items if item.id is not None
-        ]
+        submitted_positions = [item.position for item in submitted_day.items]
+        if len(submitted_positions) != len(set(submitted_positions)):
+            raise MenuValidationError("Daily menu item positions must be unique")
+
+        submitted_items_with_id = sorted(
+            (item for item in submitted_day.items if item.id is not None),
+            key=lambda item: item.position,
+        )
         submitted_ids = [item.id for item in submitted_items_with_id]
 
         if len(submitted_ids) != len(set(submitted_ids)):
             raise MenuValidationError(
-                "School users cannot remove, replace, or reorder existing dishes",
+                "School users cannot replace or reorder existing dish IDs",
             )
 
         if any(item_id not in current_items_by_id for item_id in submitted_ids):
             raise MenuValidationError(
-                "School users cannot remove, replace, or reorder existing dishes",
+                "School users cannot replace or reorder existing dish IDs",
             )
 
         removed_ids = set(current_items_by_id.keys()) - set(submitted_ids)
-        for removed_id in removed_ids:
-            item = current_items_by_id[removed_id]
-            if not item.is_school_added:
-                raise MenuValidationError(
-                    "School users cannot remove, replace, or reorder existing dishes",
-                )
 
         if current_day.closed_at is not None and (
             removed_ids or len(submitted_day.items) != len(current_day.items)
@@ -1379,21 +1389,8 @@ def _ensure_school_menu_shape_is_stable(
         ]
         if submitted_ids != expected_surviving_order:
             raise MenuValidationError(
-                "School users cannot remove, replace, or reorder existing dishes",
+                "School users cannot replace or reorder existing dish IDs",
             )
-
-        submitted_item_map = {item.id: item for item in submitted_items_with_id}
-        for item in current_day.items:
-            if not item.is_school_added:
-                submitted_item = submitted_item_map.get(item.id)
-                if submitted_item is None or submitted_item.position != item.position:
-                    raise MenuValidationError(
-                        "School users cannot remove, replace, or reorder existing dishes",
-                    )
-
-        submitted_positions = [item.position for item in submitted_day.items]
-        if len(submitted_positions) != len(set(submitted_positions)):
-            raise MenuValidationError("Daily menu item positions must be unique")
 
         # Deterministic position resequencing after successful validation
         submitted_day.items.sort(key=lambda it: it.position)

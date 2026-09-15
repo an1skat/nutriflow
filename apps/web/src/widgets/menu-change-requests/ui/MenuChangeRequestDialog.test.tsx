@@ -160,4 +160,113 @@ describe('MenuChangeRequestDialog', () => {
     expect(within(dialog).getByText(/Середа — видалено: Хліб пшеничний/)).toBeInTheDocument();
     expect(within(dialog).getAllByText('Видалено позицію')).toHaveLength(2);
   });
+
+  it('keeps a removed dish separate from a changed dish at its former position', async () => {
+    render(
+      <MenuChangeRequestDialog open request={{
+        ...request,
+        changes: [
+          { weekday: 'monday', item_id: 'soup', position: 1, field: 'item_removed',
+            before_value: 'Суп', after_value: null },
+          { weekday: 'monday', item_id: 'porridge', position: 1, field: 'name',
+            before_value: 'Каша', after_value: 'Каша гречана' },
+        ],
+      }} loading={false} error={null} onRetry={() => undefined} onClose={() => undefined} />
+    );
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/Понеділок — видалено: Суп/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Понеділок · страва № 1/)).toBeInTheDocument();
+  });
+
+  it('keeps a removed dish separate from a new dish at the freed position', async () => {
+    render(
+      <MenuChangeRequestDialog open request={{
+        ...request,
+        changes: [
+          { weekday: 'monday', item_id: 'soup', position: 1, field: 'item_removed',
+            before_value: 'Суп', after_value: null },
+          { weekday: 'monday', item_id: 'compote', position: 1, field: 'item_added',
+            before_value: null, after_value: 'Компот' },
+        ],
+      }} loading={false} error={null} onRetry={() => undefined} onClose={() => undefined} />
+    );
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/Понеділок — видалено: Суп/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Понеділок — додано: Компот/)).toBeInTheDocument();
+  });
+
+  it('groups multiple field changes for the same item into one section', async () => {
+    render(
+      <MenuChangeRequestDialog
+        open
+        request={{
+          ...request,
+          changes: [
+            {
+              weekday: 'monday',
+              item_id: 'soup',
+              position: 1,
+              field: 'name',
+              before_value: 'Суп',
+              after_value: 'Суп гороховий',
+            },
+            {
+              weekday: 'monday',
+              item_id: 'soup',
+              position: 1,
+              field: 'portions',
+              before_value: null,
+              after_value: null,
+            },
+          ],
+        }}
+        loading={false}
+        error={null}
+        onRetry={() => undefined}
+        onClose={() => undefined}
+      />
+    );
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getAllByText(/Понеділок · страва № 1/)).toHaveLength(1);
+  });
+
+  it('keeps changes on different weekdays separate', async () => {
+    render(
+      <MenuChangeRequestDialog
+        open
+        request={{
+          ...request,
+          changes: [
+            {
+              weekday: 'monday',
+              item_id: 'soup',
+              position: 1,
+              field: 'item_removed',
+              before_value: 'Суп',
+              after_value: null,
+            },
+            {
+              weekday: 'tuesday',
+              item_id: 'soup',
+              position: 1,
+              field: 'item_removed',
+              before_value: 'Суп',
+              after_value: null,
+            },
+          ],
+        }}
+        loading={false}
+        error={null}
+        onRetry={() => undefined}
+        onClose={() => undefined}
+      />
+    );
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/Понеділок — видалено: Суп/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Вівторок — видалено: Суп/)).toBeInTheDocument();
+  });
 });

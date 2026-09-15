@@ -182,12 +182,14 @@ describe('school daily menu item additions', () => {
     });
   });
 
-  it('allows removing only an unsaved item and editing its yield', () => {
+  it('allows removing template and unsaved items but edits yield only for the unsaved item', () => {
     const unsavedItem = menuItem('new:test-item');
     const props = renderPanel({ day: day([menuItem(), unsavedItem]) });
 
-    expect(screen.getAllByRole('button', { name: /Видалити нову позицію/ })).toHaveLength(1);
-    fireEvent.click(screen.getByRole('button', { name: 'Видалити нову позицію Хліб пшеничний' }));
+    expect(screen.getAllByRole('button', { name: /Видалити позицію/ })).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Видалити позицію Овочевий суп' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Видалити позицію Хліб пшеничний' }));
+    expect(props.onRemoveItem).toHaveBeenCalledWith('item-1');
     expect(props.onRemoveItem).toHaveBeenCalledWith('new:test-item');
 
     fireEvent.change(screen.getByLabelText('Вихід для 6-11 років'), {
@@ -200,7 +202,7 @@ describe('school daily menu item additions', () => {
     renderPanel({ day: day([menuItem(), menuItem('new:test-item')], true), readOnly: true });
 
     expect(screen.queryByRole('button', { name: '+ Додати позицію' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Видалити нову позицію/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Видалити позицію/ })).not.toBeInTheDocument();
   });
 
   it('keeps ordinary replacement working for an existing item', () => {
@@ -299,8 +301,8 @@ describe('school daily menu item additions', () => {
     expect(isSchoolAddedDailyMenuItem(savedSchoolItem)).toBe(true);
 
     const props = renderPanel({ day: day([menuItem('db-item-1'), savedSchoolItem]) });
-    expect(screen.getByRole('button', { name: 'Видалити нову позицію Хліб пшеничний' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Видалити нову позицію Хліб пшеничний' }));
+    expect(screen.getByRole('button', { name: 'Видалити позицію Хліб пшеничний' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Видалити позицію Хліб пшеничний' }));
     expect(props.onRemoveItem).toHaveBeenCalledWith('db-item-6');
 
     fireEvent.change(screen.getByLabelText('Вихід для 6-11 років'), {

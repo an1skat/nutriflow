@@ -89,7 +89,8 @@ export function DailyMenuSchoolWorkspace() {
     }
 
     const draft = loadDailyMenuDraft(menu.id, menu.updated_at);
-    const nextDays = prepareDailyMenuDays(draft?.days ?? sortDays(menu.days), activeGroups);
+    const serverDays = prepareDailyMenuDays(sortDays(menu.days), activeGroups);
+    const nextDays = draft ? prepareDailyMenuDays(sortDays(draft.days), activeGroups) : serverDays;
 
     initializedMenuKey.current = menuKey;
     setDays(nextDays);
@@ -98,8 +99,8 @@ export function DailyMenuSchoolWorkspace() {
         ? currentWeekday
         : (nextDays[0]?.weekday ?? null)
     );
-    setSavedAt(draft?.savedAt ?? null);
-    setIsDirty(false);
+    setSavedAt(menu.updated_at);
+    setIsDirty(Boolean(draft) && JSON.stringify(nextDays) !== JSON.stringify(serverDays));
   }, [activeGroups, groups.data, selectedMenu.data]);
 
   useEffect(() => {
@@ -203,7 +204,11 @@ export function DailyMenuSchoolWorkspace() {
     }
 
     const item = activeDay.items.find((candidate) => candidate.id === itemId);
-    if (!item || !isSchoolAddedDailyMenuItem(item)) {
+    if (!item) {
+      return;
+    }
+    if (activeDay.items.length <= 1) {
+      toast.error('У денному меню має залишитися хоча б одна позиція.');
       return;
     }
 
@@ -303,7 +308,7 @@ export function DailyMenuSchoolWorkspace() {
       }
     }
 
-    const localSavedAt = saveDailyMenuDraft(menu.id, menu.updated_at, days);
+    saveDailyMenuDraft(menu.id, menu.updated_at, days);
 
     try {
       const updatedMenu = await updateWeeklyMenu.mutateAsync({
@@ -315,10 +320,9 @@ export function DailyMenuSchoolWorkspace() {
       setDays(prepareDailyMenuDays(sortDays(updatedMenu.days), activeGroups));
       setSavedAt(updatedMenu.updated_at);
       setIsDirty(false);
-      toast.success('Зміни збережено. Якщо страву замінено, технолог отримав повідомлення.');
+      toast.success('Зміни збережено. Якщо страву змінено або видалено, технолог отримав повідомлення.');
       return updatedMenu;
     } catch (error) {
-      setSavedAt(localSavedAt);
       toast.error(getApiErrorMessage(error));
       return null;
     }

@@ -144,7 +144,7 @@ export function DayMenuPanel({
               item={item}
               readOnly={readOnly}
               onDishChange={(selectedItem) => void onDishChange(item.id, selectedItem)}
-              onRemove={isSchoolAddedDailyMenuItem(item) ? () => onRemoveItem(item.id) : undefined}
+              onRemove={() => onRemoveItem(item.id)}
               onPortionYieldChange={
                 isSchoolAddedDailyMenuItem(item)
                   ? (portionIndex, value) => onPortionYieldChange(item.id, portionIndex, value)
@@ -201,7 +201,7 @@ function DishRow({
             <button
               type="button"
               className="nf-button nf-button-ghost min-h-9 px-2 text-red-700"
-              aria-label={`Видалити нову позицію ${item.name}`}
+              aria-label={`Видалити позицію ${item.name}`}
               onClick={onRemove}
             >
               <Trash2 className="size-4" aria-hidden />

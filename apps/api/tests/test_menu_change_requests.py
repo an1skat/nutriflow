@@ -141,10 +141,47 @@ def test_template_update_preserves_school_dish_replacement() -> None:
     school_item.name = "Рис з овочами"
     school_item.is_school_customized = True
 
-    merged = _merge_distributed_days(source_days, school_days)
+    merged = _merge_distributed_days(source_days, school_days, source_days)
 
     assert merged[0].items[0].recipe_card_number == "2.17"
     assert merged[0].items[0].name == "Рис з овочами"
+
+
+def test_template_update_preserves_school_deletion_and_adds_new_template_item() -> None:
+    previous_days = build_days()
+    previous_days[0].items.append(
+        DailyMenuItem(
+            position=2,
+            name="Суп",
+            portions=[MenuPortion(age_group=AgeGroup.SIX_TO_ELEVEN, yield_amount="200")],
+        )
+    )
+    school_days = deepcopy(previous_days)
+    removed_item = school_days[0].items.pop(0)
+    school_days[0].items[0].position = 1
+
+    changes = _collect_school_dish_changes(previous_days, school_days)
+    assert [(change.field, change.item_id) for change in changes] == [
+        ("item_removed", removed_item.id)
+    ]
+
+    updated_days = deepcopy(previous_days)
+    updated_days[0].items[1].name = "Суп оновлений"
+    updated_days[0].items.append(
+        DailyMenuItem(
+            position=3,
+            name="Компот",
+            portions=[MenuPortion(age_group=AgeGroup.SIX_TO_ELEVEN, yield_amount="200")],
+        )
+    )
+
+    merged = _merge_distributed_days(updated_days, school_days, previous_days)
+    assert [item.id for item in merged[0].items] == [
+        previous_days[0].items[1].id,
+        updated_days[0].items[2].id,
+    ]
+    assert [item.position for item in merged[0].items] == [1, 2]
+    assert [item.name for item in merged[0].items] == ["Суп оновлений", "Компот"]
 
 
 def test_template_update_preserves_school_added_item_and_updates_template_dish() -> None:
@@ -194,7 +231,7 @@ def test_template_update_preserves_school_added_item_and_updates_template_dish()
     updated_template_days[0].items[1].name = "Суп гороховий оновлений"
     updated_template_days[0].items[1].recipe_card_number = "1.05"
 
-    merged_a = _merge_distributed_days(updated_template_days, school_a_days)
+    merged_a = _merge_distributed_days(updated_template_days, school_a_days, template_days)
 
     assert len(merged_a[0].items) == 6
     # Template item 2 updated
@@ -267,8 +304,8 @@ def test_admin_adds_new_template_item_preserves_school_added_item_with_shifted_p
     new_template_item_id = new_template_item.id
 
     # Propagate to School A and School B
-    merged_a = _merge_distributed_days(admin_days, school_a_days)
-    merged_b = _merge_distributed_days(admin_days, school_b_days)
+    merged_a = _merge_distributed_days(admin_days, school_a_days, template_days)
+    merged_b = _merge_distributed_days(admin_days, school_b_days, template_days)
 
     # School B gets 6 items (all 6 template items)
     assert len(merged_b[0].items) == 6

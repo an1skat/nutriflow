@@ -137,7 +137,7 @@ export function MenuChangeRequestDialog({
 
                 return (
                   <section
-                    key={`${group.weekday}-${group.position}`}
+                    key={group.key}
                     className="border border-amber-200 bg-amber-50/40"
                   >
                     <div className="border-b border-amber-200 bg-amber-50 px-4 py-3">
@@ -353,6 +353,7 @@ function groupChanges(request: MenuChangeRequest) {
   const groups = new Map<
     string,
     {
+      key: string;
       weekday: MenuFieldChange['weekday'];
       position: number;
       date: string | null;
@@ -361,8 +362,10 @@ function groupChanges(request: MenuChangeRequest) {
   >();
 
   for (const change of request.changes) {
-    const key = `${change.weekday}:${change.position}`;
+    const itemKey = change.item_id || `pos-${change.position}`;
+    const key = `${change.weekday}:${itemKey}`;
     const existing = groups.get(key) ?? {
+      key,
       weekday: change.weekday,
       position: change.position,
       date: request.days_snapshot.find((day) => day.weekday === change.weekday)?.date ?? null,
@@ -377,6 +380,7 @@ function groupChanges(request: MenuChangeRequest) {
   return [...groups.values()]
     .filter((group) => group.visibleChanges.length > 0)
     .map((group) => ({
+      key: group.key,
       weekday: group.weekday,
       position: group.position,
       date: group.date,

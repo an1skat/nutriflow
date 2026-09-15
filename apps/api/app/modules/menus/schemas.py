@@ -107,7 +107,7 @@ class DailyMenuItemPayload(BaseModel):
 class DailyMenuPayload(BaseModel):
     weekday: Weekday
     date: Date | None = None
-    items: list[DailyMenuItemPayload] = Field(default_factory=list, min_length=1)
+    items: list[DailyMenuItemPayload] = Field(min_length=1)
     notes: str | None = Field(default=None, min_length=1, max_length=2000)
 
     @field_validator("notes", mode="before")
