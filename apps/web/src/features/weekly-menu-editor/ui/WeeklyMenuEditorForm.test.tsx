@@ -7,6 +7,7 @@ import {
   type WeeklyMenuFormValues,
   createBlankItem,
   createBlankWeeklyMenuFormValues,
+  formValuesToWeeklyMenuPayload,
 } from '../model/WeeklyMenuFormSchema';
 import { WeeklyMenuEditorForm } from './WeeklyMenuEditorForm';
 
@@ -188,6 +189,72 @@ describe('WeeklyMenuEditorForm', () => {
     expect(screen.getByRole('button', { name: 'Додати П’ятниця' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Додати Субота' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Додати Неділя' })).not.toBeInTheDocument();
+  });
+
+  it('propagates a changed start date into submitted days and keeps manual day edits', async () => {
+    const initialValues = createBlankWeeklyMenuFormValues();
+    initialValues.title = 'Осіннє меню';
+    initialValues.starts_on = '2026-09-21';
+    initialValues.days.forEach((day, index) => {
+      day.date = `2026-09-${21 + index}`;
+      day.items[0].name = `Страва ${index + 1}`;
+      day.items[0].portions.forEach((portion) => {
+        portion.yield_amount = '100';
+      });
+    });
+    const submittedPayloads: ReturnType<typeof formValuesToWeeklyMenuPayload>[] = [];
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <WeeklyMenuEditorForm
+          initialValues={initialValues}
+          mode="backoffice"
+          submitLabel="Зберегти"
+          saving={false}
+          onSubmit={async (values) => {
+            submittedPayloads.push(formValuesToWeeklyMenuPayload(values));
+          }}
+          recipeCatalogEnabled={false}
+        />
+      </QueryClientProvider>
+    );
+
+    fireEvent.change(screen.getByLabelText('Дата початку'), {
+      target: { value: '2026-09-14' },
+    });
+
+    expect(screen.getByText('Є незбережені зміни у поточній формі.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Понеділок 2026-09-14/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /П’ятниця 2026-09-18/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Зберегти' }));
+    await waitFor(() => expect(submittedPayloads).toHaveLength(1));
+    expect(submittedPayloads[0].starts_on).toBe('2026-09-14');
+    expect(submittedPayloads[0].days.map((day) => day.date)).toEqual([
+      '2026-09-14',
+      '2026-09-15',
+      '2026-09-16',
+      '2026-09-17',
+      '2026-09-18',
+    ]);
+
+    fireEvent.click(screen.getByRole('button', { name: /Середа 2026-09-16/ }));
+    fireEvent.change(screen.getByLabelText('Дата дня'), {
+      target: { value: '2026-09-23' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Зберегти' }));
+
+    await waitFor(() => expect(submittedPayloads).toHaveLength(2));
+    expect(submittedPayloads[1].days.map((day) => day.date)).toEqual([
+      '2026-09-14',
+      '2026-09-15',
+      '2026-09-23',
+      '2026-09-17',
+      '2026-09-18',
+    ]);
   });
 
   it('renders school readonly mode as text and shows allergens from linked dish card', async () => {

@@ -145,4 +145,16 @@ describe('weekly menu form schema', () => {
       '2026-07-17',
     ]);
   });
+
+  it('keeps a partial week order while deriving dates from weekday', () => {
+    const values = createBlankWeeklyMenuFormValues();
+    values.days = [values.days[4], values.days[1]];
+
+    const updatedDays = updateDayDate(values.days, 'monday', '2026-09-14');
+
+    expect(updatedDays.map((day) => [day.weekday, day.date])).toEqual([
+      ['friday', '2026-09-18'],
+      ['tuesday', '2026-09-15'],
+    ]);
+  });
 });

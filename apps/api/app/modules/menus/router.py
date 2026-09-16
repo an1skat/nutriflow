@@ -645,6 +645,8 @@ async def publish_weekly_menu(
         raise not_found(exc) from exc
     except MenuAccessDeniedError as exc:
         raise forbidden(exc) from exc
+    except MenuVersionConflictError as exc:
+        raise conflict(exc) from exc
     except MenuValidationError as exc:
         raise bad_request(exc) from exc
 

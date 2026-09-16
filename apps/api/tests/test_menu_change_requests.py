@@ -1,5 +1,6 @@
 import asyncio
 from copy import deepcopy
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -145,6 +146,18 @@ def test_template_update_preserves_school_dish_replacement() -> None:
 
     assert merged[0].items[0].recipe_card_number == "2.17"
     assert merged[0].items[0].name == "Рис з овочами"
+
+
+def test_template_update_does_not_overwrite_closed_day() -> None:
+    source_days = build_days()
+    school_days = deepcopy(source_days)
+    school_days[0].closed_at = datetime(2026, 9, 14, 12, tzinfo=UTC)
+    source_days[0].date = datetime(2026, 9, 21, tzinfo=UTC).date()
+    source_days[0].items[0].name = "Нова назва"
+
+    merged = _merge_distributed_days(source_days, school_days, source_days)
+
+    assert merged[0] == school_days[0]
 
 
 def test_template_update_preserves_school_deletion_and_adds_new_template_item() -> None:

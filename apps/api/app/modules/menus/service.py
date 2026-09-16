@@ -699,6 +699,49 @@ def _school_dish_override(source: DailyMenuItem, school: DailyMenuItem) -> bool:
     )
 
 
+async def _removed_school_item_ids(
+    copies: list[WeeklyMenu],
+) -> dict[PydanticObjectId, dict[Weekday, set[PydanticObjectId]]]:
+    copy_ids = [copy.id for copy in copies if copy.id is not None]
+    if not copy_ids:
+        return {}
+
+    requests = await MenuChangeRequest.find(
+        {"menu_id": {"$in": copy_ids}, "changes.field": "item_removed"}
+    ).to_list()
+    removed: dict[PydanticObjectId, dict[Weekday, set[PydanticObjectId]]] = {}
+    for request in requests:
+        for change in request.changes:
+            if change.field == "item_removed":
+                removed.setdefault(request.menu_id, {}).setdefault(change.weekday, set()).add(
+                    change.item_id
+                )
+    return removed
+
+
+def _republish_previous_source_days(
+    source_days: list[DailyMenu],
+    current_days: list[DailyMenu],
+    removed_item_ids: dict[Weekday, set[PydanticObjectId]],
+) -> list[DailyMenu]:
+    previous_days = deepcopy(current_days)
+    previous_by_weekday = {day.weekday: day for day in previous_days}
+    for source_day in source_days:
+        previous_day = previous_by_weekday.get(source_day.weekday)
+        if previous_day is None:
+            continue
+        existing_ids = {item.id for item in previous_day.items}
+        for source_item in source_day.items:
+            if (
+                source_item.id in removed_item_ids.get(source_day.weekday, set())
+                and source_item.id not in existing_ids
+            ):
+                deleted_item = deepcopy(source_item)
+                deleted_item.position = len(previous_day.items) + 1
+                previous_day.items.append(deleted_item)
+    return previous_days
+
+
 async def publish_weekly_menu(
     menu_id: PydanticObjectId,
     data: PublishWeeklyMenuRequest,
@@ -717,11 +760,36 @@ async def publish_weekly_menu(
         WeeklyMenu.source_menu_id == source.id,
         {"school_id": {"$in": target_school_ids}},
     ).to_list()
-    existing_school_ids = {copy.school_id for copy in existing_copies if copy.school_id is not None}
-    skipped_existing_school_ids = [
-        school_id for school_id in target_school_ids if school_id in existing_school_ids
-    ]
+    existing_copies_by_school_id = {
+        copy.school_id: copy for copy in existing_copies if copy.school_id is not None
+    }
+    replaced_copies: list[WeeklyMenu] = []
+    skipped_existing_school_ids: list[PydanticObjectId] = []
+    for school_id in target_school_ids:
+        existing_copy = existing_copies_by_school_id.get(school_id)
+        if existing_copy is None:
+            continue
+        if data.replace_existing and existing_copy.status != WeeklyMenuStatus.REVOKED:
+            replaced_copies.append(existing_copy)
+        else:
+            skipped_existing_school_ids.append(school_id)
+
     now = datetime.now(UTC)
+    replaced_copy_revisions = [copy.revision for copy in replaced_copies]
+    removed_item_ids = await _removed_school_item_ids(replaced_copies)
+    for copy in replaced_copies:
+        previous_source_days = _republish_previous_source_days(
+            source.days,
+            copy.days,
+            removed_item_ids.get(copy.id, {}),
+        )
+        _apply_template_update_to_copy(
+            source,
+            copy,
+            previous_source_days,
+            actor=admin,
+            now=now,
+        )
 
     source.status = WeeklyMenuStatus.PUBLISHED
     source.published_at = now
@@ -749,13 +817,15 @@ async def publish_weekly_menu(
             updated_at=now,
         )
         for school in target_schools
-        if school.id not in existing_school_ids
+        if school.id not in existing_copies_by_school_id
     ]
 
     async def save_publication(session: Any) -> None:
         await source.save(session=session)
         if new_copies:
             await WeeklyMenu.insert_many(new_copies, session=session)
+        for copy, revision in zip(replaced_copies, replaced_copy_revisions, strict=True):
+            await _replace_weekly_menu_if_current(copy, revision, session=session)
 
     async with get_mongo_client().start_session() as session:
         await session.with_transaction(save_publication)
@@ -764,7 +834,7 @@ async def publish_weekly_menu(
         source_menu_id=source.id,
         target_school_ids=target_school_ids,
         created_menu_ids=[copy.id for copy in new_copies if copy.id is not None],
-        replaced_menu_ids=[],
+        replaced_menu_ids=[copy.id for copy in replaced_copies if copy.id is not None],
         skipped_existing_school_ids=skipped_existing_school_ids,
     )
 

@@ -21,6 +21,7 @@ import {
   type WeeklyMenuFormValues,
   createBlankDay,
   getRemainingWeekdays,
+  propagateMondayDate,
   resolveEffectiveDayDate,
   resolveEffectiveStartDate,
   weeklyMenuFormSchema,
@@ -97,6 +98,7 @@ export function WeeklyMenuEditorForm({
   );
   const effectiveStartDate = resolveEffectiveStartDate(watchedStartDate);
   const canUseDraftStorage = Boolean(allowValueEdits && draftKey && draftBaseUpdatedAt);
+  const startDateRegistration = form.register('starts_on');
 
   useEffect(() => {
     if (!canUseDraftStorage || !draftKey || !draftBaseUpdatedAt) {
@@ -302,7 +304,15 @@ export function WeeklyMenuEditorForm({
               <input
                 id="weekly-menu-starts-on"
                 type="date"
-                {...form.register('starts_on')}
+                {...startDateRegistration}
+                onChange={(event) => {
+                  startDateRegistration.onChange(event);
+                  form.setValue(
+                    'days',
+                    propagateMondayDate(form.getValues('days'), event.target.value),
+                    { shouldDirty: true, shouldValidate: true }
+                  );
+                }}
                 readOnly={!allowValueEdits}
                 aria-invalid={isFocusedField(validationFocus, 'starts_on') ? 'true' : 'false'}
                 className="nf-input"

@@ -385,6 +385,7 @@ class MenuChangeRequestSchoolOption(BaseModel):
 
 class PublishWeeklyMenuRequest(BaseModel):
     school_ids: list[PydanticObjectId] | None = None
+    replace_existing: bool = False
 
 
 class PublishWeeklyMenuResponse(BaseModel):
