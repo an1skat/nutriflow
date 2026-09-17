@@ -168,6 +168,8 @@ async def generate_menu_requirements(
             catalog_by_id=catalog_by_id,
             catalog_by_name=catalog_by_name,
         )
+        if not calculations:
+            continue
         prepared.append(
             (
                 group,
@@ -681,9 +683,7 @@ async def _build_dish_calculations(
             None,
         )
         if portion is None:
-            raise MenuRequirementValidationError(
-                f'Portion for group "{group.name}" is missing in dish "{item.name}"'
-            )
+            continue
 
         resolved_portion_variant_id = portion.dish_card_portion_variant_id
 

@@ -446,6 +446,92 @@ def test_school_generates_and_regenerates_menu_requirement(seeded_client) -> Non
     assert technologist_delete_response.status_code == 204
 
 
+def test_missing_age_group_portion_is_excluded_from_requirements(seeded_client) -> None:
+    client, identities = seeded_client
+    login(client, identities.admin.username, identities.admin_password)
+    ingredient_response = client.post(
+        "/api/v1/recipes/ingredients",
+        json={"name": "Морква", "unit": "g"},
+        headers=csrf_headers(client),
+    )
+    assert ingredient_response.status_code == 201
+    card_id, variant_id = create_confirmed_dish(
+        client,
+        ingredient_id=ingredient_response.json()["id"],
+    )
+    menu = publish_school_menu(
+        client,
+        school_id=str(identities.own_school.id),
+        card_id=card_id,
+        variant_id=variant_id,
+    )
+
+    present_group = next(
+        group for group in identities.own_school.groups if group.age_group.value == "6-11"
+    )
+    missing_group = next(
+        group for group in identities.own_school.groups if group.age_group.value == "14-18"
+    )
+    login(client, identities.school_user.username, identities.school_user_password)
+    menu["days"][0]["items"][0]["servings"] = [
+        {
+            "school_group_id": str(present_group.id),
+            "age_group": "6-11",
+            "children_count": 3,
+        },
+        {
+            "school_group_id": str(missing_group.id),
+            "age_group": "14-18",
+            "children_count": 4,
+        },
+    ]
+    update_response = client.patch(
+        f"/api/v1/menus/weekly/{menu['id']}",
+        json={"days": menu["days"], "revision": menu["revision"]},
+        headers=csrf_headers(client),
+    )
+    assert update_response.status_code == 200
+
+    generate_response = client.post(
+        "/api/v1/menu-requirements/generate",
+        json={
+            "weekly_menu_id": menu["id"],
+            "weekday": "monday",
+            "service_date": "2026-07-06",
+        },
+        headers=csrf_headers(client),
+    )
+    assert generate_response.status_code == 200
+    requirements = generate_response.json()["items"]
+    assert [item["school_group_id"] for item in requirements] == [str(present_group.id)]
+    assert requirements[0]["dishes"][0]["children_count"] == 3
+
+    export_response = client.get(
+        f"/api/v1/menu-requirements/{requirements[0]['id']}/export.xlsx"
+    )
+    assert export_response.status_code == 200
+
+    login(client, identities.admin.username, identities.admin_password)
+    report_params = {
+        "school_id": str(identities.own_school.id),
+        "date_from": "2026-07-06",
+        "date_to": "2026-07-06",
+        "granularity": "range",
+        "meal_type": "lunch",
+        "school_group_id": str(present_group.id),
+    }
+    report_response = client.get("/api/v1/menu-requirements/report", params=report_params)
+    assert report_response.status_code == 200
+    assert [group["school_group_id"] for group in report_response.json()["groups"]] == [
+        str(present_group.id)
+    ]
+    report_export_response = client.get(
+        "/api/v1/menu-requirements/report/export.xlsx",
+        params=report_params,
+    )
+    assert report_export_response.status_code == 200
+
+
 def test_school_closes_day_and_admin_reopens_it(
     seeded_client,
     monkeypatch: pytest.MonkeyPatch,
@@ -1038,4 +1124,3 @@ def test_generate_menu_requirement_for_wholegrain_bread_product_composite_yield(
     assert invalid_gen_resp.json()["detail"] == (
         'Product "Хліб цільнозерновий" must have a single numeric yield in grams'
     )
-

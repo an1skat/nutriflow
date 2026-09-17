@@ -73,6 +73,23 @@ describe('weekly menu form schema', () => {
     });
   });
 
+  it('preserves partial age-group portions on save', () => {
+    const values = createBlankWeeklyMenuFormValues();
+    values.title = 'Меню з двома порціями';
+    values.days = values.days.slice(0, 1);
+    values.days[0].items[0].name = 'Салат з буряків';
+    values.days[0].items[0].portions = values.days[0].items[0].portions.slice(0, 2);
+    values.days[0].items[0].portions[0].yield_amount = '100';
+    values.days[0].items[0].portions[1].yield_amount = '120';
+
+    const payload = formValuesToWeeklyMenuPayload(values);
+
+    expect(payload.days[0].items[0].portions.map((portion) => portion.age_group)).toEqual([
+      '6-11',
+      '11-14',
+    ]);
+  });
+
   it('uses the next Monday when week start is omitted', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-07-10T10:00:00+03:00'));

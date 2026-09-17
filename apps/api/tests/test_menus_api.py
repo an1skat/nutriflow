@@ -208,7 +208,7 @@ def test_admin_creates_weekly_menu_and_autofills_allergens_from_dish_card_versio
     assert menu["days"][0]["items"][0]["allergen_codes"] == ["ГЦ", "Л"]
 
 
-def test_admin_previews_and_commits_imported_weekly_menu(seeded_client):
+def test_admin_imports_partial_age_group_menu_end_to_end(seeded_client):
     client, identities = seeded_client
     login(client, identities.admin.username, identities.admin_password)
     dish_card_id, _version_id = create_confirmed_dish_card(
@@ -216,13 +216,18 @@ def test_admin_previews_and_commits_imported_weekly_menu(seeded_client):
         card_number="1.54",
         allergen_codes=["ГЦ"],
     )
+    workbook = openpyxl.load_workbook(BytesIO(import_workbook_bytes()))
+    for column_number in range(14, 19):
+        workbook.active.cell(6, column_number).value = None
+    stream = BytesIO()
+    workbook.save(stream)
 
     preview_response = client.post(
         "/api/v1/menus/weekly/import-preview?meal_type=lunch",
         files={
             "file": (
                 "menu.xlsx",
-                import_workbook_bytes(),
+                stream.getvalue(),
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
         },
@@ -237,16 +242,17 @@ def test_admin_previews_and_commits_imported_weekly_menu(seeded_client):
     assert [diagnostic["code"] for diagnostic in preview["diagnostics"]] == [
         "portion_variant_scaled",
         "portion_variant_scaled",
-        "portion_variant_scaled",
     ]
-    assert preview["menu"]["days"][0]["items"][0]["recipe_card_number"] == "1.54"
+    preview_item = preview["menu"]["days"][0]["items"][0]
+    assert preview_item["recipe_card_number"] == "1.54"
+    assert [portion["age_group"] for portion in preview_item["portions"]] == [
+        "6-11",
+        "11-14",
+    ]
 
     commit_response = client.post(
         "/api/v1/menus/weekly/import-commit",
-        json={
-            "preview_id": preview["preview_id"],
-            "school_id": str(identities.own_school.id),
-        },
+        json={"preview_id": preview["preview_id"]},
         headers=csrf_headers(client),
     )
 
@@ -255,9 +261,57 @@ def test_admin_previews_and_commits_imported_weekly_menu(seeded_client):
     assert len(commit["created_menu_ids"]) == 1
     menu = commit["menu"]
     assert menu is not None
-    assert menu["school_id"] == str(identities.own_school.id)
-    assert menu["days"][0]["items"][0]["dish_card_id"] == dish_card_id
-    assert menu["days"][0]["items"][0]["allergen_codes"] == ["ГЦ"]
+    assert menu["school_id"] is None
+    menu_id = menu["id"]
+
+    get_response = client.get(f"/api/v1/menus/weekly/{menu_id}")
+    assert get_response.status_code == 200
+    menu = get_response.json()
+    item = menu["days"][0]["items"][0]
+    assert item["dish_card_id"] == dish_card_id
+    assert item["allergen_codes"] == ["ГЦ"]
+    assert [portion["age_group"] for portion in item["portions"]] == ["6-11", "11-14"]
+
+    update_response = client.patch(
+        f"/api/v1/menus/weekly/{menu_id}",
+        json={"days": menu["days"], "revision": menu["revision"]},
+        headers=csrf_headers(client),
+    )
+    assert update_response.status_code == 200
+    assert [
+        portion["age_group"]
+        for portion in update_response.json()["days"][0]["items"][0]["portions"]
+    ] == ["6-11", "11-14"]
+
+    export_response = client.get(f"/api/v1/menus/weekly/{menu_id}/export.xlsx")
+    assert export_response.status_code == 200
+    exported_sheet = openpyxl.load_workbook(BytesIO(export_response.content)).active
+    assert exported_sheet["D6"].value == "120"
+    assert exported_sheet["I6"].value == "120"
+    assert all(exported_sheet.cell(6, column).value is None for column in range(14, 19))
+    exported_menu, _ = parse_weekly_menu_workbook(
+        export_response.content,
+        filename="export.xlsx",
+        meal_type=MealType.LUNCH,
+    )
+    assert [portion.age_group.value for portion in exported_menu.days[0].items[0].portions] == [
+        "6-11",
+        "11-14",
+    ]
+
+    publish_response = client.post(
+        f"/api/v1/menus/weekly/{menu_id}/publish",
+        json={"school_ids": [str(identities.own_school.id)]},
+        headers=csrf_headers(client),
+    )
+    assert publish_response.status_code == 200
+    copy_id = publish_response.json()["created_menu_ids"][0]
+    copy_response = client.get(f"/api/v1/menus/weekly/{copy_id}")
+    assert copy_response.status_code == 200
+    assert [
+        portion["age_group"]
+        for portion in copy_response.json()["days"][0]["items"][0]["portions"]
+    ] == ["6-11", "11-14"]
 
 
 def test_weekly_menu_export_generates_roundtrip_workbook(seeded_client):

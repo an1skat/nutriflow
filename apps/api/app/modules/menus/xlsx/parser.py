@@ -439,19 +439,6 @@ def _parse_day_items(
             sheet_name=sheet_name,
             diagnostics=diagnostics,
         )
-        if len(portions) != len(AGE_GROUPS_BY_BLOCK):
-            diagnostics.append(
-                _diagnostic(
-                    level=MenuImportDiagnosticLevel.ERROR,
-                    code="incomplete_age_groups",
-                    message="Menu row must include all three age-group blocks",
-                    sheet_name=sheet_name,
-                    row_number=row_number,
-                    column_number=portion_starts[0],
-                )
-            )
-            continue
-
         kind = MenuItemKind.PRODUCT if _is_product_source(source_text) else MenuItemKind.DISH_CARD
         position = len(items) + 1
         try:

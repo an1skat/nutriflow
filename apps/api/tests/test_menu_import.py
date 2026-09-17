@@ -139,6 +139,62 @@ def test_weekly_menu_preview_reports_exact_invalid_cell() -> None:
     assert diagnostic.cell == "E6"
 
 
+@pytest.mark.parametrize(
+    ("empty_columns", "expected_portions"),
+    [
+        (range(14, 19), 2),
+        (range(9, 19), 1),
+        (range(0), 3),
+    ],
+    ids=["two-portions", "one-portion", "all-three-portions"],
+)
+def test_weekly_menu_preview_accepts_available_age_group_portions(
+    empty_columns: range,
+    expected_portions: int,
+) -> None:
+    workbook = build_menu_workbook()
+    for column_number in empty_columns:
+        workbook.active.cell(6, column_number).value = None
+
+    preview = preview_weekly_menu_workbook(
+        workbook_bytes(workbook),
+        filename="menu.xlsx",
+        meal_type=MealType.LUNCH,
+    )
+
+    assert preview.commit_ready is True, preview.diagnostics
+    assert len(preview.menu.days[0].items[0].portions) == expected_portions
+
+
+def test_weekly_menu_preview_rejects_partial_age_group_block_without_yield() -> None:
+    workbook = build_menu_workbook()
+    workbook.active["N6"] = None
+
+    preview = preview_weekly_menu_workbook(
+        workbook_bytes(workbook),
+        filename="menu.xlsx",
+        meal_type=MealType.LUNCH,
+    )
+
+    assert preview.commit_ready is False
+    assert [diagnostic.code for diagnostic in preview.diagnostics] == ["missing_yield"]
+
+
+def test_weekly_menu_preview_rejects_item_without_portions() -> None:
+    workbook = build_menu_workbook()
+    for column_number in range(4, 19):
+        workbook.active.cell(6, column_number).value = None
+
+    preview = preview_weekly_menu_workbook(
+        workbook_bytes(workbook),
+        filename="menu.xlsx",
+        meal_type=MealType.LUNCH,
+    )
+
+    assert preview.commit_ready is False
+    assert "invalid_item" in [diagnostic.code for diagnostic in preview.diagnostics]
+
+
 def test_card_number_candidates_accepts_final_separator_variant() -> None:
     assert card_number_candidates("2.11.1") == ["2.11.1", "2.11_1"]
     assert card_number_candidates("2.11_1") == ["2.11_1", "2.11.1"]
