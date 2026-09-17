@@ -4,14 +4,20 @@ import { translateApiDetail } from './ApiMessages';
 
 describe('translateApiDetail', () => {
   it('translates the school menu shape guard', () => {
-    expect(
-      translateApiDetail('School users cannot replace or reorder existing dish IDs')
-    ).toBe('Школа не може підміняти ідентифікатори або змінювати порядок наявних страв.');
+    expect(translateApiDetail('School users cannot replace or reorder existing dish IDs')).toBe(
+      'Школа не може підміняти ідентифікатори або змінювати порядок наявних страв.'
+    );
   });
 
   it('translates unique positions error', () => {
     expect(translateApiDetail('Daily menu item positions must be unique')).toBe(
       'Позиції страв у меню дня мають бути унікальними.'
+    );
+  });
+
+  it('translates a duplicate dish-card number', () => {
+    expect(translateApiDetail('Dish card with this number already exists')).toBe(
+      'Техкарта з таким номером уже існує.'
     );
   });
 

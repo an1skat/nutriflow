@@ -154,8 +154,6 @@ function buildVersionPayload(
       values.portions.map((portion) => ({
         ingredient_id: catalogReferences.ingredientIdsByTempId[ingredient.tempId],
         ingredient_name_snapshot: ingredient.ingredient_name_snapshot,
-        group_key: orNull(ingredient.group_key),
-        alternative_label: orNull(ingredient.alternative_label),
         gross_amount: ingredient.amounts[portion.tempId].gross,
         net_amount: ingredient.amounts[portion.tempId].net,
         unit: 'g',

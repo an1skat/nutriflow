@@ -45,8 +45,6 @@ const defaultValues: RecipeUploadFormValues = {
     {
       tempId: newIngredientTempId(),
       ingredient_name_snapshot: '',
-      group_key: '',
-      alternative_label: '',
       notes: '',
       amounts: {},
     },
@@ -60,6 +58,8 @@ const PROGRESS_LABELS: Record<UploadProgress['step'], string> = {
   validating: 'Перевіряємо техкарту…',
   confirming: 'Підтверджуємо техкарту…',
 };
+
+const INVALID_FORM_MESSAGE = 'Є незаповнені або некоректні поля. Перевірте підсвічені поля.';
 
 export function DishCardUploadForm() {
   const [progress, setProgress] = useState<UploadProgress | null>(null);
@@ -121,45 +121,66 @@ export function DishCardUploadForm() {
     ingredients.append({
       tempId: newIngredientTempId(),
       ingredient_name_snapshot: '',
-      group_key: '',
-      alternative_label: '',
       notes: '',
       amounts: {},
     });
   };
 
-  const onSubmit = form.handleSubmit(async (values) => {
-    form.clearErrors('root');
-    setSuccess(null);
+  const onSubmit = form.handleSubmit(
+    async (values) => {
+      form.clearErrors('root');
+      setSuccess(null);
 
-    try {
-      await upload.mutateAsync({
-        values,
-        onProgress: setProgress,
+      try {
+        await upload.mutateAsync({
+          values,
+          onProgress: setProgress,
+        });
+        setSuccess('Техкарту збережено та підтверджено.');
+        form.reset(defaultValues);
+        toast.success('Техкарту завантажено');
+      } catch (error) {
+        const message = getApiErrorMessage(error);
+        form.setError('root', {
+          type: 'server',
+          message,
+        });
+        toast.error(message);
+      } finally {
+        setProgress(null);
+      }
+    },
+    () => {
+      form.clearErrors('root');
+      setSuccess(null);
+      toast.error(INVALID_FORM_MESSAGE);
+      setTimeout(() => {
+        const activeElement = document.activeElement;
+        const firstInvalidField = document
+          .getElementById('dish-card-upload-form')
+          ?.querySelector<HTMLElement>('[aria-invalid="true"]');
+        const field =
+          activeElement instanceof HTMLElement &&
+          activeElement.getAttribute('aria-invalid') === 'true'
+            ? activeElement
+            : firstInvalidField;
+        field?.focus();
+        field?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
       });
-      setSuccess('Техкарту збережено та підтверджено.');
-      form.reset(defaultValues);
-      toast.success('Техкарту завантажено');
-    } catch (error) {
-      form.setError('root', {
-        type: 'server',
-        message: getApiErrorMessage(error),
-      });
-    } finally {
-      setProgress(null);
     }
-  });
+  );
 
   const isBusy = form.formState.isSubmitting || upload.isPending;
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-8">
+    <form id="dish-card-upload-form" onSubmit={onSubmit} className="flex flex-col gap-8">
       <Section title="Основне">
         <Field label="Номер техкарти" error={form.formState.errors.card_number?.message}>
           <input
             id="card-number"
             className="nf-input"
             placeholder="1.17"
+            aria-invalid={form.formState.errors.card_number ? 'true' : undefined}
             {...form.register('card_number')}
           />
         </Field>
@@ -168,6 +189,7 @@ export function DishCardUploadForm() {
             id="dish-name"
             className="nf-input"
             placeholder="Салат з моркви та яблук…"
+            aria-invalid={form.formState.errors.name ? 'true' : undefined}
             {...form.register('name')}
           />
         </Field>
@@ -181,6 +203,7 @@ export function DishCardUploadForm() {
               list="dish-categories"
               className="nf-input"
               placeholder="Оберіть або введіть нову категорію"
+              aria-invalid={form.formState.errors.category ? 'true' : undefined}
               {...form.register('category')}
               onFocus={(event) => {
                 event.currentTarget.showPicker?.();
@@ -200,6 +223,7 @@ export function DishCardUploadForm() {
               id="dish-source"
               className="nf-input"
               placeholder="ТК до весняного меню…"
+              aria-invalid={form.formState.errors.source ? 'true' : undefined}
               {...form.register('source')}
             />
           </Field>
@@ -212,6 +236,7 @@ export function DishCardUploadForm() {
             id="dish-technology"
             className="nf-input min-h-24"
             rows={4}
+            aria-invalid={form.formState.errors.technology_text ? 'true' : undefined}
             {...form.register('technology_text')}
           />
         </Field>
@@ -264,6 +289,9 @@ export function DishCardUploadForm() {
                     <input
                       className="nf-input"
                       placeholder="ГЦ"
+                      aria-invalid={
+                        form.formState.errors.allergens?.[index]?.code ? 'true' : undefined
+                      }
                       {...form.register(`allergens.${index}.code`)}
                     />
                   </Field>
@@ -274,6 +302,9 @@ export function DishCardUploadForm() {
                     <input
                       className="nf-input"
                       placeholder="гірчиця"
+                      aria-invalid={
+                        form.formState.errors.allergens?.[index]?.name ? 'true' : undefined
+                      }
                       {...form.register(`allergens.${index}.name`)}
                     />
                   </Field>
@@ -318,6 +349,9 @@ export function DishCardUploadForm() {
                   <input
                     className="nf-input"
                     placeholder="120"
+                    aria-invalid={
+                      form.formState.errors.portions?.[index]?.portion_grams ? 'true' : undefined
+                    }
                     {...form.register(`portions.${index}.portion_grams`)}
                   />
                 </Field>
@@ -330,6 +364,9 @@ export function DishCardUploadForm() {
                   <input
                     className="nf-input"
                     placeholder="1.18"
+                    aria-invalid={
+                      form.formState.errors.portions?.[index]?.proteins ? 'true' : undefined
+                    }
                     {...form.register(`portions.${index}.proteins`)}
                   />
                 </Field>
@@ -342,6 +379,9 @@ export function DishCardUploadForm() {
                   <input
                     className="nf-input"
                     placeholder="4.27"
+                    aria-invalid={
+                      form.formState.errors.portions?.[index]?.fats ? 'true' : undefined
+                    }
                     {...form.register(`portions.${index}.fats`)}
                   />
                 </Field>
@@ -354,6 +394,9 @@ export function DishCardUploadForm() {
                   <input
                     className="nf-input"
                     placeholder="11.03"
+                    aria-invalid={
+                      form.formState.errors.portions?.[index]?.carbs ? 'true' : undefined
+                    }
                     {...form.register(`portions.${index}.carbs`)}
                   />
                 </Field>
@@ -366,6 +409,9 @@ export function DishCardUploadForm() {
                   <input
                     className="nf-input"
                     placeholder="82.8"
+                    aria-invalid={
+                      form.formState.errors.portions?.[index]?.kcal ? 'true' : undefined
+                    }
                     {...form.register(`portions.${index}.kcal`)}
                   />
                 </Field>
@@ -453,7 +499,7 @@ function IngredientRow({ index, portions, register, errors, onRemove }: Ingredie
   return (
     <div className="nf-panel">
       <div className="nf-panel-body flex flex-col gap-3">
-        <div className="grid gap-3 sm:grid-cols-[1fr_160px_160px_auto]">
+        <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
           <Field
             label="Назва інгредієнта"
             error={
@@ -464,33 +510,12 @@ function IngredientRow({ index, portions, register, errors, onRemove }: Ingredie
             <input
               className="nf-input"
               placeholder="Морква свіжа до 01.01"
+              aria-invalid={
+                (errors as { ingredient_name_snapshot?: unknown })?.ingredient_name_snapshot
+                  ? 'true'
+                  : undefined
+              }
               {...register(`ingredients.${index}.ingredient_name_snapshot`)}
-            />
-          </Field>
-          <Field
-            label="Група альтернатив"
-            error={
-              (errors as { group_key?: { message?: string } })?.group_key?.message as
-                string | undefined
-            }
-          >
-            <input
-              className="nf-input"
-              placeholder="carrot-season"
-              {...register(`ingredients.${index}.group_key`)}
-            />
-          </Field>
-          <Field
-            label="Варіант"
-            error={
-              (errors as { alternative_label?: { message?: string } })?.alternative_label
-                ?.message as string | undefined
-            }
-          >
-            <input
-              className="nf-input"
-              placeholder="до 01.01"
-              {...register(`ingredients.${index}.alternative_label`)}
             />
           </Field>
           <div className="flex items-end">
@@ -514,6 +539,7 @@ function IngredientRow({ index, portions, register, errors, onRemove }: Ingredie
           <input
             className="nf-input"
             placeholder="Оригінал брутто: 1/6 шт."
+            aria-invalid={(errors as { notes?: unknown })?.notes ? 'true' : undefined}
             {...register(`ingredients.${index}.notes`)}
           />
         </Field>
@@ -528,7 +554,7 @@ function IngredientRow({ index, portions, register, errors, onRemove }: Ingredie
                 portionTempId={portion.tempId}
                 portionGrams={portion.portion_grams || '?'}
                 register={register}
-                error={amountError(errors, portion.tempId)}
+                errors={amountErrors(errors, portion.tempId)}
               />
             ))}
           </div>
@@ -538,21 +564,21 @@ function IngredientRow({ index, portions, register, errors, onRemove }: Ingredie
   );
 }
 
-function amountError(errors: Record<string, unknown> | undefined, portionTempId: string) {
-  const amount = (
+type AmountErrors = {
+  gross?: { message?: string };
+  net?: { message?: string };
+  message?: string;
+};
+
+function amountErrors(
+  errors: Record<string, unknown> | undefined,
+  portionTempId: string
+): AmountErrors | undefined {
+  return (
     errors as {
-      amounts?: Record<
-        string,
-        {
-          gross?: { message?: string };
-          net?: { message?: string };
-          message?: string;
-        }
-      >;
+      amounts?: Record<string, AmountErrors>;
     }
   )?.amounts?.[portionTempId];
-
-  return amount?.message ?? amount?.gross?.message ?? amount?.net?.message;
 }
 
 type AmountCellProps = {
@@ -560,10 +586,12 @@ type AmountCellProps = {
   portionTempId: string;
   portionGrams: string;
   register: ReturnType<typeof useForm<RecipeUploadFormValues>>['register'];
-  error: string | undefined;
+  errors: AmountErrors | undefined;
 };
 
-function AmountCell({ index, portionTempId, portionGrams, register, error }: AmountCellProps) {
+function AmountCell({ index, portionTempId, portionGrams, register, errors }: AmountCellProps) {
+  const error = errors?.message ?? errors?.gross?.message ?? errors?.net?.message;
+
   return (
     <div className="flex flex-col gap-1">
       <span className="text-xs text-slate-600">Порція {portionGrams} г</span>
@@ -572,14 +600,14 @@ function AmountCell({ index, portionTempId, portionGrams, register, error }: Amo
           className="nf-input"
           placeholder="брутто"
           aria-label={`Брутто для порції ${portionGrams}`}
-          aria-invalid={error ? 'true' : undefined}
+          aria-invalid={errors?.message || errors?.gross?.message ? 'true' : undefined}
           {...register(`ingredients.${index}.amounts.${portionTempId}.gross`)}
         />
         <input
           className="nf-input"
           placeholder="нетто"
           aria-label={`Нетто для порції ${portionGrams}`}
-          aria-invalid={error ? 'true' : undefined}
+          aria-invalid={errors?.message || errors?.net?.message ? 'true' : undefined}
           {...register(`ingredients.${index}.amounts.${portionTempId}.net`)}
         />
       </div>

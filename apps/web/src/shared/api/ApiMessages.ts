@@ -42,6 +42,7 @@ export const detailTranslations: Record<string, string> = {
   'Weekly menu is revoked': 'Це меню відкликано адміністратором.',
   'School is inactive': 'Школа неактивна.',
   'Dish card not found': 'Техкарту не знайдено.',
+  'Dish card with this number already exists': 'Техкарта з таким номером уже існує.',
   'Dish card version does not belong to menu item dish card':
     'Версія техкарти не відповідає вибраній техкарті.',
   'Product ingredient not found': 'Інгредієнт продукту не знайдено.',

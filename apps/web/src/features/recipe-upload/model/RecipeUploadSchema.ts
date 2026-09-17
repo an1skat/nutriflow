@@ -43,8 +43,6 @@ const ingredientFormSchema = z.object({
     .trim()
     .min(1, 'Введіть назву інгредієнта')
     .max(200, 'Назва надто довга'),
-  group_key: z.string().trim().max(80).or(z.literal('')),
-  alternative_label: z.string().trim().max(120).or(z.literal('')),
   notes: z.string().trim().max(1000).or(z.literal('')),
   // Map portionTempId -> { gross, net } for this ingredient.
   amounts: z.record(
@@ -70,38 +68,18 @@ export const recipeUploadSchema = z
   })
   .superRefine((data, ctx) => {
     // Every ingredient must have an amount row for every portion.
-    for (const ingredient of data.ingredients) {
+    data.ingredients.forEach((ingredient, ingredientIndex) => {
       for (const portion of data.portions) {
         const amount = ingredient.amounts[portion.tempId];
         if (!amount) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            path: ['ingredients', 'amounts', portion.tempId],
+            path: ['ingredients', ingredientIndex, 'amounts', portion.tempId],
             message: `Вкажіть брутто/нетто для порції ${portion.portion_grams} г`,
           });
         }
       }
-    }
-    // Alternative groups must have a label on every member.
-    const grouped: Record<string, number> = {};
-    for (const ingredient of data.ingredients) {
-      if (ingredient.group_key) {
-        grouped[ingredient.group_key] = (grouped[ingredient.group_key] ?? 0) + 1;
-      }
-    }
-    for (const ingredient of data.ingredients) {
-      if (
-        ingredient.group_key &&
-        grouped[ingredient.group_key] > 1 &&
-        !ingredient.alternative_label
-      ) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['ingredients', 'alternative_label'],
-          message: 'Для альтернативи вкажіть варіант (напр. до 01.01)',
-        });
-      }
-    }
+    });
   });
 
 export type RecipeUploadFormValues = z.infer<typeof recipeUploadSchema>;
