@@ -197,6 +197,50 @@ def test_ready_portion_is_compared_with_the_appendix_portion_amount() -> None:
     assert contribution_value(contribution, norm) == (Decimal("120"), Decimal("1"))
 
 
+def test_cereal_ingredients_are_counted_once_as_a_dish_portion() -> None:
+    group, day, expected = _expected_fixture()
+    requirement = _requirement_fixture(
+        group,
+        day,
+        expected.weekly_menu_id,
+        amount=None,
+    )
+    dish = requirement.dishes[0]
+    dish.kind = MenuItemKind.DISH_CARD
+    dish.name = "Ліниві голубці зі сметаною"
+    dish.yield_amount = "180"
+    dish.normative_contributions = [
+        NormativeContributionSnapshot(
+            group_code=NormativeGroupCode.CEREALS_GRAINS_LEGUMES,
+            amount=Decimal("30"),
+            unit=NormativeUnit.GRAM,
+            source_type=NormativeContributionSource.INGREDIENT,
+            source_name="Крупа рисова",
+        ),
+        NormativeContributionSnapshot(
+            group_code=NormativeGroupCode.CEREALS_GRAINS_LEGUMES,
+            amount=Decimal("20"),
+            unit=NormativeUnit.GRAM,
+            source_type=NormativeContributionSource.INGREDIENT,
+            source_name="Булгур",
+        ),
+    ]
+
+    section = _build_section(group.age_group, MealType.BREAKFAST, [requirement], [expected])
+    cereals = next(
+        row
+        for row in section.rows
+        if row.normative_group_code == NormativeGroupCode.CEREALS_GRAINS_LEGUMES
+    )
+
+    assert cereals.actual_amount == Decimal("120")
+    assert cereals.actual_portions == Decimal("1")
+    assert len(cereals.breakdown) == 1
+    assert cereals.breakdown[0].dish_name == dish.name
+    assert cereals.breakdown[0].source_name == dish.name
+    assert cereals.breakdown[0].source_type == NormativeContributionSource.PORTION_VARIANT
+
+
 def test_section_reports_complete_row_and_stale_requirement() -> None:
     group, day, expected = _expected_fixture()
     requirement = _requirement_fixture(

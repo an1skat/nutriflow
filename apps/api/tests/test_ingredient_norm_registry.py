@@ -45,6 +45,13 @@ def test_manual_registry_uses_distinct_legal_groups() -> None:
     assert INGREDIENT_NORM_RULES["буряк столовий свіжий з 01.01."].group_code == (
         NormativeGroupCode.VEGETABLES
     )
+    assert INGREDIENT_NORM_RULES["капуста білокачанна"].group_code == (
+        NormativeGroupCode.VEGETABLES
+    )
+    assert INGREDIENT_NORM_RULES["помідор"].group_code == NormativeGroupCode.VEGETABLES
+    assert INGREDIENT_NORM_RULES["помідори свіжі"].group_code == (
+        NormativeGroupCode.VEGETABLES
+    )
     assert INGREDIENT_NORM_RULES["картопля свіжа з 01.03"].group_code == (
         NormativeGroupCode.POTATOES
     )
@@ -163,6 +170,108 @@ def test_existing_requirement_without_snapshots_is_enriched_from_registry() -> N
 
     assert dish.normative_contributions[0].group_code == NormativeGroupCode.VEGETABLES
     assert dish.normative_contributions[0].amount == Decimal("35")
+
+
+def test_existing_partial_vegetable_snapshots_are_completed_without_duplicates() -> None:
+    cabbage = _ingredient("Капуста білокачанна")
+    tomatoes = _ingredient("Помідор")
+    dill = _ingredient("Кріп свіжий")
+    menu_item_id = PydanticObjectId()
+    dish = MenuRequirementDish(
+        menu_item_id=menu_item_id,
+        position=1,
+        kind=MenuItemKind.DISH_CARD,
+        name="Салат з капусти, помідорів та кропу",
+        yield_amount="100",
+        children_count=20,
+        normative_contributions=_snapshots(dill, Decimal("2")),
+    )
+    amounts = [(cabbage, Decimal("40")), (tomatoes, Decimal("30")), (dill, Decimal("2"))]
+    requirement = MenuRequirement.model_construct(
+        dishes=[dish],
+        ingredient_rows=[
+            MenuRequirementIngredientRow(
+                key=f"ingredient:{ingredient.id}",
+                ingredient_id=ingredient.id,
+                ingredient_name=ingredient.name,
+                cells=[
+                    MenuRequirementCell(
+                        menu_item_id=menu_item_id,
+                        net_per_person_g=amount,
+                    )
+                ],
+                per_person_total_g=amount,
+                issue_total_raw_g=amount * 20,
+                issue_total_rounded_g=int(amount * 20),
+            )
+            for ingredient, amount in amounts
+        ],
+    )
+
+    for _ in range(2):
+        _apply_manual_ingredient_rules_from_catalog(
+            [requirement],
+            [cabbage, tomatoes, dill],
+        )
+
+    vegetables = [
+        contribution
+        for contribution in dish.normative_contributions
+        if contribution.group_code == NormativeGroupCode.VEGETABLES
+    ]
+    assert len(vegetables) == 3
+    assert {contribution.source_name: contribution.amount for contribution in vegetables} == {
+        "Капуста білокачанна": Decimal("40"),
+        "Помідор": Decimal("30"),
+        "Кріп свіжий": Decimal("2"),
+    }
+
+
+def test_existing_sour_cream_sauce_product_is_enriched_from_registry() -> None:
+    sauce = _ingredient('Соус "Сметанний"')
+    menu_item_id = PydanticObjectId()
+    dish = MenuRequirementDish(
+        menu_item_id=menu_item_id,
+        position=1,
+        kind=MenuItemKind.PRODUCT,
+        name='Соус "Сметанний"',
+        product_ingredient_id=sauce.id,
+        yield_amount="26",
+        children_count=20,
+    )
+    requirement = MenuRequirement.model_construct(
+        dishes=[dish],
+        ingredient_rows=[
+            MenuRequirementIngredientRow(
+                key=f"ingredient:{sauce.id}",
+                ingredient_id=sauce.id,
+                ingredient_name=sauce.name,
+                cells=[
+                    MenuRequirementCell(
+                        menu_item_id=menu_item_id,
+                        net_per_person_g=Decimal("26"),
+                    )
+                ],
+                per_person_total_g=Decimal("26"),
+                issue_total_raw_g=Decimal("520"),
+                issue_total_rounded_g=520,
+            )
+        ],
+    )
+
+    for _ in range(2):
+        _apply_manual_ingredient_rules_from_catalog([requirement], [sauce])
+
+    dairy = [
+        contribution
+        for contribution in dish.normative_contributions
+        if contribution.group_code == NormativeGroupCode.DAIRY
+    ]
+    assert len(dairy) == 1
+    assert dairy[0].source_name == 'Соус "Сметанний"'
+    assert dairy[0].amount == Decimal("26")
+    assert dairy[0].product_variant == "sour_cream"
+    assert dairy[0].source_type == NormativeContributionSource.PRODUCT
 
 
 def _ingredient(name: str) -> Ingredient:

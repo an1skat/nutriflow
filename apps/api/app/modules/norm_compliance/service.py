@@ -7,7 +7,7 @@ from decimal import ROUND_FLOOR, Decimal
 from beanie import PydanticObjectId
 
 from app.modules.identity.models import AgeGroup, School, SchoolGroup, User, UserRole
-from app.modules.menu_requirements.models import MenuRequirement
+from app.modules.menu_requirements.models import MenuRequirement, MenuRequirementDish
 from app.modules.menu_requirements.service import hash_daily_menu
 from app.modules.menus.models import (
     DailyMenu,
@@ -35,12 +35,14 @@ from app.modules.nutrition.contributions import (
 from app.modules.nutrition.domain import (
     NormativeContributionSnapshot,
     NormativeContributionSource,
+    NormativeGroupCode,
+    NormativeUnit,
 )
 from app.modules.nutrition.ingredient_registry import (
     INGREDIENTS_NOT_COUNTED_SEPARATELY,
     get_ingredient_norm_rule,
 )
-from app.modules.recipe.models import Ingredient, normalize_lookup_text
+from app.modules.recipe.models import Ingredient, normalize_lookup_text, parse_menu_yield_grams
 
 
 class NormComplianceNotFoundError(ValueError):
@@ -173,11 +175,7 @@ async def get_norm_compliance_report(
 
 
 async def _apply_manual_ingredient_rules(requirements: list[MenuRequirement]) -> None:
-    if not any(
-        not dish.normative_contributions
-        for requirement in requirements
-        for dish in requirement.dishes
-    ):
+    if not any(requirement.ingredient_rows for requirement in requirements):
         return
 
     catalog = await Ingredient.find({"is_active": True}).to_list()
@@ -193,7 +191,13 @@ def _apply_manual_ingredient_rules_from_catalog(
 
     for requirement in requirements:
         for dish in requirement.dishes:
-            if dish.normative_contributions:
+            if dish.normative_contributions and dish.kind != MenuItemKind.DISH_CARD:
+                continue
+            if any(
+                contribution.group_code == NormativeGroupCode.VEGETABLES
+                and contribution.source_type == NormativeContributionSource.PORTION_VARIANT
+                for contribution in dish.normative_contributions
+            ):
                 continue
             lines = [
                 IngredientLine(
@@ -206,7 +210,7 @@ def _apply_manual_ingredient_rules_from_catalog(
                 for cell in row.cells
                 if cell.menu_item_id == dish.menu_item_id
             ]
-            dish.normative_contributions = ingredient_contribution_snapshots(
+            inferred = ingredient_contribution_snapshots(
                 lines,
                 catalog_by_id=catalog_by_id,
                 catalog_by_name=catalog_by_name,
@@ -217,6 +221,33 @@ def _apply_manual_ingredient_rules_from_catalog(
                     else NormativeContributionSource.INGREDIENT
                 ),
             )
+            if not dish.normative_contributions:
+                dish.normative_contributions = inferred
+                continue
+
+            existing_ids = {
+                contribution.source_id
+                for contribution in dish.normative_contributions
+                if contribution.group_code == NormativeGroupCode.VEGETABLES
+                and contribution.source_id is not None
+            }
+            existing_names = {
+                normalize_lookup_text(contribution.source_name)
+                for contribution in dish.normative_contributions
+                if contribution.group_code == NormativeGroupCode.VEGETABLES
+            }
+            for contribution in inferred:
+                if contribution.group_code != NormativeGroupCode.VEGETABLES:
+                    continue
+                if (
+                    contribution.source_id in existing_ids
+                    or normalize_lookup_text(contribution.source_name) in existing_names
+                ):
+                    continue
+                dish.normative_contributions.append(contribution)
+                if contribution.source_id is not None:
+                    existing_ids.add(contribution.source_id)
+                existing_names.add(normalize_lookup_text(contribution.source_name))
 
 
 def _build_sections(
@@ -338,9 +369,7 @@ def _build_row(
     incompatible = False
     for requirement in requirements:
         for dish in requirement.dishes:
-            for contribution in dish.normative_contributions:
-                if contribution.group_code != norm.group_code:
-                    continue
+            for contribution in _dish_contributions_for_norm(dish, norm):
                 if not _is_countable_contribution(contribution):
                     continue
                 value = contribution_value(contribution, norm)
@@ -405,6 +434,39 @@ def _build_row(
         if status in {ComplianceStatus.UNMAPPED, ComplianceStatus.MIXED}
         else [],
     )
+
+
+def _dish_contributions_for_norm(
+    dish: MenuRequirementDish,
+    norm: NutritionNorm,
+) -> list[NormativeContributionSnapshot]:
+    contributions = [
+        contribution
+        for contribution in dish.normative_contributions
+        if contribution.group_code == norm.group_code
+    ]
+    if (
+        norm.group_code != NormativeGroupCode.CEREALS_GRAINS_LEGUMES
+        or dish.kind != MenuItemKind.DISH_CARD
+        or not contributions
+    ):
+        return contributions
+
+    output = parse_menu_yield_grams(dish.yield_amount)
+    if output is None or output <= 0:
+        return contributions
+
+    return [
+        NormativeContributionSnapshot(
+            group_code=norm.group_code,
+            amount=output,
+            unit=NormativeUnit.GRAM,
+            portion_equivalent=Decimal("1"),
+            source_type=NormativeContributionSource.PORTION_VARIANT,
+            source_id=str(dish.menu_item_id),
+            source_name=dish.name,
+        )
+    ]
 
 
 def _unmapped_dishes(requirements: list[MenuRequirement]) -> list[UnmappedItemResponse]:
