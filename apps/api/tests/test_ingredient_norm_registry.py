@@ -175,18 +175,24 @@ def test_existing_requirement_without_snapshots_is_enriched_from_registry() -> N
 def test_existing_partial_vegetable_snapshots_are_completed_without_duplicates() -> None:
     cabbage = _ingredient("Капуста білокачанна")
     tomatoes = _ingredient("Помідор")
+    carrots = _ingredient("Морква свіжа")
     dill = _ingredient("Кріп свіжий")
     menu_item_id = PydanticObjectId()
     dish = MenuRequirementDish(
         menu_item_id=menu_item_id,
         position=1,
         kind=MenuItemKind.DISH_CARD,
-        name="Салат з капусти, помідорів та кропу",
+        name="Овочевий салат",
         yield_amount="100",
         children_count=20,
         normative_contributions=_snapshots(dill, Decimal("2")),
     )
-    amounts = [(cabbage, Decimal("40")), (tomatoes, Decimal("30")), (dill, Decimal("2"))]
+    amounts = [
+        (cabbage, Decimal("40")),
+        (tomatoes, Decimal("30")),
+        (carrots, Decimal("28")),
+        (dill, Decimal("2")),
+    ]
     requirement = MenuRequirement.model_construct(
         dishes=[dish],
         ingredient_rows=[
@@ -211,7 +217,7 @@ def test_existing_partial_vegetable_snapshots_are_completed_without_duplicates()
     for _ in range(2):
         _apply_manual_ingredient_rules_from_catalog(
             [requirement],
-            [cabbage, tomatoes, dill],
+            [cabbage, tomatoes, carrots, dill],
         )
 
     vegetables = [
@@ -219,10 +225,11 @@ def test_existing_partial_vegetable_snapshots_are_completed_without_duplicates()
         for contribution in dish.normative_contributions
         if contribution.group_code == NormativeGroupCode.VEGETABLES
     ]
-    assert len(vegetables) == 3
+    assert len(vegetables) == 4
     assert {contribution.source_name: contribution.amount for contribution in vegetables} == {
         "Капуста білокачанна": Decimal("40"),
         "Помідор": Decimal("30"),
+        "Морква свіжа": Decimal("28"),
         "Кріп свіжий": Decimal("2"),
     }
 

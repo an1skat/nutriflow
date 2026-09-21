@@ -86,6 +86,7 @@ INGREDIENT_NORM_RULES: dict[str, IngredientNormRule] = {
     "капуста білокочанна свіжа": _rule(NormativeGroupCode.VEGETABLES),
     "капуста пекінська свіжа": _rule(NormativeGroupCode.VEGETABLES),
     "кріп свіжий": _rule(NormativeGroupCode.VEGETABLES),
+    "морква свіжа": _rule(NormativeGroupCode.VEGETABLES),
     "морква свіжа до 01.01": _rule(NormativeGroupCode.VEGETABLES),
     "морква свіжа з 01.01": _rule(NormativeGroupCode.VEGETABLES),
     "морква столова свіжа до 01.01": _rule(NormativeGroupCode.VEGETABLES),
