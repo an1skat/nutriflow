@@ -257,7 +257,7 @@ export function DailyMenuSchoolWorkspace() {
     dishCard: DishCard
   ): Promise<DailyMenuItem | null> => {
     if (!dishCard.current_version_id) {
-      toast.error('У цієї техкарти немає підтвердженої поточної версії.');
+      toast.error('У цієї техкарти немає поточної версії.');
       return null;
     }
 
@@ -266,8 +266,12 @@ export function DailyMenuSchoolWorkspace() {
         dishCardVersionQueryOptions(dishCard.current_version_id)
       );
 
-      if (version.status !== 'confirmed' && version.status !== 'archived') {
-        toast.error('Поточна версія техкарти ще не підтверджена.');
+      const isCurrentDraft =
+        version.status === 'draft' &&
+        version.dish_card_id === dishCard.id &&
+        version.id === dishCard.current_version_id;
+      if (version.status !== 'confirmed' && version.status !== 'archived' && !isCurrentDraft) {
+        toast.error('Поточна версія техкарти недоступна для розрахунків.');
         return null;
       }
 

@@ -2,6 +2,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { toast } from 'sonner';
+
 import type { SchoolGroup } from '@/entities/school-group/model/SchoolGroup';
 import type { WeeklyMenu } from '@/entities/weekly-menu/model/WeeklyMenu';
 
@@ -10,6 +12,7 @@ import { DailyMenuSchoolWorkspace } from './DailyMenuSchoolWorkspace';
 const mocks = vi.hoisted(() => ({
   update: vi.fn(),
   close: vi.fn(),
+  fetchVersion: vi.fn(),
 }));
 
 const group: SchoolGroup = {
@@ -50,6 +53,7 @@ const originalMenu: WeeklyMenu = {
   }],
 };
 
+const catalogCard = {id: 'new-card', name: 'Новий суп', card_number: '9.1', current_version_id: 'new-version'};
 let currentMenu = originalMenu;
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
@@ -61,7 +65,8 @@ vi.mock('@/entities/school-group/api/SchoolGroupQueries', () => ({
   useOwnSchoolGroups: () => ({ data: { items: [group] }, isPending: false, isError: false }),
 }));
 vi.mock('@/entities/recipe/api/RecipeQueries', () => ({
-  useDishCards: () => ({ data: { items: [] }, isPending: false, isError: false }),
+  dishCardVersionQueryOptions: (id: string) => ({queryKey: ['version', id], queryFn: mocks.fetchVersion}),
+  useDishCards: () => ({ data: { items: [catalogCard] }, isPending: false, isError: false }),
   useIngredients: () => ({ data: { items: [] }, isPending: false, isError: false }),
 }));
 vi.mock('@/features/weekly-menu-editor/model/UseWeeklyMenuMutations', () => ({
@@ -71,6 +76,7 @@ vi.mock('@/features/weekly-menu-editor/model/UseWeeklyMenuMutations', () => ({
 vi.mock('@/features/menu-requirement-generation/model/UseGenerateMenuRequirements', () => ({
   useGenerateMenuRequirements: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
+vi.mock('sonner', () => ({toast: {error: vi.fn(), success: vi.fn()}}));
 vi.mock('@/shared/ui/ConfirmDialog', () => ({ useConfirm: () => async () => true }));
 
 function renderWorkspace() {
@@ -87,6 +93,33 @@ describe('daily menu draft and day closure', () => {
     currentMenu = originalMenu;
     mocks.update.mockReset();
     mocks.close.mockReset();
+    vi.mocked(toast.error).mockClear();
+    mocks.fetchVersion.mockReset();
+  });
+
+  it.each(['draft', 'confirmed', 'archived'])('accepts the current %s version in the daily menu', async (status) => {
+    mocks.fetchVersion.mockResolvedValue({id: 'new-version', dish_card_id: 'new-card', status,
+      portion_variants: [{id: 'portion-new', age_group: '6-11', output_grams: '200', nutrition: {kcal: '42', proteins: '1', fats: '2', carbs: '3'}}],
+      ingredient_amounts: [], allergen_ids: []});
+    renderWorkspace();
+    fireEvent.click(await screen.findByRole('button', {name: 'Суп'}));
+    fireEvent.click(await screen.findByRole('option', {name: /Новий суп/}));
+    await screen.findByRole('button', {name: 'Видалити позицію Новий суп'});
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(screen.getByText('Є незбережені зміни')).toBeInTheDocument();
+  });
+
+  it.each([
+    ['import_preview', 'new-version', 'new-card'],
+    ['draft', 'other-version', 'new-card'],
+    ['draft', 'new-version', 'other-card'],
+  ])('rejects unusable version %s / %s / %s', async (status, id, dishCardId) => {
+    mocks.fetchVersion.mockResolvedValue({id, dish_card_id: dishCardId, status});
+    renderWorkspace();
+    fireEvent.click(await screen.findByRole('button', {name: 'Суп'}));
+    fireEvent.click(await screen.findByRole('option', {name: /Новий суп/}));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Поточна версія техкарти недоступна для розрахунків.'));
+    expect(screen.getByRole('button', {name: 'Видалити позицію Суп'})).toBeInTheDocument();
   });
 
   it('retries an unsaved restored deletion and does not close after another failed Save', async () => {

@@ -423,7 +423,7 @@ function DishPicker({
                     </span>
                     <span className="mt-0.5 block text-xs text-slate-500">
                       ТК № {dishCard.card_number}
-                      {dishCard.current_version_id ? '' : ' · немає підтвердженої версії'}
+                      {dishCard.current_version_id ? '' : ' · немає поточної версії'}
                     </span>
                   </span>
                   {isSelected ? <Check className="mt-0.5 size-4 shrink-0" aria-hidden /> : null}

@@ -754,6 +754,14 @@ async def publish_weekly_menu(
     if source.status == WeeklyMenuStatus.ARCHIVED:
         raise MenuValidationError("Archived weekly menus cannot be published")
 
+    try:
+        # Validate a copy: publishing must preserve stored version IDs and nutrition snapshots.
+        await resolve_menu_item_references(
+            deepcopy([item for day in source.days for item in day.items])
+        )
+    except MenuReferenceError as exc:
+        raise MenuValidationError(str(exc)) from exc
+
     target_schools = await _get_publish_target_schools(data.school_ids, admin)
     target_school_ids = [school.id for school in target_schools if school.id is not None]
     existing_copies = await WeeklyMenu.find(

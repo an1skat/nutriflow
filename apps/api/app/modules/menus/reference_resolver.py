@@ -13,7 +13,9 @@ from app.modules.recipe.models import (
     Allergen,
     DishCard,
     DishCardVersion,
+    DishCardVersionStatus,
     Ingredient,
+    is_current_draft,
     resolve_portion_variant_by_yield,
     scale_nutrition,
 )
@@ -173,6 +175,13 @@ async def resolve_menu_item_references(items: list[DailyMenuItem]) -> None:
         version = catalog.dish_card_version(item, dish_card)
         if version is None or version.dish_card_id != dish_card.id:
             raise MenuReferenceError("Dish card version does not belong to menu item dish card")
+        if version.status not in {
+            DishCardVersionStatus.CONFIRMED,
+            DishCardVersionStatus.ARCHIVED,
+        } and not is_current_draft(version, dish_card):
+            raise MenuReferenceError(
+                "Dish card version is not confirmed, archived or a current draft"
+            )
 
         for portion in item.portions:
             preferred_variant_id = portion.dish_card_portion_variant_id or named_portion_variant_id(

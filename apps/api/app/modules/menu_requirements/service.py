@@ -82,11 +82,13 @@ from app.modules.nutrition.domain import (
     NormativeUnit,
 )
 from app.modules.recipe.models import (
+    DishCard,
     DishCardVersion,
     DishCardVersionStatus,
     Ingredient,
     IngredientAmount,
     PortionVariant,
+    is_current_draft,
     normalize_lookup_text,
     parse_menu_yield_grams,
     resolve_portion_variant_by_yield,
@@ -155,6 +157,9 @@ async def generate_menu_requirements(
     catalog_by_id = {ingredient.id: ingredient for ingredient in catalog}
     catalog_by_name = _catalog_by_normalized_name(catalog)
     source_day_hash = hash_daily_menu(day)
+    card_ids = {item.dish_card_id for item in day.items if item.dish_card_id is not None}
+    cards = await DishCard.find({"_id": {"$in": list(card_ids)}}).to_list() if card_ids else []
+    dish_cards_by_id = {card.id: card for card in cards}
 
     prepared: list[
         tuple[SchoolGroup, list[MenuRequirementDish], list[MenuRequirementIngredientRow]]
@@ -167,6 +172,7 @@ async def generate_menu_requirements(
             service_date=resolved_service_date,
             catalog_by_id=catalog_by_id,
             catalog_by_name=catalog_by_name,
+            dish_cards_by_id=dish_cards_by_id,
         )
         if not calculations:
             continue
@@ -667,6 +673,7 @@ async def _build_dish_calculations(
     service_date: Date,
     catalog_by_id: dict[PydanticObjectId, Ingredient],
     catalog_by_name: dict[str, Ingredient],
+    dish_cards_by_id: dict[PydanticObjectId, DishCard] | None = None,
 ) -> list[DishCalculation]:
     calculations: list[DishCalculation] = []
 
@@ -707,6 +714,7 @@ async def _build_dish_calculations(
                 service_date=service_date,
                 catalog_by_id=catalog_by_id,
                 catalog_by_name=catalog_by_name,
+                dish_cards_by_id=dish_cards_by_id,
             )
             ready_portion = _ready_dish_contribution_snapshot(item, portion)
             if ready_portion is not None:
@@ -753,6 +761,7 @@ async def _dish_card_ingredient_lines(
     service_date: Date,
     catalog_by_id: dict[PydanticObjectId, Ingredient],
     catalog_by_name: dict[str, Ingredient],
+    dish_cards_by_id: dict[PydanticObjectId, DishCard] | None = None,
 ) -> tuple[
     PydanticObjectId,
     list[IngredientLine],
@@ -766,13 +775,26 @@ async def _dish_card_ingredient_lines(
     version = await DishCardVersion.get(item.dish_card_version_id)
     if version is None:
         raise MenuRequirementValidationError(f'Dish card version for "{item.name}" was not found')
+    if version.dish_card_id != item.dish_card_id:
+        raise MenuRequirementValidationError(
+            f'Dish card version for "{item.name}" does not belong to menu item dish card'
+        )
 
+    dish_card = (
+        (
+            dish_cards_by_id.get(version.dish_card_id)
+            if dish_cards_by_id is not None
+            else await DishCard.get(version.dish_card_id)
+        )
+        if version.status == DishCardVersionStatus.DRAFT
+        else None
+    )
     if version.status not in {
         DishCardVersionStatus.CONFIRMED,
         DishCardVersionStatus.ARCHIVED,
-    }:
+    } and not is_current_draft(version, dish_card):
         raise MenuRequirementValidationError(
-            f'Dish card version for "{item.name}" is not confirmed'
+            f'Dish card version for "{item.name}" is not confirmed, archived or a current draft'
         )
 
     variant, factor = _resolve_requirement_portion_variant(

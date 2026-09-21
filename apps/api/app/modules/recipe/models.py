@@ -341,3 +341,13 @@ class DishCardVersion(Document):
             ),
             IndexModel([("status", ASCENDING)], name="ix_dish_card_version_status"),
         ]
+
+
+def is_current_draft(version: DishCardVersion, dish_card: DishCard | None) -> bool:
+    return (
+        version.status == DishCardVersionStatus.DRAFT
+        and version.id is not None
+        and dish_card is not None
+        and version.dish_card_id == dish_card.id
+        and dish_card.current_version_id == version.id
+    )

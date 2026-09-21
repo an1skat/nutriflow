@@ -361,7 +361,7 @@ def test_owner_can_select_previous_confirmed_version(admin_client):
     )
 
 
-def test_main_version_must_be_confirmed(admin_client):
+def test_current_draft_stays_editable_and_only_current_draft_can_be_calculated(admin_client):
     client, _ = admin_client
     dish_card_id = _create_dish_card(client, number="99.12")
     variant_id = PydanticObjectId()
@@ -377,11 +377,64 @@ def test_main_version_must_be_confirmed(admin_client):
         headers=csrf_headers(client),
     )
 
-    assert response.status_code == 400
-    assert response.json()["detail"] == "Only confirmed versions can be selected as main"
+    assert response.status_code == 200
+    assert response.json()["current_version_id"] == version_id
+    assert (
+        client.get(f"/api/v1/recipes/dish-cards/{dish_card_id}").json()["current_version_id"]
+        == version_id
+    )
+    version_url = f"/api/v1/recipes/dish-card-versions/{version_id}"
+    assert client.get(version_url).json()["status"] == "draft"
+    edited = client.patch(
+        version_url, json={"technology_text": "Editable main draft"}, headers=csrf_headers(client)
+    )
+    assert edited.status_code == 200
+    assert edited.json()["status"] == "draft"
+    calculation = {"portion_variant_id": str(variant_id), "servings_count": 3}
+    calculated = client.post(f"{version_url}/calculate", json=calculation)
+    assert calculated.status_code == 200
+    assert calculated.json()["items"][0]["gross_total"] == "300"
+    other_id = _create_version(
+        client,
+        dish_card_id=dish_card_id,
+        variant_id=variant_id,
+        amounts=[amount_payload(name="Морква", gross="200", net="80", variant_id=variant_id)],
+    )
+    assert (
+        client.post(
+            f"/api/v1/recipes/dish-card-versions/{other_id}/calculate", json=calculation
+        ).status_code
+        == 400
+    )
+    assert (
+        client.put(
+            f"/api/v1/recipes/dish-card-versions/{other_id}/main", headers=csrf_headers(client)
+        ).status_code
+        == 200
+    )
+    assert client.post(f"{version_url}/calculate", json=calculation).status_code == 400
+    other_url = f"/api/v1/recipes/dish-card-versions/{other_id}"
+    confirmed = client.post(f"{other_url}/confirm", headers=csrf_headers(client))
+    assert confirmed.status_code == 200
+    assert confirmed.json()["status"] == "confirmed"
+    assert (
+        client.get(f"/api/v1/recipes/dish-cards/{dish_card_id}").json()["current_version_id"]
+        == other_id
+    )
+    assert client.put(f"{version_url}/main", headers=csrf_headers(client)).status_code == 200
+    assert client.post(f"{other_url}/calculate", json=calculation).status_code == 200
+    assert client.put(f"{other_url}/main", headers=csrf_headers(client)).status_code == 200
+    assert client.post(f"{version_url}/calculate", json=calculation).status_code == 400
+    assert (
+        client.patch(
+            other_url, json={"technology_text": "immutable"}, headers=csrf_headers(client)
+        ).status_code
+        == 403
+    )
 
 
-def test_technologist_can_select_main_version(seeded_client):
+@pytest.mark.parametrize("status", ["draft", "confirmed"])
+def test_technologist_can_select_main_version(seeded_client, status):
     client, identities = seeded_client
     login(client, identities.admin.username, identities.admin_password)
     dish_card_id = _create_dish_card(client, number="99.13")
@@ -392,13 +445,14 @@ def test_technologist_can_select_main_version(seeded_client):
         variant_id=variant_id,
         amounts=[amount_payload(name="Морква", gross="100", net="80", variant_id=variant_id)],
     )
-    assert (
-        client.post(
-            f"/api/v1/recipes/dish-card-versions/{version_id}/confirm",
-            headers=csrf_headers(client),
-        ).status_code
-        == 200
-    )
+    if status == "confirmed":
+        assert (
+            client.post(
+                f"/api/v1/recipes/dish-card-versions/{version_id}/confirm",
+                headers=csrf_headers(client),
+            ).status_code
+            == 200
+        )
     assert (
         client.post(
             "/api/v1/admin/admins",
@@ -424,9 +478,10 @@ def test_technologist_can_select_main_version(seeded_client):
     assert response.json()["current_version_id"] == version_id
 
 
-def test_admin_cannot_select_main_version(seeded_client):
+@pytest.mark.parametrize("actor", ["lower_admin", "school_user"])
+def test_admin_cannot_select_main_version(seeded_client, actor):
     client, identities = seeded_client
-    login(client, identities.lower_admin.username, identities.lower_admin_password)
+    login(client, getattr(identities, actor).username, getattr(identities, f"{actor}_password"))
 
     response = client.put(
         "/api/v1/recipes/dish-card-versions/6a4700000000000000000000/main",
@@ -689,3 +744,20 @@ async def test_decimal_round_trip_via_beanie_preserves_precision():
             await dish_card.delete()
     finally:
         await close_mongo()
+
+
+def test_import_preview_cannot_be_main(admin_client):
+    client, _ = admin_client
+    card_id = _create_dish_card(client, number="99.90")
+    response = client.post(
+        f"/api/v1/recipes/dish-cards/{card_id}/versions/preview",
+        json={"portion_variants": [], "ingredient_amounts": []},
+        headers=csrf_headers(client),
+    )
+    assert response.status_code == 202
+    version_id = response.json()["id"]
+    response = client.put(
+        f"/api/v1/recipes/dish-card-versions/{version_id}/main", headers=csrf_headers(client)
+    )
+    assert response.status_code == 400
+    assert client.get(f"/api/v1/recipes/dish-cards/{card_id}").json()["current_version_id"] is None

@@ -208,13 +208,61 @@ def test_admin_creates_weekly_menu_and_autofills_allergens_from_dish_card_versio
     assert menu["days"][0]["items"][0]["allergen_codes"] == ["ГЦ", "Л"]
 
 
-def test_admin_imports_partial_age_group_menu_end_to_end(seeded_client):
+@pytest.mark.parametrize("main_draft", [False, True])
+def test_publish_rechecks_draft_eligibility_without_switching_stored_version(
+    seeded_client, main_draft
+):
+    client, identities = seeded_client
+    login(client, identities.admin.username, identities.admin_password)
+    card_id, original_id = create_confirmed_dish_card(
+        client,
+        card_number="1.54",
+        main_draft=main_draft,
+    )
+    response = client.post(
+        "/api/v1/menus/weekly",
+        json=weekly_menu_payload(),
+        headers=csrf_headers(client),
+    )
+    assert response.status_code == 201
+    menu = response.json()
+    original = client.get(f"/api/v1/recipes/dish-card-versions/{original_id}").json()
+    newer = client.post(
+        f"/api/v1/recipes/dish-cards/{card_id}/versions",
+        json={key: original[key] for key in ("portion_variants", "ingredient_amounts")},
+        headers=csrf_headers(client),
+    )
+    assert newer.status_code == 201
+    assert (
+        client.put(
+            f"/api/v1/recipes/dish-card-versions/{newer.json()['id']}/main",
+            headers=csrf_headers(client),
+        ).status_code
+        == 200
+    )
+    published = client.post(
+        f"/api/v1/menus/weekly/{menu['id']}/publish",
+        json={"school_ids": [str(identities.own_school.id)]},
+        headers=csrf_headers(client),
+    )
+    assert published.status_code == (400 if main_draft else 200)
+    stored = client.get(f"/api/v1/menus/weekly/{menu['id']}").json()
+    assert stored["days"] == menu["days"]
+    if not main_draft:
+        copy_id = published.json()["created_menu_ids"][0]
+        copied = client.get(f"/api/v1/menus/weekly/{copy_id}").json()
+        assert copied["days"] == menu["days"]
+
+
+@pytest.mark.parametrize("main_draft", [False, True])
+def test_admin_imports_partial_age_group_menu_end_to_end(seeded_client, main_draft):
     client, identities = seeded_client
     login(client, identities.admin.username, identities.admin_password)
     dish_card_id, _version_id = create_confirmed_dish_card(
         client,
         card_number="1.54",
         allergen_codes=["ГЦ"],
+        main_draft=main_draft,
     )
     workbook = openpyxl.load_workbook(BytesIO(import_workbook_bytes()))
     for column_number in range(14, 19):
@@ -309,8 +357,7 @@ def test_admin_imports_partial_age_group_menu_end_to_end(seeded_client):
     copy_response = client.get(f"/api/v1/menus/weekly/{copy_id}")
     assert copy_response.status_code == 200
     assert [
-        portion["age_group"]
-        for portion in copy_response.json()["days"][0]["items"][0]["portions"]
+        portion["age_group"] for portion in copy_response.json()["days"][0]["items"][0]["portions"]
     ] == ["6-11", "11-14"]
 
 
@@ -583,9 +630,7 @@ def test_publish_replace_existing_updates_copy_and_preserves_school_data(seeded_
     assert len({copy["school_id"] for copy in copies}) == 2
 
 
-def test_publish_replace_existing_rolls_back_all_copies_on_conflict(
-    seeded_client, monkeypatch
-):
+def test_publish_replace_existing_rolls_back_all_copies_on_conflict(seeded_client, monkeypatch):
     client, identities = seeded_client
     login(client, identities.admin.username, identities.admin_password)
     source = client.post(
@@ -595,9 +640,7 @@ def test_publish_replace_existing_rolls_back_all_copies_on_conflict(
     ).json()
     published = client.post(
         f"/api/v1/menus/weekly/{source['id']}/publish",
-        json={
-            "school_ids": [str(identities.own_school.id), str(identities.other_school.id)]
-        },
+        json={"school_ids": [str(identities.own_school.id), str(identities.other_school.id)]},
         headers=csrf_headers(client),
     ).json()
     copy_ids = published["created_menu_ids"]
@@ -1425,6 +1468,7 @@ def create_confirmed_dish_card(
     card_number: str,
     allergen_codes: list[str] | None = None,
     output_grams: str = "100",
+    main_draft: bool = False,
 ) -> tuple[str, str]:
     create_card = client.post(
         "/api/v1/recipes/dish-cards",
@@ -1475,9 +1519,15 @@ def create_confirmed_dish_card(
     assert create_version.status_code == 201
     version_id = create_version.json()["id"]
 
-    confirm = client.post(
-        f"/api/v1/recipes/dish-card-versions/{version_id}/confirm",
-        headers=csrf_headers(client),
+    confirm = (
+        client.put(
+            f"/api/v1/recipes/dish-card-versions/{version_id}/main", headers=csrf_headers(client)
+        )
+        if main_draft
+        else client.post(
+            f"/api/v1/recipes/dish-card-versions/{version_id}/confirm",
+            headers=csrf_headers(client),
+        )
     )
     assert confirm.status_code == 200
     return dish_card_id, version_id

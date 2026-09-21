@@ -135,7 +135,7 @@ export function DishCardVersionsWidget({ dishCardId }: { dishCardId: string }) {
                         <td>
                           {isCurrent ? (
                             <span className="text-xs font-bold text-emerald-700">Основна</span>
-                          ) : canSelectMain && v.status === 'confirmed' ? (
+                          ) : canSelectMain && (v.status === 'confirmed' || v.status === 'draft') ? (
                             <button
                               type="button"
                               className="nf-button nf-button-secondary"

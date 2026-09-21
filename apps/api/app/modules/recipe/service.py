@@ -14,6 +14,7 @@ from app.modules.recipe.models import (
     IngredientAmount,
     Nutrition,
     PortionVariant,
+    is_current_draft,
     normalize_lookup_text,
 )
 from app.modules.recipe.schemas import (
@@ -49,7 +50,7 @@ class DishCardVersionInvalidError(ValueError):
 
 
 class DishCardVersionNotConfirmedError(ValueError):
-    """Only confirmed dish card versions can be used for calculations."""
+    """The version is not eligible for the requested operation."""
 
 
 async def list_ingredients(
@@ -465,8 +466,10 @@ async def confirm_dish_card_version(version_id: PydanticObjectId) -> DishCardVer
 async def set_main_dish_card_version(version_id: PydanticObjectId) -> DishCard:
     version = await get_dish_card_version(version_id)
 
-    if version.status != DishCardVersionStatus.CONFIRMED:
-        raise DishCardVersionNotConfirmedError("Only confirmed versions can be selected as main")
+    if version.status not in {DishCardVersionStatus.CONFIRMED, DishCardVersionStatus.DRAFT}:
+        raise DishCardVersionNotConfirmedError(
+            "Only confirmed or draft versions can be selected as main"
+        )
 
     dish_card = await get_dish_card(version.dish_card_id)
     if dish_card.current_version_id == version.id:
@@ -483,16 +486,25 @@ async def calculate_ingredients(
     data: CalculateIngredientsRequest,
 ) -> list[IngredientCalculationLine]:
     version = await get_dish_card_version(version_id)
-    return calculate_ingredient_lines(version, data)
+    dish_card = (
+        await get_dish_card(version.dish_card_id)
+        if version.status == DishCardVersionStatus.DRAFT
+        else None
+    )
+    return calculate_ingredient_lines(version, data, dish_card=dish_card)
 
 
 def calculate_ingredient_lines(
     version: DishCardVersion,
     data: CalculateIngredientsRequest,
+    *,
+    dish_card: DishCard | None = None,
 ) -> list[IngredientCalculationLine]:
-    if version.status != DishCardVersionStatus.CONFIRMED:
+    if version.status != DishCardVersionStatus.CONFIRMED and not is_current_draft(
+        version, dish_card
+    ):
         raise DishCardVersionNotConfirmedError(
-            "Only confirmed dish card versions can be calculated"
+            "Only confirmed or current draft dish card versions can be calculated"
         )
 
     if not any(variant.id == data.portion_variant_id for variant in version.portion_variants):

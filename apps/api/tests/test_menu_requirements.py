@@ -118,6 +118,7 @@ def create_confirmed_dish(
     client: TestClient,
     *,
     ingredient_id: str,
+    main_draft: bool = False,
 ) -> tuple[str, str]:
     card_response = client.post(
         "/api/v1/recipes/dish-cards",
@@ -154,9 +155,15 @@ def create_confirmed_dish(
     )
     assert version_response.status_code == 201
     version_id = version_response.json()["id"]
-    confirm_response = client.post(
-        f"/api/v1/recipes/dish-card-versions/{version_id}/confirm",
-        headers=csrf_headers(client),
+    confirm_response = (
+        client.put(
+            f"/api/v1/recipes/dish-card-versions/{version_id}/main", headers=csrf_headers(client)
+        )
+        if main_draft
+        else client.post(
+            f"/api/v1/recipes/dish-card-versions/{version_id}/confirm",
+            headers=csrf_headers(client),
+        )
     )
     assert confirm_response.status_code == 200
     return card_id, str(variant_id)
@@ -243,7 +250,8 @@ def prepare_school_menu_with_count(
     return response.json()
 
 
-def test_school_generates_and_regenerates_menu_requirement(seeded_client) -> None:
+@pytest.mark.parametrize("main_draft", [False, True])
+def test_school_generates_and_regenerates_menu_requirement(seeded_client, main_draft) -> None:
     client, identities = seeded_client
     login(client, identities.admin.username, identities.admin_password)
 
@@ -257,6 +265,7 @@ def test_school_generates_and_regenerates_menu_requirement(seeded_client) -> Non
     card_id, variant_id = create_confirmed_dish(
         client,
         ingredient_id=ingredient_id,
+        main_draft=main_draft,
     )
     menu = publish_school_menu(
         client,
