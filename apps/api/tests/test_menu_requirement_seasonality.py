@@ -77,5 +77,5 @@ def test_seasonal_spaces_single_out_of_season_and_unrelated_rows():
         september,
         salt,
     ]
-    assert _select_seasonal_amounts([january, salt], date(2026, 9, 16)) == [salt]
+    assert _select_seasonal_amounts([january, salt], date(2026, 9, 16)) == [january, salt]
     assert _select_seasonal_amounts([salt, salt], date(2026, 9, 16)) == [salt, salt]

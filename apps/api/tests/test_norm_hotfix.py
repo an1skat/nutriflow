@@ -380,3 +380,70 @@ def test_registry_lookup_one_digit_dates(raw_name, expected_group):
     rule = get_ingredient_norm_rule(raw_name.lower())
     assert rule is not None, f"Rule not found for {raw_name}"
     assert rule.group_code == expected_group
+
+
+def test_singleton_beet_survives_on_september_14():
+    from app.modules.nutrition.seasonality import select_seasonal_items
+
+    name = "Буряк столовий свіжий з 01.01."
+    selected = select_seasonal_items([name], date(2026, 9, 14), name=lambda x: x)
+    assert selected == [name]
+
+
+def test_singleton_carrot_survives_on_september_16():
+    from app.modules.nutrition.seasonality import select_seasonal_items
+
+    name = "Морква свіжа з 01.01"
+    selected = select_seasonal_items([name], date(2026, 9, 16), name=lambda x: x)
+    assert selected == [name]
+
+
+def test_potato_alternatives_on_september_14_select_only_target():
+    from app.modules.nutrition.seasonality import select_seasonal_items
+
+    potatoes = [
+        "Картопля свіжа з 01.09 по 31.10",
+        "Картопля свіжа з 01.11 по 31.12",
+        "Картопля свіжа з 01.01 по 28–29.02",
+        "Картопля свіжа з 01.03",
+        "Картопля молода до 1.09",
+    ]
+    for candidates in (potatoes, list(reversed(potatoes))):
+        selected = select_seasonal_items(candidates, date(2026, 9, 14), name=lambda x: x)
+        assert selected == ["Картопля свіжа з 01.09 по 31.10"]
+
+
+def test_real_old_production_snapshot_no_longer_removes_carrot_or_beet():
+    from pathlib import Path
+
+    from bson import json_util
+
+    snapshot_path = Path(__file__).parents[1] / "norms-6a848408f9867d3ec9e6c866-2026-09-14_18.json"
+    if not snapshot_path.exists():
+        pytest.skip("Production snapshot file not present")
+
+    data = json_util.loads(snapshot_path.read_text())
+    for entry in data["entries"]:
+        before = entry["before"]
+        repaired = repaired_fields(before)
+        for d_before, d_repaired in zip(before["dishes"], repaired["dishes"], strict=True):
+            b_c = [
+                c["source_name"]
+                for c in d_before.get("normative_contributions", [])
+                if any(v in c["source_name"].lower() for v in ("моркв", "буряк"))
+            ]
+            r_c = [
+                c["source_name"]
+                for c in d_repaired.get("normative_contributions", [])
+                if any(v in c["source_name"].lower() for v in ("моркв", "буряк"))
+            ]
+            assert r_c == b_c, (
+                f"Dish {d_before['name']} lost vegetable contributions: "
+                f"before={b_c}, repaired={r_c}"
+            )
+
+        repaired_rows = {r["ingredient_name"] for r in repaired.get("ingredient_rows", [])}
+        if any(d["name"] == "Салат з буряків" for d in before["dishes"]):
+            assert "Буряк столовий свіжий з 01.01." in repaired_rows
+        if any(d["name"] == "Плов з булгура зі свининою" for d in before["dishes"]):
+            assert "Морква свіжа з 01.01" in repaired_rows

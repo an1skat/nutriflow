@@ -75,6 +75,8 @@ def select_seasonal_items[T](
             )
             if matched is not None:
                 selected.append(matched)
+            else:
+                selected.extend(candidates)
         elif len(candidates) > 1 and any(
             "грунтові" in name(item).lower() or "ґрунтові" in name(item).lower()
             for item in candidates
