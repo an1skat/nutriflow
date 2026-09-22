@@ -29,6 +29,7 @@ from app.modules.nutrition.contributions import (
     product_portion_contributions,
 )
 from app.modules.nutrition.domain import (
+    NormativeContributionSnapshot,
     NormativeContributionSource,
     NormativeGroupCode,
     NormativeUnit,
@@ -265,3 +266,117 @@ def test_repaired_fields_supports_date_object():
     assert "dishes" in repaired
     assert "ingredient_rows" in repaired
 
+
+def test_repair_removes_young_potato_on_september_14():
+    """Reproduce production repair plan defect: school 6a848408f9867d3ec9e6c866 on 2026-09-14."""
+    dish_id = PydanticObjectId()
+    baked_potato = MenuRequirementDish(
+        menu_item_id=dish_id,
+        position=1,
+        kind=MenuItemKind.DISH_CARD,
+        name="Картопля запечена з маслом вершковим",
+        yield_amount="100",
+        children_count=10,
+        normative_contributions=[
+            NormativeContributionSnapshot(
+                group_code=NormativeGroupCode.POTATOES,
+                amount=Decimal("62"),
+                unit=NormativeUnit.GRAM,
+                source_type=NormativeContributionSource.INGREDIENT,
+                source_id=str(dish_id),
+                source_name="Картопля молода до 1.09",
+            ),
+            NormativeContributionSnapshot(
+                group_code=NormativeGroupCode.POTATOES,
+                amount=Decimal("62"),
+                unit=NormativeUnit.GRAM,
+                source_type=NormativeContributionSource.INGREDIENT,
+                source_id=str(dish_id),
+                source_name="Картопля свіжа з 01.09 по 31.10",
+            ),
+        ],
+    )
+    lines = [
+        line("Картопля молода до 1.09", "62"),
+        line("Картопля свіжа з 01.09 по 31.10", "62"),
+    ]
+    rows = build_ingredient_rows([DishCalculation(baked_potato, lines)])
+    req = requirement([baked_potato], rows)
+    req.service_date = date(2026, 9, 14)
+
+    repair_requirement_norms(req)
+
+    # Young potato must be completely removed from ingredient_rows, not just contributions.
+    assert len(req.ingredient_rows) == 1
+    assert req.ingredient_rows[0].ingredient_name == "Картопля свіжа з 01.09 по 31.10"
+    assert req.ingredient_rows[0].issue_total_raw_g == Decimal("620")
+    assert len(baked_potato.normative_contributions) == 1
+    assert baked_potato.normative_contributions[0].source_name == "Картопля свіжа з 01.09 по 31.10"
+    assert baked_potato.normative_contributions[0].amount == Decimal("62")
+
+
+@pytest.mark.parametrize(
+    ("service_date", "expected_name"),
+    [
+        (date(2026, 8, 31), "Картопля молода до 1.09"),
+        (date(2026, 9, 1), "Картопля свіжа з 01.09 по 31.10"),
+        (date(2026, 9, 14), "Картопля свіжа з 01.09 по 31.10"),
+        (date(2026, 11, 15), "Картопля свіжа з 01.11 по 31.12"),
+        (date(2026, 1, 15), "Картопля свіжа з 01.01 по 28–29.02"),
+        (date(2026, 3, 15), "Картопля свіжа з 01.03"),
+    ],
+)
+def test_potato_seasonality_with_young_potato(service_date, expected_name):
+    from app.modules.nutrition.seasonality import select_seasonal_items
+
+    potatoes = [
+        "Картопля свіжа з 01.09 по 31.10",
+        "Картопля свіжа з 01.11 по 31.12",
+        "Картопля свіжа з 01.01 по 28–29.02",
+        "Картопля свіжа з 01.03",
+        "Картопля молода до 1.09",
+    ]
+    for candidates in (potatoes, list(reversed(potatoes))):
+        selected = select_seasonal_items(candidates, service_date, name=lambda x: x)
+        assert selected == [expected_name]
+
+
+@pytest.mark.parametrize(
+    ("service_date", "expected_name"),
+    [
+        (date(2026, 9, 14), "Морква свіжа до 1.01"),
+        (date(2026, 11, 15), "Морква свіжа до 1.01"),
+        (date(2026, 12, 31), "Морква свіжа до 1.01"),
+        (date(2026, 1, 1), "Морква свіжа з 1.01"),
+        (date(2026, 1, 15), "Морква свіжа з 1.01"),
+        (date(2026, 3, 15), "Морква свіжа з 1.01"),
+        (date(2026, 8, 31), "Морква свіжа з 1.01"),
+    ],
+)
+def test_carrot_paired_annual_boundary_semantics(service_date, expected_name):
+    from app.modules.nutrition.seasonality import select_seasonal_items
+
+    carrots = [
+        "Морква свіжа до 1.01",
+        "Морква свіжа з 1.01",
+    ]
+    for candidates in (carrots, list(reversed(carrots))):
+        selected = select_seasonal_items(candidates, service_date, name=lambda x: x)
+        assert selected == [expected_name]
+
+
+@pytest.mark.parametrize(
+    ("raw_name", "expected_group"),
+    [
+        ("Картопля молода до 1.09", NormativeGroupCode.POTATOES),
+        ("картопля молода до 1.09.", NormativeGroupCode.POTATOES),
+        ("Морква свіжа до 1.01", NormativeGroupCode.VEGETABLES),
+        ("Морква свіжа з 1.01", NormativeGroupCode.VEGETABLES),
+        ("Буряк столовий свіжий до 1.01", NormativeGroupCode.VEGETABLES),
+        ("Буряк столовий свіжий з 1.01", NormativeGroupCode.VEGETABLES),
+    ],
+)
+def test_registry_lookup_one_digit_dates(raw_name, expected_group):
+    rule = get_ingredient_norm_rule(raw_name.lower())
+    assert rule is not None, f"Rule not found for {raw_name}"
+    assert rule.group_code == expected_group

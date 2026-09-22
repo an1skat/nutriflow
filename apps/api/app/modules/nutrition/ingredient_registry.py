@@ -295,6 +295,8 @@ INGREDIENTS_NOT_COUNTED_SEPARATELY = frozenset(
 def _normalize_date_punctuation(name: str) -> str:
     name = re.sub(r"(?<=\d)\s*[-–—/]\s*(?=\d)", "-", name)
     name = re.sub(r"(?<=\d)\s*\.\s*(?=\d)", ".", name)
+    name = re.sub(r"\b(\d)\.(\d{1,2})\b", r"0\1.\2", name)
+    name = re.sub(r"\b(\d{2})\.(\d)\b", r"\1.0\2", name)
     return re.sub(r"(\d{2}\.\d{2})\s*\.", r"\1", name)
 
 
