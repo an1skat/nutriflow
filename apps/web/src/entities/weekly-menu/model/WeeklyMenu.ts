@@ -1,5 +1,10 @@
 import { z } from 'zod';
 
+import {
+  type NormativeContribution,
+  normativeContributionSchema,
+} from '@/entities/recipe/model/Recipe';
+
 export const mealTypeSchema = z.enum(['breakfast', 'lunch']);
 export const weekdaySchema = z.enum([
   'monday',
@@ -63,6 +68,7 @@ export const menuPortionSchema = z.object({
   dish_card_portion_variant_id: z.string().min(1).nullable(),
   calculated_from: menuPortionCalculationSourceSchema.nullable().default(null),
   nutrition: menuNutritionSchema,
+  normative_contributions: z.array(normativeContributionSchema).optional(),
 });
 
 export const menuItemServingCountSchema = z.object({
@@ -213,6 +219,7 @@ export type WeeklyMenuPayload = {
           portion_variant_id: string;
           yield_amount: string;
         } | null;
+        normative_contributions?: NormativeContribution[];
         nutrition: {
           kcal?: string | null;
           proteins?: string | null;

@@ -264,3 +264,32 @@ describe('NormComplianceWorkspace', () => {
     );
   });
 });
+
+it('deduplicates the same record but explains separate school groups', () => {
+  const withGroups = structuredClone(report);
+  const section = withGroups.groups[0].sections[0];
+  section.unmapped_items.push({ ...section.unmapped_items[0] });
+  const second = structuredClone(withGroups.groups[0]);
+  second.school_group_id = 'group-2';
+  second.school_group_name = '2-Б';
+  second.age_group = '11-14';
+  second.sections[0].unmapped_items = [
+    {
+      ...section.unmapped_items[0],
+      requirement_id: 'requirement-other-group',
+    },
+  ];
+  withGroups.groups.push(second);
+  render(
+    <NormComplianceReportView
+      report={withGroups}
+      selectedRow={null}
+      onSelectRow={() => undefined}
+      onCloseDetails={() => undefined}
+    />
+  );
+  const panel = screen.getByRole('region', { name: 'Не визначено нормативну групу · 2' });
+  expect(within(panel).getAllByRole('listitem')).toHaveLength(2);
+  expect(within(panel).getByText('1-А · 6-11 років · Обід')).toBeInTheDocument();
+  expect(within(panel).getByText('2-Б · 11-14 років · Обід')).toBeInTheDocument();
+});

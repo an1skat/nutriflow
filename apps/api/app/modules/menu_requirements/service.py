@@ -73,6 +73,7 @@ from app.modules.menus.models import (
 from app.modules.nutrition.contributions import (
     IngredientLine,
     ingredient_contribution_snapshots,
+    product_portion_contributions,
 )
 from app.modules.nutrition.domain import (
     NormativeContributionBasis,
@@ -81,6 +82,7 @@ from app.modules.nutrition.domain import (
     NormativeGroupCode,
     NormativeUnit,
 )
+from app.modules.nutrition.seasonality import select_seasonal_items
 from app.modules.recipe.models import (
     DishCard,
     DishCardVersion,
@@ -944,7 +946,12 @@ def _menu_portion_contribution_snapshots(
             source_id=str(item.id),
             source_name=item.name,
         )
-        for contribution in portion.normative_contributions
+        for contribution in (
+            portion.normative_contributions
+            or product_portion_contributions(
+                item.product_name_snapshot or item.name, portion.yield_amount
+            )
+        )
         if contribution.basis == NormativeContributionBasis.PER_PORTION
     ]
 
@@ -979,70 +986,9 @@ def _select_seasonal_amounts(
     amounts: list[IngredientAmount],
     service_date: Date,
 ) -> list[IngredientAmount]:
-    grouped: dict[str, list[IngredientAmount]] = defaultdict(list)
-    for amount in amounts:
-        key = re.sub(
-            r"\s+(?:до|з)\s+\d{2}\.\d{2}\.?\s*(?:по\s+\d{2}(?:-\d{2})?\.\d{2}\.)?",
-            "",
-            normalize_lookup_text(amount.ingredient_name_snapshot),
-        )
-        key = key.replace("грунтові", "").replace("теплично-парникові", "")
-        grouped[" ".join(key.split())].append(amount)
-
-    selected: list[IngredientAmount] = []
-    for candidates in grouped.values():
-        if len(candidates) == 1:
-            selected.extend(candidates)
-            continue
-        matched = next(
-            (
-                item
-                for item in candidates
-                if _is_in_ingredient_season(item.ingredient_name_snapshot, service_date)
-            ),
-            None,
-        )
-        if matched is not None:
-            selected.append(matched)
-            continue
-        if any("грунтові" in item.ingredient_name_snapshot.casefold() for item in candidates):
-            selected.append(
-                next(
-                    item
-                    for item in candidates
-                    if ("грунтові" in item.ingredient_name_snapshot.casefold())
-                    == (5 <= service_date.month <= 9)
-                )
-            )
-            continue
-        selected.append(candidates[0])
-    return selected
-
-
-def _is_in_ingredient_season(name: str, service_date: Date) -> bool:
-    normalized = normalize_lookup_text(name)
-    range_match = re.search(
-        r"з\s+(\d{2})\.(\d{2})\.?\s+по\s+(\d{2})(?:-\d{2})?\.(\d{2})\.?",
-        normalized,
+    return select_seasonal_items(
+        amounts, service_date, name=lambda amount: amount.ingredient_name_snapshot
     )
-    if range_match is not None:
-        start = (int(range_match.group(2)), int(range_match.group(1)))
-        end = (int(range_match.group(4)), int(range_match.group(3)))
-        current = (service_date.month, service_date.day)
-        return start <= current <= end if start <= end else current >= start or current <= end
-    start_match = re.search(r"з\s+(\d{2})\.(\d{2})", normalized)
-    if start_match is not None:
-        return (service_date.month, service_date.day) >= (
-            int(start_match.group(2)),
-            int(start_match.group(1)),
-        )
-    end_match = re.search(r"до\s+(\d{2})\.(\d{2})", normalized)
-    if end_match is not None:
-        return (service_date.month, service_date.day) < (
-            int(end_match.group(2)),
-            int(end_match.group(1)),
-        )
-    return False
 
 
 def _portion_variant_contribution_snapshots(

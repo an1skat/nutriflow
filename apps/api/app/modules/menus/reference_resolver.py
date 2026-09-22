@@ -8,6 +8,7 @@ from app.modules.menus.models import (
     MenuNutrition,
     MenuPortionCalculationSource,
 )
+from app.modules.nutrition.contributions import product_portion_contributions
 from app.modules.nutrition.domain import normalize_lookup_text
 from app.modules.recipe.models import (
     Allergen,
@@ -150,6 +151,10 @@ async def resolve_menu_item_references(items: list[DailyMenuItem]) -> None:
             for portion in item.portions:
                 portion.dish_card_portion_variant_id = None
                 portion.calculated_from = None
+                if not portion.normative_contributions:
+                    portion.normative_contributions = product_portion_contributions(
+                        item.product_name_snapshot or item.name, portion.yield_amount
+                    )
             ingredient = catalog.product_ingredient(item)
             if item.product_ingredient_id is not None and ingredient is None:
                 raise MenuReferenceError("Product ingredient not found")

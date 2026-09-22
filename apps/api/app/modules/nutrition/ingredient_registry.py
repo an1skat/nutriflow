@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass
 from decimal import ROUND_FLOOR, Decimal
 
@@ -148,6 +149,12 @@ INGREDIENT_NORM_RULES: dict[str, IngredientNormRule] = {
         divisor="40",
         whole_items=True,
     ),
+    "яйце відварне": _rule(
+        NormativeGroupCode.EGGS,
+        unit=NormativeUnit.ITEM,
+        divisor="40",
+        whole_items=True,
+    ),
     "яйце куряче": _rule(
         NormativeGroupCode.EGGS,
         unit=NormativeUnit.ITEM,
@@ -285,5 +292,16 @@ INGREDIENTS_NOT_COUNTED_SEPARATELY = frozenset(
 )
 
 
+def _normalize_date_punctuation(name: str) -> str:
+    name = re.sub(r"(?<=\d)\s*[-–—/]\s*(?=\d)", "-", name)
+    name = re.sub(r"(?<=\d)\s*\.\s*(?=\d)", ".", name)
+    return re.sub(r"(\d{2}\.\d{2})\s*\.", r"\1", name)
+
+
+_RULES_BY_DATE_PUNCTUATION = {
+    _normalize_date_punctuation(name): rule for name, rule in INGREDIENT_NORM_RULES.items()
+}
+
+
 def get_ingredient_norm_rule(normalized_name: str) -> IngredientNormRule | None:
-    return INGREDIENT_NORM_RULES.get(normalized_name)
+    return _RULES_BY_DATE_PUNCTUATION.get(_normalize_date_punctuation(normalized_name))

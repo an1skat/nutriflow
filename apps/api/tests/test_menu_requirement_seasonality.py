@@ -38,3 +38,44 @@ def _amount(name: str, portion_variant_id: PydanticObjectId) -> IngredientAmount
         unit="g",
         portion_variant_id=portion_variant_id,
     )
+
+
+@pytest.mark.parametrize("dash", ["-", "–", "—", "/"])
+@pytest.mark.parametrize("dots", ["", "."])
+@pytest.mark.parametrize(
+    ("service_date", "expected"),
+    [
+        (date(2026, 9, 16), 0),
+        (date(2026, 11, 15), 1),
+        (date(2026, 1, 15), 2),
+        (date(2026, 3, 15), 3),
+        (date(2028, 2, 29), 2),
+        (date(2026, 10, 31), 0),
+        (date(2026, 11, 1), 1),
+        (date(2026, 3, 1), 3),
+    ],
+)
+def test_all_potato_variants_form_one_group(service_date, expected, dash, dots):
+    names = [
+        f"Картопля свіжа з 01.09{dots} по 31.10{dots}",
+        f"Картопля свіжа з 01.11{dots} по 31.12{dots}",
+        f"Картопля свіжа з 01.01{dots} по 28{dash}29.02{dots}",
+        f"Картопля свіжа з 01.03{dots}",
+    ]
+    amounts = [_amount(name, PydanticObjectId()) for name in names]
+    # Open-ended March first must not swallow the bounded September/November range.
+    for candidates in (amounts, list(reversed(amounts))):
+        assert _select_seasonal_amounts(candidates, service_date) == [amounts[expected]]
+
+
+def test_seasonal_spaces_single_out_of_season_and_unrelated_rows():
+    variant = PydanticObjectId()
+    september = _amount("Картопля свіжа з 01 . 09 . по 31 . 10 .", variant)
+    january = _amount("Картопля свіжа з 01 . 01 . по 28 – 29 . 02 .", variant)
+    salt = _amount("Сіль", variant)
+    assert _select_seasonal_amounts([september, january, salt], date(2026, 9, 16)) == [
+        september,
+        salt,
+    ]
+    assert _select_seasonal_amounts([january, salt], date(2026, 9, 16)) == [salt]
+    assert _select_seasonal_amounts([salt, salt], date(2026, 9, 16)) == [salt, salt]

@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { type WeeklyMenu, menuPortionSchema } from '@/entities/weekly-menu/model/WeeklyMenu';
+
 import {
   createBlankDay,
   createBlankWeeklyMenuFormValues,
@@ -8,6 +10,7 @@ import {
   resolveEffectiveDayDate,
   updateDayDate,
   weeklyMenuFormSchema,
+  weeklyMenuToFormValues,
 } from './WeeklyMenuFormSchema';
 
 describe('weekly menu form schema', () => {
@@ -174,4 +177,42 @@ describe('weekly menu form schema', () => {
       ['tuesday', '2026-09-15'],
     ]);
   });
+});
+
+it('preserves explicit composite contributions through API parsing and editor save', () => {
+  const components = [
+    {
+      group_code: 'bread',
+      amount: '30',
+      unit: 'g',
+      basis: 'per_portion',
+      portion_equivalent: null,
+      product_variant: null,
+    },
+    {
+      group_code: 'dairy',
+      amount: '15',
+      unit: 'g',
+      basis: 'per_portion',
+      portion_equivalent: null,
+      product_variant: 'hard_cheese',
+    },
+  ];
+  const portion = menuPortionSchema.parse({
+    age_group: '6-11',
+    yield_amount: '45',
+    dish_card_portion_variant_id: null,
+    nutrition: { kcal: null, proteins: null, fats: null, carbs: null },
+    normative_contributions: components,
+  });
+  const initial = createBlankWeeklyMenuFormValues();
+  initial.title = 'Меню';
+  initial.days = initial.days.slice(0, 1);
+  initial.days[0].items[0].kind = 'product';
+  initial.days[0].items[0].name = 'Хліб цільнозерновий з тв.сиром';
+  const payload = formValuesToWeeklyMenuPayload(initial);
+  payload.days[0].items[0].portions = [portion];
+  const values = weeklyMenuFormSchema.parse(weeklyMenuToFormValues(payload as WeeklyMenu));
+  const saved = formValuesToWeeklyMenuPayload(values);
+  expect(saved.days[0].items[0].portions[0].normative_contributions).toEqual(components);
 });

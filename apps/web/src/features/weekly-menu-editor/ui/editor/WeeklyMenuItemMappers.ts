@@ -17,6 +17,13 @@ export function applyDishCardSelection(
   itemIndex: number,
   dishCard: DishCard
 ) {
+  form.getValues(`days.${dayIndex}.items.${itemIndex}.portions`).forEach((_, portionIndex) => {
+    form.setValue(
+      `days.${dayIndex}.items.${itemIndex}.portions.${portionIndex}.normative_contributions`,
+      [],
+      { shouldDirty: true }
+    );
+  });
   form.setValue(`days.${dayIndex}.items.${itemIndex}.kind`, 'dish_card', {
     shouldDirty: true,
   });
@@ -80,6 +87,13 @@ export function applyIngredientSelection(
   itemIndex: number,
   ingredient: Ingredient
 ) {
+  form.getValues(`days.${dayIndex}.items.${itemIndex}.portions`).forEach((_, portionIndex) => {
+    form.setValue(
+      `days.${dayIndex}.items.${itemIndex}.portions.${portionIndex}.normative_contributions`,
+      [],
+      { shouldDirty: true }
+    );
+  });
   form.setValue(`days.${dayIndex}.items.${itemIndex}.kind`, 'product', {
     shouldDirty: true,
   });

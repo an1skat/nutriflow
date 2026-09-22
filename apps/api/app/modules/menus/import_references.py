@@ -7,6 +7,7 @@ from app.modules.menus.models import (
 from app.modules.menus.reference_resolver import MenuReferenceCatalog, named_portion_variant_id
 from app.modules.menus.schemas import DailyMenuItemPayload, MenuNutritionPayload
 from app.modules.menus.xlsx import ParsedWeeklyMenuPreview
+from app.modules.nutrition.contributions import product_portion_contributions
 from app.modules.recipe.models import (
     Allergen,
     resolve_portion_variant_by_yield,
@@ -64,6 +65,11 @@ def _hydrate_product(
     catalog: MenuReferenceCatalog,
 ) -> None:
     lookup_name = item.product_name_snapshot or item.name
+    for portion in item.portions:
+        if not portion.normative_contributions:
+            portion.normative_contributions = product_portion_contributions(
+                lookup_name, portion.yield_amount
+            )
     ingredient = catalog.product_ingredient(item)
     if ingredient is None:
         preview.diagnostics.append(

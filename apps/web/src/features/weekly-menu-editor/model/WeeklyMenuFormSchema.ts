@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { normativeContributionSchema } from '@/entities/recipe/model/Recipe';
 import type {
   Weekday,
   WeeklyMenu,
@@ -40,6 +41,7 @@ const weeklyMenuPortionFormSchema = z.object({
     })
     .nullable()
     .default(null),
+  normative_contributions: z.array(normativeContributionSchema).optional(),
   nutrition: z.object({
     kcal: optionalDecimalInput,
     proteins: optionalDecimalInput,
@@ -207,6 +209,7 @@ export function weeklyMenuToFormValues(menu: WeeklyMenu): WeeklyMenuFormValues {
               yield_amount: portion.yield_amount,
               dish_card_portion_variant_id: portion.dish_card_portion_variant_id,
               calculated_from: portion.calculated_from,
+              normative_contributions: portion.normative_contributions,
               nutrition: {
                 kcal: portion.nutrition.kcal ?? '',
                 proteins: portion.nutrition.proteins ?? '',
@@ -261,6 +264,7 @@ export function formValuesToWeeklyMenuPayload(values: WeeklyMenuFormValues): Wee
           yield_amount: portion.yield_amount.trim(),
           dish_card_portion_variant_id: portion.dish_card_portion_variant_id,
           calculated_from: portion.calculated_from,
+          normative_contributions: portion.normative_contributions,
           nutrition: {
             kcal: normalizeOptionalText(portion.nutrition.kcal),
             proteins: normalizeOptionalText(portion.nutrition.proteins),

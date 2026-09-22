@@ -1,3 +1,4 @@
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal
@@ -10,6 +11,8 @@ from app.modules.nutrition.domain import (
     NormativeContributionBasis,
     NormativeContributionSnapshot,
     NormativeContributionSource,
+    NormativeGroupCode,
+    NormativeUnit,
     normalize_lookup_text,
 )
 from app.modules.nutrition.ingredient_registry import (
@@ -50,16 +53,20 @@ def ingredient_contribution_snapshots(
         )
         if ingredient is None:
             ingredient = catalog_by_name.get(normalize_lookup_text(line.name))
-        if ingredient is None:
-            continue
+        source_id = ingredient.id if ingredient is not None else line.ingredient_id
+        normalized_name = (
+            ingredient.normalized_name
+            if ingredient is not None
+            else normalize_lookup_text(line.name)
+        )
         if (
             source_type == NormativeContributionSource.INGREDIENT
-            and ingredient.normalized_name in INGREDIENTS_NOT_COUNTED_SEPARATELY
+            and normalized_name in INGREDIENTS_NOT_COUNTED_SEPARATELY
         ):
             continue
 
-        if not ingredient.normative_contributions:
-            rule = get_ingredient_norm_rule(ingredient.normalized_name)
+        if ingredient is None or not ingredient.normative_contributions:
+            rule = get_ingredient_norm_rule(normalized_name)
             amount = rule.contribution_amount(line.net_per_person_g) if rule is not None else None
             if rule is not None and amount is not None and rule.group_code not in excluded_groups:
                 snapshots.append(
@@ -69,8 +76,8 @@ def ingredient_contribution_snapshots(
                         unit=rule.unit,
                         product_variant=rule.product_variant,
                         source_type=source_type,
-                        source_id=str(ingredient.id) if ingredient.id is not None else None,
-                        source_name=ingredient.name,
+                        source_id=str(source_id) if source_id is not None else None,
+                        source_name=ingredient.name if ingredient is not None else line.name,
                     )
                 )
             continue
@@ -120,3 +127,33 @@ def _scaled_ingredient_contribution(
         source_id=str(ingredient.id) if ingredient.id is not None else None,
         source_name=ingredient.name,
     )
+
+
+def product_portion_contributions(name: str, yield_amount: str) -> list[NormativeContribution]:
+    """Reviewed composite recipe: slash-separated bread / hard-cheese grams.
+
+    A total like "45" cannot recover the component split and is never guessed.
+    """
+    normalized = re.sub(r"тв\.\s*сир", "тв.сир", normalize_lookup_text(name))
+    if normalized != "хліб цільнозерновий з тв.сиром":
+        return []
+    match = re.fullmatch(
+        r"\s*(\d+(?:[.,]\d+)?)\s*/\s*(\d+(?:[.,]\d+)?)\s*(?:г|гр|g)?\s*",
+        yield_amount.lower(),
+    )
+    if match is None:
+        return []
+    bread, cheese = (Decimal(value.replace(",", ".")) for value in match.groups())
+    if bread <= 0 or cheese <= 0:
+        return []
+    return [
+        NormativeContribution(
+            group_code=NormativeGroupCode.BREAD, amount=bread, unit=NormativeUnit.GRAM
+        ),
+        NormativeContribution(
+            group_code=NormativeGroupCode.DAIRY,
+            amount=cheese,
+            unit=NormativeUnit.GRAM,
+            product_variant="hard_cheese",
+        ),
+    ]

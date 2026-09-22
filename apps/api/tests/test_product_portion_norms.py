@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 import pytest
+from beanie import PydanticObjectId
 
 from app.modules.identity.models import AgeGroup
 from app.modules.menu_requirements.service import _product_ingredient_lines
@@ -15,7 +16,8 @@ from app.modules.recipe.models import Ingredient
 
 @pytest.mark.asyncio
 async def test_product_portion_can_record_exact_component_norms() -> None:
-    product = Ingredient(
+    product = Ingredient.model_construct(
+        id=PydanticObjectId(),
         name="Хліб цільнозерновий з тв.сиром",
         normalized_name="хліб цільнозерновий з тв.сиром",
         unit="g",

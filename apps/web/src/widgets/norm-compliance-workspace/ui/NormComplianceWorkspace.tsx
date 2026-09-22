@@ -496,7 +496,9 @@ function AmountCell({ value, unit }: { value: number; unit: NormativeUnit }) {
   );
 }
 
-function UnmappedItemsPanel({ items }: { items: UnmappedItem[] }) {
+type UnmappedItemWithContext = UnmappedItem & { context: string };
+
+function UnmappedItemsPanel({ items }: { items: UnmappedItemWithContext[] }) {
   return (
     <section className="border border-amber-300 bg-amber-50" aria-labelledby="unmapped-title">
       <div className="flex items-start gap-3 border-b border-amber-200 px-4 py-3">
@@ -519,7 +521,7 @@ function UnmappedItemsPanel({ items }: { items: UnmappedItem[] }) {
           >
             <span className="font-bold text-slate-900">{item.item_name}</span>
             <span className="text-xs text-slate-600">{formatDateOnly(item.service_date)}</span>
-            <span className="text-xs text-amber-900">Нормативну групу не визначено</span>
+            <span className="text-xs text-amber-900">{item.context}</span>
           </li>
         ))}
       </ul>
@@ -709,9 +711,14 @@ function summarizeReport(report: NormComplianceReport) {
   };
 }
 
-function collectUnmappedItems(report: NormComplianceReport): UnmappedItem[] {
+function collectUnmappedItems(report: NormComplianceReport): UnmappedItemWithContext[] {
   const items = report.groups.flatMap((group) =>
-    group.sections.flatMap((section) => section.unmapped_items)
+    group.sections.flatMap((section) =>
+      section.unmapped_items.map((item) => ({
+        ...item,
+        context: `${group.school_group_name} · ${ageGroupLabels[group.age_group]} · ${mealTypeLabels[section.meal_type]}`,
+      }))
+    )
   );
   return [
     ...new Map(items.map((item) => [`${item.requirement_id}:${item.menu_item_id}`, item])).values(),

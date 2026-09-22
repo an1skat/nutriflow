@@ -66,9 +66,7 @@ export function DailyMenuDayEditor({
   const [openItemId, setOpenItemId] = useState<string | null>(null);
   const focusedItemIndex = validationFocus?.itemIndex;
   const focusedItemField =
-    focusedItemIndex === undefined
-      ? null
-      : (itemsFieldArray.fields[focusedItemIndex] ?? null);
+    focusedItemIndex === undefined ? null : (itemsFieldArray.fields[focusedItemIndex] ?? null);
 
   useEffect(() => {
     if (!focusedItemField || focusedItemIndex === undefined) {
@@ -387,8 +385,7 @@ export function DailyMenuDayEditor({
                             {...form.register(`days.${dayIndex}.items.${itemIndex}.name` as const)}
                             readOnly={!allowValueEdits}
                             aria-invalid={
-                              validationFocus?.fieldPath ===
-                              `${itemPath(dayIndex, itemIndex)}.name`
+                              validationFocus?.fieldPath === `${itemPath(dayIndex, itemIndex)}.name`
                                 ? 'true'
                                 : 'false'
                             }
@@ -461,7 +458,15 @@ export function DailyMenuDayEditor({
                                     {allowValueEdits ? (
                                       <input
                                         {...form.register(
-                                          `days.${dayIndex}.items.${itemIndex}.portions.${portionIndex}.yield_amount` as const
+                                          `days.${dayIndex}.items.${itemIndex}.portions.${portionIndex}.yield_amount` as const,
+                                          {
+                                            onChange: () =>
+                                              form.setValue(
+                                                `days.${dayIndex}.items.${itemIndex}.portions.${portionIndex}.normative_contributions`,
+                                                [],
+                                                { shouldDirty: true }
+                                              ),
+                                          }
                                         )}
                                         readOnly={!allowValueEdits}
                                         aria-invalid={
