@@ -135,7 +135,8 @@ def product_portion_contributions(name: str, yield_amount: str) -> list[Normativ
     A total like "45" cannot recover the component split and is never guessed.
     """
     normalized = re.sub(r"тв\.\s*сир", "тв.сир", normalize_lookup_text(name))
-    if normalized != "хліб цільнозерновий з тв.сиром":
+    legacy_bread = normalized == "хліб цільнозерновий"
+    if not legacy_bread and normalized != "хліб цільнозерновий з тв.сиром":
         return []
     match = re.fullmatch(
         r"\s*(\d+(?:[.,]\d+)?)\s*/\s*(\d+(?:[.,]\d+)?)\s*(?:г|гр|g)?\s*",
@@ -144,6 +145,8 @@ def product_portion_contributions(name: str, yield_amount: str) -> list[Normativ
     if match is None:
         return []
     bread, cheese = (Decimal(value.replace(",", ".")) for value in match.groups())
+    if legacy_bread and (bread, cheese) != (Decimal("30"), Decimal("15")):
+        return []
     if bread <= 0 or cheese <= 0:
         return []
     return [

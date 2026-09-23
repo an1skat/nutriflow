@@ -11,6 +11,8 @@ from app.modules.nutrition.contributions import (
 from app.modules.nutrition.domain import (
     NormativeContributionSnapshot,
     NormativeContributionSource,
+    NormativeGroupCode,
+    NormativeUnit,
     normalize_lookup_text,
 )
 from app.modules.nutrition.seasonality import select_seasonal_items
@@ -19,6 +21,7 @@ from app.modules.nutrition.seasonality import select_seasonal_items
 def repair_requirement_norms(requirement: MenuRequirement) -> None:
     """Keep selected seasonal quantities and fill only the two reviewed product gaps.
 
+    Only the known plain-bread 30/15 aggregate replaces a nonempty product snapshot.
     Unrelated rows, explicit contributions, servings and closed-day metadata survive.
     The caller owns persistence and optimistic concurrency control.
     """
@@ -52,9 +55,23 @@ def repair_requirement_norms(requirement: MenuRequirement) -> None:
             for c in dish.normative_contributions
             if c.source_type != NormativeContributionSource.INGREDIENT or c in selected_snapshots
         ]
-        if dish.kind != MenuItemKind.PRODUCT or dish.normative_contributions:
+        if dish.kind != MenuItemKind.PRODUCT:
             continue
         components = product_portion_contributions(dish.name, dish.yield_amount)
+        if dish.normative_contributions:
+            if not (
+                components
+                and normalize_lookup_text(dish.name) == "хліб цільнозерновий"
+                and len(dish.normative_contributions) == 1
+                and dish.normative_contributions[0].group_code == NormativeGroupCode.BREAD
+                and dish.normative_contributions[0].amount == 45
+                and dish.normative_contributions[0].unit == NormativeUnit.GRAM
+                and dish.normative_contributions[0].source_type
+                == NormativeContributionSource.PRODUCT
+                and dish.normative_contributions[0].portion_equivalent is None
+                and dish.normative_contributions[0].product_variant is None
+            ):
+                continue
         if components:
             dish.normative_contributions = [
                 NormativeContributionSnapshot(

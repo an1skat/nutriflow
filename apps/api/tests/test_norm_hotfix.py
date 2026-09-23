@@ -119,10 +119,11 @@ def test_composite_split_is_not_guessed(value):
     assert product_portion_contributions("Хліб цільнозерновий з тв.сиром", value) == []
 
 
-async def test_old_menu_composite_generation_without_catalog():
+@pytest.mark.parametrize("name", ["Хліб цільнозерновий з тв.сиром", "Хліб цільнозерновий"])
+async def test_old_menu_composite_generation_without_catalog(name):
     item = DailyMenuItem(
         position=1,
-        name="Хліб цільнозерновий з тв.сиром",
+        name=name,
         kind=MenuItemKind.PRODUCT,
         portions=[MenuPortion(age_group=AgeGroup.SIX_TO_ELEVEN, yield_amount="30/15")],
     )
@@ -447,3 +448,155 @@ def test_real_old_production_snapshot_no_longer_removes_carrot_or_beet():
             assert "Буряк столовий свіжий з 01.01." in repaired_rows
         if any(d["name"] == "Плов з булгура зі свининою" for d in before["dishes"]):
             assert "Морква свіжа з 01.01" in repaired_rows
+
+
+@pytest.mark.parametrize("name", ["Хліб цільнозерновий", "  ХЛІБ  цільнозерновий  "])
+def test_repair_legacy_bread_aggregate_and_repeat(name):
+    bread = dish(name, MenuItemKind.PRODUCT, "30/15")
+    bread.normative_contributions = ingredient_contribution_snapshots(
+        [line(name, "45")],
+        catalog_by_id={},
+        catalog_by_name={},
+        excluded_groups=set(),
+        source_type=NormativeContributionSource.PRODUCT,
+    )
+    assert len(bread.normative_contributions) == 1
+    req = requirement([bread], build_ingredient_rows([DishCalculation(bread, [line(name, "45")])]))
+    original = deepcopy(req.model_dump())
+    repair_requirement_norms(req)
+    assert [(c.group_code, c.amount, c.product_variant) for c in bread.normative_contributions] == [
+        (NormativeGroupCode.BREAD, 30, None),
+        (NormativeGroupCode.DAIRY, 15, "hard_cheese"),
+    ]
+    expected = deepcopy(original)
+    expected["dishes"][0]["normative_contributions"] = bread.model_dump()["normative_contributions"]
+    assert req.model_dump() == expected
+    repair_requirement_norms(req)
+    assert req.model_dump() == expected
+
+
+@pytest.mark.parametrize(
+    ("name", "yield_amount", "amount", "kind"),
+    [
+        ("Хліб цільнозерновий", "30", "30", MenuItemKind.PRODUCT),
+        ("Хліб цільнозерновий", "20/25", "45", MenuItemKind.PRODUCT),
+        ("Хліб цільнозерновий", "30/15/5", "45", MenuItemKind.PRODUCT),
+        ("Хліб житній", "30/15", "45", MenuItemKind.PRODUCT),
+        ("Хліб цільнозерновий", "30/15", "44", MenuItemKind.PRODUCT),
+        ("Хліб цільнозерновий", "30/15", "45", MenuItemKind.DISH_CARD),
+    ],
+)
+def test_repair_leaves_other_bread_snapshots_unchanged(name, yield_amount, amount, kind):
+    bread = dish(name, kind, yield_amount)
+    bread.normative_contributions = [
+        NormativeContributionSnapshot(
+            group_code=NormativeGroupCode.BREAD,
+            amount=Decimal(amount),
+            unit=NormativeUnit.GRAM,
+            source_type=NormativeContributionSource.PRODUCT,
+            source_name=name,
+        )
+    ]
+    req = requirement([bread], [])
+    before = deepcopy(req.model_dump())
+    repair_requirement_norms(req)
+    assert req.model_dump() == before
+
+
+@pytest.mark.parametrize("name", ["Хліб цільнозерновий з тв.сиром", "Хліб цільнозерновий"])
+async def test_correct_composite_repair_is_unchanged(name):
+    item = DailyMenuItem(
+        position=1,
+        name=name,
+        kind=MenuItemKind.PRODUCT,
+        portions=[MenuPortion(age_group=AgeGroup.SIX_TO_ELEVEN, yield_amount="30/15")],
+    )
+    _, contributions = await _product_ingredient_lines(
+        item, item.portions[0], catalog_by_id={}, catalog_by_name={}
+    )
+    bread = dish(name, MenuItemKind.PRODUCT, "30/15")
+    bread.normative_contributions = contributions
+    req = requirement([bread], [])
+    before = deepcopy(req.model_dump())
+    repair_requirement_norms(req)
+    repair_requirement_norms(req)
+    assert req.model_dump() == before
+
+
+async def test_plain_bread_generation_stays_bread_only():
+    item = DailyMenuItem(
+        position=1,
+        name="Хліб цільнозерновий",
+        kind=MenuItemKind.PRODUCT,
+        portions=[MenuPortion(age_group=AgeGroup.SIX_TO_ELEVEN, yield_amount="30")],
+    )
+    _, contributions = await _product_ingredient_lines(
+        item, item.portions[0], catalog_by_id={}, catalog_by_name={}
+    )
+    assert [(c.group_code, c.amount, c.product_variant) for c in contributions] == [
+        (NormativeGroupCode.BREAD, 30, None)
+    ]
+
+
+@pytest.mark.parametrize(
+    "name,yield_amount",
+    [
+        ("Хліб цільнозерновий", "30"),
+        ("Хліб цільнозерновий", "20/25"),
+        ("Хліб цільнозерновий", "30/15/5"),
+        ("Хліб житній", "30/15"),
+    ],
+)
+def test_legacy_composite_recognition_is_narrow(name, yield_amount):
+    assert product_portion_contributions(name, yield_amount) == []
+
+
+def test_real_september_snapshot_repairs_legacy_bread():
+    from pathlib import Path
+
+    from beanie.odm.utils.encoder import Encoder
+    from bson import json_util
+
+    snapshot = Path(__file__).parents[1] / "norms-lyceum3-september-v1.json"
+    if not snapshot.exists():
+        pytest.skip("Local September production before-image backup not present")
+    original_bytes = snapshot.read_bytes()
+    data = json_util.loads(original_bytes)
+    target_checked = False
+    for entry in data["entries"]:
+        before = entry["before"]
+        untouched = deepcopy(before)
+        repaired = repaired_fields(before)
+        assert before == untouched
+        assert repaired_fields({**before, **repaired}) == repaired
+        if str(before["_id"]) != "6aa84dfc7c0236edcbba2a55":
+            continue
+        target_checked = True
+        assert str(before["school_id"]) == "6a848408f9867d3ec9e6c866"
+        assert before["service_date"].date() == date(2026, 9, 8)
+        original_dishes = [MenuRequirementDish.model_validate(d) for d in before["dishes"]]
+        bread_index = next(
+            i
+            for i, d in enumerate(original_dishes)
+            if d.name == "Хліб цільнозерновий" and d.yield_amount == "30/15"
+        )
+        old = original_dishes[bread_index].normative_contributions
+        assert len(old) == 1 and old[0].group_code == NormativeGroupCode.BREAD
+        assert old[0].amount == 45
+        actual = MenuRequirementDish.model_validate(repaired["dishes"][bread_index])
+        assert [
+            (c.group_code, c.amount, c.product_variant) for c in actual.normative_contributions
+        ] == [
+            (NormativeGroupCode.BREAD, 30, None),
+            (NormativeGroupCode.DAIRY, 15, "hard_cheese"),
+        ]
+        original = Encoder().encode([d.model_dump() for d in original_dishes])
+        assert repaired["dishes"] != original
+        # The real September 8 dish changes only its normative snapshot.
+        expected = deepcopy(original[bread_index])
+        expected["normative_contributions"] = repaired["dishes"][bread_index][
+            "normative_contributions"
+        ]
+        assert repaired["dishes"][bread_index] == expected
+    assert target_checked
+    assert snapshot.read_bytes() == original_bytes
