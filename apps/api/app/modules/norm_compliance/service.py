@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import date as Date
 from datetime import timedelta
 from decimal import ROUND_FLOOR, Decimal
+from typing import Literal
 
 from beanie import PydanticObjectId
 
@@ -17,7 +18,7 @@ from app.modules.menus.models import (
     WeeklyMenu,
     WeeklyMenuStatus,
 )
-from app.modules.norm_compliance.registry import NutritionNorm, get_norms
+from app.modules.norm_compliance.registry import NUTRITION_NORMS, NutritionNorm, get_norms
 from app.modules.norm_compliance.schemas import (
     ComplianceBreakdownResponse,
     ComplianceGroupResponse,
@@ -87,12 +88,9 @@ def calculate_numeric_status(
 def contribution_value(
     contribution: NormativeContributionSnapshot,
     norm: NutritionNorm,
-) -> tuple[Decimal, Decimal] | None:
-    """Return comparison amount and portion equivalents for one snapshot."""
+) -> tuple[Decimal, Decimal] | Literal["not_applicable"] | None:
+    """Return amounts, not_applicable for excluded variants, or None for invalid data."""
     if norm.uses_portion_equivalents:
-        if contribution.portion_equivalent is not None:
-            value = contribution.portion_equivalent
-            return value, value
         option = next(
             (
                 candidate
@@ -103,7 +101,21 @@ def contribution_value(
             None,
         )
         if option is None:
+            if not any(
+                candidate.product_variant == contribution.product_variant
+                for candidate in norm.portion_options
+            ) and any(
+                candidate.product_variant == contribution.product_variant
+                and candidate.unit == contribution.unit
+                for known_norm in NUTRITION_NORMS
+                if known_norm.group_code == norm.group_code
+                for candidate in known_norm.portion_options
+            ):
+                return "not_applicable"
             return None
+        if contribution.portion_equivalent is not None:
+            value = contribution.portion_equivalent
+            return value, value
         value = contribution.amount / option.amount
         return value, value
 
@@ -373,6 +385,8 @@ def _build_row(
                 if not _is_countable_contribution(contribution):
                     continue
                 value = contribution_value(contribution, norm)
+                if value == "not_applicable":
+                    continue
                 if value is None:
                     incompatible = True
                     continue

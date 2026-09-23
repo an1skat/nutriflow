@@ -490,3 +490,111 @@ def _requirement_fixture(
         source_day_hash=hash_daily_menu(day),
         generated_by=PydanticObjectId(),
     )
+
+
+@pytest.mark.parametrize(
+    "meal_type, entries, actual, status",
+    [
+        (MealType.LUNCH, [("milk", "18", "ml"), ("milk", "4", "ml")], "0", ComplianceStatus.UNDER),
+        (
+            MealType.LUNCH,
+            [
+                ("sour_cream", "4", "g"),
+                ("hard_cheese", "15", "g"),
+                ("milk", "48", "ml"),
+                ("milk", "6", "ml"),
+            ],
+            "1.16",
+            ComplianceStatus.UNDER,
+        ),
+        (MealType.LUNCH, [("sour_cream", "14", "g")], "0.56", ComplianceStatus.UNDER),
+        (MealType.LUNCH, [("soft_cheese", "75", "g")], "1", ComplianceStatus.UNDER),
+        (MealType.BREAKFAST, [("milk", "200", "ml")], "1", ComplianceStatus.UNDER),
+        (MealType.LUNCH, [("unknown", "18", "ml")], "0", ComplianceStatus.UNMAPPED),
+        (MealType.LUNCH, [(None, "18", "ml")], "0", ComplianceStatus.UNMAPPED),
+        (MealType.LUNCH, [("milk", "18", "g")], "0", ComplianceStatus.UNMAPPED),
+        (MealType.LUNCH, [("hard_cheese", "15", "ml")], "0", ComplianceStatus.UNMAPPED),
+    ],
+)
+def test_dairy_variant_applicability(meal_type, entries, actual, status) -> None:
+    group, day, expected = _expected_fixture()
+    requirement = _requirement_fixture(group, day, expected.weekly_menu_id, amount=None)
+    requirement.meal_type = meal_type
+    requirement.dishes[0].normative_contributions = [
+        NormativeContributionSnapshot(
+            group_code=NormativeGroupCode.DAIRY,
+            product_variant=variant,
+            amount=Decimal(amount),
+            unit=unit,
+            source_type=NormativeContributionSource.INGREDIENT,
+            source_name=variant or "Missing variant",
+        )
+        for variant, amount, unit in entries
+    ]
+    section = _build_section(group.age_group, meal_type, [requirement], [])
+    dairy = next(
+        row for row in section.rows if row.normative_group_code == NormativeGroupCode.DAIRY
+    )
+    assert dairy.actual_portions == Decimal(actual)
+    assert dairy.status == status
+    assert len(dairy.breakdown) == (
+        len(entries)
+        if meal_type == MealType.BREAKFAST
+        else sum(
+            variant in {"soft_cheese", "hard_cheese", "sour_cream"} and unit == "g"
+            for variant, _, unit in entries
+        )
+    )
+
+
+def test_lunch_dairy_production_week_ignores_milk() -> None:
+    group, base_day, expected = _expected_fixture()
+    requirements = []
+    daily_entries = [
+        [("milk", "18", "ml"), ("milk", "4", "ml")],
+        [
+            ("sour_cream", "4", "g"),
+            ("hard_cheese", "15", "g"),
+            ("milk", "48", "ml"),
+            ("milk", "6", "ml"),
+        ],
+        [],
+        [],
+        [("sour_cream", "14", "g")],
+    ]
+    for offset, entries in enumerate(daily_entries):
+        day = base_day.model_copy(
+            update={
+                "date": date(2026, 9, 14) + timedelta(days=offset),
+                "weekday": list(Weekday)[offset],
+            }
+        )
+        requirement = _requirement_fixture(group, day, expected.weekly_menu_id, amount=None)
+        requirement.school_id = PydanticObjectId("6a848408f9867d3ec9e6c866")
+        requirement.meal_type = MealType.LUNCH
+        requirement.dishes[0].normative_contributions = [
+            NormativeContributionSnapshot(
+                group_code=NormativeGroupCode.DAIRY,
+                product_variant=variant,
+                amount=Decimal(amount),
+                unit=unit,
+                source_type=NormativeContributionSource.INGREDIENT,
+                source_name=variant,
+            )
+            for variant, amount, unit in entries
+        ]
+        if not entries:
+            requirement.dishes = []
+        requirements.append(requirement)
+    section = _build_section(group.age_group, MealType.LUNCH, requirements, [])
+    dairy = next(
+        row for row in section.rows if row.normative_group_code == NormativeGroupCode.DAIRY
+    )
+    assert dairy.actual_portions == dairy.actual_amount == Decimal("1.72")
+    assert dairy.required_portions == dairy.required_amount == Decimal("3")
+    assert dairy.status == ComplianceStatus.UNDER
+    assert [(item.amount, item.service_date) for item in dairy.breakdown] == [
+        (Decimal("4"), date(2026, 9, 15)),
+        (Decimal("15"), date(2026, 9, 15)),
+        (Decimal("14"), date(2026, 9, 18)),
+    ]
