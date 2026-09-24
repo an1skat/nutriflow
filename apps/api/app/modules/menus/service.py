@@ -211,12 +211,15 @@ async def update_weekly_menu(
         if data.model_fields_set - {"days", "revision"}:
             raise MenuAccessDeniedError("School users can only update daily menu data")
         if "days" in data.model_fields_set:
+            _ensure_closed_days_are_unchanged(previous_days, data.days or [])
             _ensure_school_menu_shape_is_stable(menu, data.days or [])
+            closed_days = {day.weekday: day for day in previous_days if day.closed_at is not None}
+            open_days = [day for day in data.days or [] if day.weekday not in closed_days]
             await _ensure_school_servings_belong_to_school(
                 menu.school_id,
-                data.days or [],
+                open_days,
             )
-            converted_days = await _to_daily_menus(data.days or [])
+            converted_days = await _to_daily_menus(open_days)
             previous_items_by_id = {item.id: item for day in previous_days for item in day.items}
             for day in converted_days:
                 for item in day.items:
@@ -230,7 +233,9 @@ async def update_weekly_menu(
                     else:
                         item.is_school_added = True
                         item.is_school_customized = False
-            _ensure_closed_days_are_unchanged(previous_days, converted_days)
+            # Closed snapshots are authoritative; never resolve their references again.
+            converted_days.extend(closed_days.values())
+            converted_days.sort(key=lambda day: list(Weekday).index(day.weekday))
             _copy_day_close_metadata(previous_days, converted_days)
     elif "days" in data.model_fields_set:
         converted_days = await _to_daily_menus(data.days or [])
@@ -1478,7 +1483,7 @@ def _ensure_school_menu_shape_is_stable(
 
 def _ensure_closed_days_are_unchanged(
     current_days: list[DailyMenu],
-    submitted_days: list[DailyMenu],
+    submitted_days: list[DailyMenuPayload],
 ) -> None:
     submitted_by_weekday = {day.weekday: day for day in submitted_days}
     for current_day in current_days:
@@ -1510,7 +1515,7 @@ def _copy_day_close_metadata(
         submitted_day.reopened_by = current_day.reopened_by
 
 
-def _day_content_dump(day: DailyMenu) -> dict[str, Any]:
+def _day_content_dump(day: DailyMenu | DailyMenuPayload) -> dict[str, Any]:
     data = day.model_dump(mode="json")
     data.pop("closed_at", None)
     data.pop("closed_by", None)
