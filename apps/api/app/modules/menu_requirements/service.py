@@ -9,6 +9,7 @@ from typing import Any
 
 from beanie import PydanticObjectId
 
+from app.db.mongo import get_mongo_client
 from app.modules.identity.models import CommunityCode, School, SchoolGroup, User, UserRole
 from app.modules.menu_requirements.access import (
     allowed_school_ids as _allowed_school_ids,
@@ -148,9 +149,22 @@ async def generate_menu_requirements(
     if school is None or not school.is_active:
         raise MenuRequirementAccessDeniedError("School is inactive or missing")
 
+    return await _generate_requirements(menu, day, school, resolved_service_date, current_user)
+
+
+async def _generate_requirements(
+    menu: WeeklyMenu,
+    day: DailyMenu,
+    school: School,
+    resolved_service_date: Date,
+    current_user: User,
+    *,
+    allow_empty: bool = False,
+) -> list[MenuRequirementRecord]:
+    weekday = day.weekday
     groups_by_id = {group.id: group for group in school.groups}
     eligible_groups = select_eligible_groups(day, groups_by_id)
-    if not eligible_groups:
+    if not eligible_groups and not allow_empty:
         raise MenuRequirementValidationError(
             "At least one dish must have a children count greater than zero"
         )
@@ -186,60 +200,82 @@ async def generate_menu_requirements(
             )
         )
 
-    now = datetime.now(UTC)
     requirements: list[MenuRequirement] = []
-    eligible_group_ids = [group.id for group, _, _ in prepared]
-    stale_requirements = await MenuRequirement.find(
-        MenuRequirement.weekly_menu_id == menu.id,
-        MenuRequirement.weekday == weekday,
-        {"school_group_id": {"$nin": eligible_group_ids}},
-    ).to_list()
-    for stale_requirement in stale_requirements:
-        await stale_requirement.delete()
 
-    for group, dishes, ingredient_rows in prepared:
-        requirement = await MenuRequirement.find_one(
+    async def persist(session: Any) -> None:
+        requirements.clear()
+        if current_user.role in {UserRole.ADMIN, UserRole.OWNER}:
+            # A real write makes concurrent edits/closure conflict with this transaction.
+            result = await WeeklyMenu.get_pymongo_collection().update_one(
+                {"_id": menu.id, "revision": menu.revision, "days.weekday": weekday.value},
+                {
+                    "$inc": {"revision": 1},
+                    "$set": {
+                        "days.$.requirements_generated_hash": source_day_hash,
+                    },
+                },
+                session=session,
+            )
+            if result.matched_count != 1:
+                raise MenuRequirementValidationError("Weekly menu was changed by another user")
+        now = datetime.now(UTC)
+        eligible_group_ids = [group.id for group, _, _ in prepared]
+        stale_requirements = await MenuRequirement.find(
             MenuRequirement.weekly_menu_id == menu.id,
             MenuRequirement.weekday == weekday,
-            MenuRequirement.school_group_id == group.id,
-        )
-        if requirement is None:
-            requirement = MenuRequirement(
-                school_id=school.id,
-                weekly_menu_id=menu.id,
-                source_menu_id=menu.source_menu_id,
-                menu_title=menu.title,
-                meal_type=menu.meal_type,
-                weekday=weekday,
-                service_date=resolved_service_date,
-                school_group_id=group.id,
-                school_group_name=group.name,
-                age_group=group.age_group,
-                dishes=dishes,
-                ingredient_rows=ingredient_rows,
-                source_day_hash=source_day_hash,
-                generated_by=current_user.id,
-                generated_at=now,
-                created_at=now,
-                updated_at=now,
+            {"school_group_id": {"$nin": eligible_group_ids}},
+            session=session,
+        ).to_list()
+        for stale_requirement in stale_requirements:
+            await stale_requirement.delete(session=session)
+
+        for group, dishes, ingredient_rows in prepared:
+            requirement = await MenuRequirement.find_one(
+                MenuRequirement.weekly_menu_id == menu.id,
+                MenuRequirement.weekday == weekday,
+                MenuRequirement.school_group_id == group.id,
+                session=session,
             )
-            await requirement.insert()
-        else:
-            requirement.source_menu_id = menu.source_menu_id
-            requirement.menu_title = menu.title
-            requirement.meal_type = menu.meal_type
-            requirement.service_date = resolved_service_date
-            requirement.school_group_name = group.name
-            requirement.age_group = group.age_group
-            requirement.dishes = dishes
-            requirement.ingredient_rows = ingredient_rows
-            requirement.source_day_hash = source_day_hash
-            requirement.revision += 1
-            requirement.generated_by = current_user.id
-            requirement.generated_at = now
-            requirement.updated_at = now
-            await requirement.save()
-        requirements.append(requirement)
+            if requirement is None:
+                requirement = MenuRequirement(
+                    school_id=school.id,
+                    weekly_menu_id=menu.id,
+                    source_menu_id=menu.source_menu_id,
+                    menu_title=menu.title,
+                    meal_type=menu.meal_type,
+                    weekday=weekday,
+                    service_date=resolved_service_date,
+                    school_group_id=group.id,
+                    school_group_name=group.name,
+                    age_group=group.age_group,
+                    dishes=dishes,
+                    ingredient_rows=ingredient_rows,
+                    source_day_hash=source_day_hash,
+                    generated_by=current_user.id,
+                    generated_at=now,
+                    created_at=now,
+                    updated_at=now,
+                )
+                await requirement.insert(session=session)
+            else:
+                requirement.source_menu_id = menu.source_menu_id
+                requirement.menu_title = menu.title
+                requirement.meal_type = menu.meal_type
+                requirement.service_date = resolved_service_date
+                requirement.school_group_name = group.name
+                requirement.age_group = group.age_group
+                requirement.dishes = dishes
+                requirement.ingredient_rows = ingredient_rows
+                requirement.source_day_hash = source_day_hash
+                requirement.revision += 1
+                requirement.generated_by = current_user.id
+                requirement.generated_at = now
+                requirement.updated_at = now
+                await requirement.save(session=session)
+            requirements.append(requirement)
+
+    async with get_mongo_client().start_session() as session:
+        await session.with_transaction(persist)
 
     records = await _build_requirement_records(requirements)
     return sorted(records, key=lambda item: item.requirement.school_group_name.casefold())

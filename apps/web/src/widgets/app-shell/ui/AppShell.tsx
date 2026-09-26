@@ -41,6 +41,8 @@ type NavigationItem = {
 };
 
 const navigation: NavigationItem[] = [
+  { href: '/admin/daily-menus', label: 'Денні меню', icon: CalendarDays,
+    requiredPermission: 'menus.manage', excludedRoles: ['TECHNOLOGIST', 'SCHOOL_USER'] },
   {
     href: '/',
     label: 'Огляд',

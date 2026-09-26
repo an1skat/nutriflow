@@ -77,7 +77,7 @@ export function DayMenuPanel({
         </div>
         <div className="flex flex-wrap items-center justify-end gap-3">
           <span className="text-xs font-bold text-slate-600">
-            {readOnly ? 'Закрито' : `${day.items.length} страв`}
+            {readOnly ? 'Лише перегляд' : `${day.items.length} страв`}
           </span>
           {!readOnly ? (
             <button
@@ -112,7 +112,7 @@ export function DayMenuPanel({
         <div className="mb-3">
           <p className="text-sm font-bold text-slate-800">Кількість дітей за групами</p>
           <p className="mt-0.5 text-xs text-slate-500">
-            Це значення буде застосовано до кожної страви дня.
+            Вказуйте фактичну кількість дітей без пробних порцій.
           </p>
         </div>
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -161,7 +161,7 @@ export function DayMenuPanel({
         }`}
       >
         {readOnly ? (
-          'День закрито. Дані зафіксовані за останнім збереженим станом.'
+          'Дані доступні лише для перегляду.'
         ) : (
           <>
             <strong>Важливо:</strong> перед закриттям дня зміни буде збережено автоматично.

@@ -1,40 +1,45 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation';
 
-import { useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, Check, FileSpreadsheet, Lock, Save } from 'lucide-react'
-import { toast } from 'sonner'
+import { useQueryClient } from '@tanstack/react-query';
+import { AlertTriangle, Check, FileSpreadsheet, Lock, Save } from 'lucide-react';
+import { toast } from 'sonner';
 
-import { dishCardVersionQueryOptions } from '@/entities/recipe/api/RecipeQueries'
-import type { DishCard } from '@/entities/recipe/model/Recipe'
-import { useOwnSchoolGroups } from '@/entities/school-group/api/SchoolGroupQueries'
-import type { SchoolGroup } from '@/entities/school-group/model/SchoolGroup'
-import { useWeeklyMenu, useWeeklyMenus } from '@/entities/weekly-menu/api/WeeklyMenuQueries'
-import type { DailyMenu, DailyMenuItem, WeeklyMenu } from '@/entities/weekly-menu/model/WeeklyMenu'
-import { WEEKDAY_LABELS } from '@/entities/weekly-menu/model/WeeklyMenu'
+import { dishCardVersionQueryOptions } from '@/entities/recipe/api/RecipeQueries';
+import type { DishCard } from '@/entities/recipe/model/Recipe';
+import { useOwnSchoolGroups } from '@/entities/school-group/api/SchoolGroupQueries';
+import type { SchoolGroup } from '@/entities/school-group/model/SchoolGroup';
+import {
+  dailyMenuQueryKeys,
+  useRegenerateDailyRequirements,
+} from '@/entities/weekly-menu/api/DailyMenuQueries';
+import { useWeeklyMenu, useWeeklyMenus } from '@/entities/weekly-menu/api/WeeklyMenuQueries';
+import type { DailyMenu, DailyMenuItem, WeeklyMenu } from '@/entities/weekly-menu/model/WeeklyMenu';
+import { WEEKDAY_LABELS } from '@/entities/weekly-menu/model/WeeklyMenu';
 import {
   clearDailyMenuDraft,
   loadDailyMenuDraft,
   prepareDailyMenuDays,
   saveDailyMenuDraft,
   updateDailyMenuGroupChildrenCount,
-} from '@/features/daily-menu/model/DailyMenuDraftStorage'
-import { useGenerateMenuRequirements } from '@/features/menu-requirement-generation/model/UseGenerateMenuRequirements'
+} from '@/features/daily-menu/model/DailyMenuDraftStorage';
+import { useReopenWeeklyMenuDay } from '@/features/day-reopening/model/UseReopenWeeklyMenuDay';
+import { useGenerateMenuRequirements } from '@/features/menu-requirement-generation/model/UseGenerateMenuRequirements';
 import {
   useCloseWeeklyMenuDay,
   useUpdateWeeklyMenu,
-} from '@/features/weekly-menu-editor/model/UseWeeklyMenuMutations'
-import { getApiErrorMessage } from '@/shared/api/HttpClient'
-import { formatDate } from '@/shared/lib/FormatDate'
-import { normalizeGramAmount } from '@/shared/lib/Portion'
-import { useConfirm } from '@/shared/ui/ConfirmDialog'
-import { LoadingSpinner } from '@/shared/ui/LoadingSpinner'
-import { RequestError } from '@/shared/ui/RequestError'
+} from '@/features/weekly-menu-editor/model/UseWeeklyMenuMutations';
+import { getApiErrorMessage } from '@/shared/api/HttpClient';
+import { formatDate } from '@/shared/lib/FormatDate';
+import { normalizeGramAmount } from '@/shared/lib/Portion';
+import { useConfirm } from '@/shared/ui/ConfirmDialog';
+import { LoadingSpinner } from '@/shared/ui/LoadingSpinner';
+import { RequestError } from '@/shared/ui/RequestError';
 
-import type { CatalogSelection } from './daily-menu/DailyMenuContent'
+import type { CatalogSelection } from './daily-menu/DailyMenuContent';
 import {
   DayMenuPanel,
   buildDailyMenuUpdatePayload,
@@ -46,9 +51,20 @@ import {
   resequenceDayItemPositions,
   resolveDayDate,
   sortDays,
-} from './daily-menu/DailyMenuContent'
+} from './daily-menu/DailyMenuContent';
 
-export function DailyMenuSchoolWorkspace() {
+export type AdminDailyMenuContext = {
+  menuId: string;
+  weekday: DailyMenu['weekday'];
+  schoolId: string;
+  groups: SchoolGroup[];
+  readOnly: boolean;
+  requirementStale: boolean;
+  requirementRevision?: number;
+  onDirtyChange?: (dirty: boolean) => void;
+};
+
+export function DailyMenuSchoolWorkspace({ admin }: { admin?: AdminDailyMenuContext } = {}) {
   const confirm = useConfirm();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -56,10 +72,17 @@ export function DailyMenuSchoolWorkspace() {
     offset: 0,
     limit: 100,
     status: 'published',
+    enabled: !admin,
   });
-  const groups = useOwnSchoolGroups({ offset: 0, limit: 100 });
+  const ownGroups = useOwnSchoolGroups({ offset: 0, limit: 100 }, !admin);
+  const groups = admin
+    ? { ...ownGroups, data: { items: admin.groups }, isPending: false, isError: false }
+    : ownGroups;
+  const reopenDay = useReopenWeeklyMenuDay(admin?.schoolId ?? '');
+  const regenerate = useRegenerateDailyRequirements();
+  const [adminStale, setAdminStale] = useState(false);
   const [selectedMenuId, setSelectedMenuId] = useState<string | null>(null);
-  const effectiveMenuId = selectedMenuId ?? menus.data?.items[0]?.id ?? '';
+  const effectiveMenuId = admin?.menuId ?? selectedMenuId ?? menus.data?.items[0]?.id ?? '';
   const selectedMenu = useWeeklyMenu(effectiveMenuId);
   const updateWeeklyMenu = useUpdateWeeklyMenu(effectiveMenuId);
   const closeWeeklyMenuDay = useCloseWeeklyMenuDay(effectiveMenuId);
@@ -69,10 +92,15 @@ export function DailyMenuSchoolWorkspace() {
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const initializedMenuKey = useRef<string | null>(null);
+  const editingRevision = useRef<number | null>(null);
+  const onDirtyChange = admin?.onDirtyChange;
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
 
   const activeGroups = useMemo(
-    () => groups.data?.items.filter((group) => group.is_active) ?? [],
-    [groups.data?.items]
+    () => groups.data?.items.filter((group) => admin || group.is_active) ?? [],
+    [groups.data?.items, admin]
   );
 
   useEffect(() => {
@@ -82,17 +110,18 @@ export function DailyMenuSchoolWorkspace() {
       return;
     }
 
-    const menuKey = `${menu.id}:${menu.updated_at}`;
+    const menuKey = `${menu.id}:${menu.revision}`;
 
-    if (initializedMenuKey.current === menuKey) {
+    if (initializedMenuKey.current === menuKey || (admin && isDirty)) {
       return;
     }
 
-    const draft = loadDailyMenuDraft(menu.id, menu.updated_at);
-    const serverDays = prepareDailyMenuDays(sortDays(menu.days), activeGroups);
+    const draft = admin ? null : loadDailyMenuDraft(menu.id, menu.updated_at);
+    const serverDays = prepareDailyMenuDays(sortDays(menu.days), activeGroups, Boolean(admin));
     const nextDays = draft ? prepareDailyMenuDays(sortDays(draft.days), activeGroups) : serverDays;
 
     initializedMenuKey.current = menuKey;
+    editingRevision.current = menu.revision;
     setDays(nextDays);
     setActiveWeekday((currentWeekday) =>
       nextDays.some((day) => day.weekday === currentWeekday)
@@ -101,7 +130,7 @@ export function DailyMenuSchoolWorkspace() {
     );
     setSavedAt(menu.updated_at);
     setIsDirty(Boolean(draft) && JSON.stringify(nextDays) !== JSON.stringify(serverDays));
-  }, [activeGroups, groups.data, selectedMenu.data]);
+  }, [activeGroups, groups.data, selectedMenu.data, admin, isDirty]);
 
   useEffect(() => {
     if (!isDirty) {
@@ -116,7 +145,8 @@ export function DailyMenuSchoolWorkspace() {
     return () => window.removeEventListener('beforeunload', warnAboutUnsavedChanges);
   }, [isDirty]);
 
-  const activeDay = days.find((day) => day.weekday === activeWeekday) ?? null;
+  const activeDay = days.find((day) => day.weekday === (admin?.weekday ?? activeWeekday)) ?? null;
+  const adminReadOnly = Boolean(admin?.readOnly);
   const isActiveDayClosed = Boolean(activeDay?.closed_at);
   const canGenerateActiveDay =
     !isActiveDayClosed &&
@@ -141,7 +171,7 @@ export function DailyMenuSchoolWorkspace() {
   };
 
   const changeDish = async (itemId: string, selectedItem: CatalogSelection) => {
-    if (!activeDay || activeDay.closed_at) {
+    if (!activeDay || activeDay.closed_at || adminReadOnly) {
       return;
     }
 
@@ -174,7 +204,7 @@ export function DailyMenuSchoolWorkspace() {
   };
 
   const addItem = async (selectedItem: CatalogSelection) => {
-    if (!activeDay || activeDay.closed_at) {
+    if (!activeDay || activeDay.closed_at || adminReadOnly) {
       return;
     }
 
@@ -199,7 +229,7 @@ export function DailyMenuSchoolWorkspace() {
   };
 
   const removeItem = (itemId: string) => {
-    if (!activeDay || activeDay.closed_at) {
+    if (!activeDay || activeDay.closed_at || adminReadOnly) {
       return;
     }
 
@@ -226,7 +256,7 @@ export function DailyMenuSchoolWorkspace() {
   };
 
   const changePortionYield = (itemId: string, portionIndex: number, value: string) => {
-    if (!activeDay || activeDay.closed_at) {
+    if (!activeDay || activeDay.closed_at || adminReadOnly) {
       return;
     }
 
@@ -283,7 +313,7 @@ export function DailyMenuSchoolWorkspace() {
   };
 
   const changeChildrenCount = (group: SchoolGroup, childrenCount: number) => {
-    if (!activeDay || activeDay.closed_at) {
+    if (!activeDay || activeDay.closed_at || adminReadOnly) {
       return;
     }
 
@@ -296,11 +326,17 @@ export function DailyMenuSchoolWorkspace() {
   const saveChanges = async (): Promise<WeeklyMenu | null> => {
     const menu = selectedMenu.data;
 
-    if (!menu) {
+    if (!menu || adminReadOnly || (admin && activeDay?.closed_at)) {
       return null;
     }
 
-    for (const day of days) {
+    const savedDays = admin
+      ? menu.days.map((day) => (day.weekday === activeDay?.weekday ? activeDay : day))
+      : days;
+    const daysToValidate = admin
+      ? (activeDay && !activeDay.closed_at ? [activeDay] : [])
+      : savedDays.filter((day) => !day.closed_at);
+    for (const day of daysToValidate) {
       for (const item of day.items) {
         for (const portion of item.portions) {
           const yieldVal = normalizeGramAmount(portion.yield_amount);
@@ -312,19 +348,28 @@ export function DailyMenuSchoolWorkspace() {
       }
     }
 
-    saveDailyMenuDraft(menu.id, menu.updated_at, days);
+    if (!admin) saveDailyMenuDraft(menu.id, menu.updated_at, days);
 
     try {
       const updatedMenu = await updateWeeklyMenu.mutateAsync({
-        ...buildDailyMenuUpdatePayload(days, menu.days),
-        revision: menu.revision,
+        ...buildDailyMenuUpdatePayload(savedDays, menu.days),
+        revision: admin ? (editingRevision.current ?? menu.revision) : menu.revision,
       });
       clearDailyMenuDraft(menu.id);
-      initializedMenuKey.current = `${updatedMenu.id}:${updatedMenu.updated_at}`;
-      setDays(prepareDailyMenuDays(sortDays(updatedMenu.days), activeGroups));
+      editingRevision.current = updatedMenu.revision;
+      initializedMenuKey.current = `${updatedMenu.id}:${updatedMenu.revision}`;
+      setDays(prepareDailyMenuDays(sortDays(updatedMenu.days), activeGroups, Boolean(admin)));
       setSavedAt(updatedMenu.updated_at);
       setIsDirty(false);
-      toast.success('Зміни збережено. Якщо страву змінено або видалено, технолог отримав повідомлення.');
+      if (admin) {
+        setAdminStale(true);
+        await queryClient.invalidateQueries({ queryKey: dailyMenuQueryKeys.all });
+        toast.success('Зміни збережено.');
+      } else {
+        toast.success(
+          'Зміни збережено. Якщо страву змінено або видалено, технолог отримав повідомлення.'
+        );
+      }
       return updatedMenu;
     } catch (error) {
       toast.error(getApiErrorMessage(error));
@@ -356,7 +401,7 @@ export function DailyMenuSchoolWorkspace() {
       );
       router.push('/menu-requirements');
     } catch (error) {
-      const serverDays = prepareDailyMenuDays(sortDays(menu.days), activeGroups);
+      const serverDays = prepareDailyMenuDays(sortDays(menu.days), activeGroups, Boolean(admin));
       setDays(serverDays);
       setSavedAt(menu.updated_at);
       setIsDirty(false);
@@ -392,8 +437,12 @@ export function DailyMenuSchoolWorkspace() {
     try {
       const updatedMenu = await closeWeeklyMenuDay.mutateAsync(activeDay.weekday);
       clearDailyMenuDraft(menu.id);
-      const nextDays = prepareDailyMenuDays(sortDays(updatedMenu.days), activeGroups);
-      initializedMenuKey.current = `${updatedMenu.id}:${updatedMenu.updated_at}`;
+      const nextDays = prepareDailyMenuDays(
+        sortDays(updatedMenu.days),
+        activeGroups,
+        Boolean(admin)
+      );
+      initializedMenuKey.current = `${updatedMenu.id}:${updatedMenu.revision}`;
       setDays(nextDays);
       setActiveWeekday(activeDay.weekday);
       setSavedAt(updatedMenu.updated_at);
@@ -407,6 +456,111 @@ export function DailyMenuSchoolWorkspace() {
       toast.error(getApiErrorMessage(error));
     }
   };
+
+  if (admin) {
+    const busy = updateWeeklyMenu.isPending || reopenDay.isPending || regenerate.isPending;
+    const readOnly = admin.readOnly || isActiveDayClosed || busy;
+    const stale =
+      adminStale ||
+      admin.requirementStale ||
+      (admin.requirementRevision !== undefined &&
+        admin.requirementRevision !== selectedMenu.data?.revision);
+    const reopen = async () => {
+      try {
+        await reopenDay.mutateAsync({ menuId: admin.menuId, weekday: admin.weekday });
+        await queryClient.invalidateQueries({ queryKey: dailyMenuQueryKeys.all });
+      } catch (error) {
+        toast.error(getApiErrorMessage(error));
+      }
+    };
+    const regenerateRequirements = async () => {
+      if (!selectedMenu.data || isDirty || readOnly) return;
+      if (
+        !(await confirm({
+          title: 'Переформувати меню-вимогу?',
+          description:
+            'Поточні дані меню-вимоги за цей день буде перераховано на основі виправленого денного меню.',
+          confirmLabel: 'Переформувати',
+        }))
+      )
+        return;
+      try {
+        await regenerate.mutateAsync({
+          schoolId: admin.schoolId,
+          menuId: admin.menuId,
+          weekday: admin.weekday,
+          revision: selectedMenu.data.revision,
+        });
+        setAdminStale(false);
+        toast.success('Меню-вимогу переформовано.');
+      } catch (error) {
+        setAdminStale(true);
+        toast.error(getApiErrorMessage(error));
+      }
+    };
+    return (
+      <section className="space-y-4">
+        {selectedMenu.isError ? (
+          <RequestError error={selectedMenu.error} onRetry={() => void selectedMenu.refetch()} />
+        ) : null}
+        {selectedMenu.isPending ? <LoadingSpinner label="Завантажуємо денне меню…" /> : null}
+        {activeDay && selectedMenu.data ? (
+          <>
+            {admin.readOnly ? <p>Цей місяць доступний лише для перегляду.</p> : null}
+            <div className="flex flex-wrap items-center gap-3">
+              {isActiveDayClosed && !admin.readOnly ? (
+                <button
+                  className="nf-button nf-button-primary"
+                  disabled={busy}
+                  onClick={() => void reopen()}
+                >
+                  Відкрити для редагування
+                </button>
+              ) : null}
+              {!isActiveDayClosed && !admin.readOnly ? (
+                <button
+                  className="nf-button nf-button-primary"
+                  disabled={busy || !isDirty}
+                  onClick={() => void saveChanges()}
+                >
+                  Зберегти зміни
+                </button>
+              ) : null}
+              {isDirty ? <p role="status">Є незбережені зміни</p> : null}
+            </div>
+            {stale ? (
+              <div role="status" className="border border-amber-400 bg-amber-50 p-4">
+                <p>Дані дня змінено. Меню-вимогу потрібно сформувати повторно.</p>
+                {!admin.readOnly && !isActiveDayClosed ? (
+                  <button
+                    className="nf-button nf-button-secondary mt-2"
+                    disabled={busy || isDirty}
+                    onClick={() => void regenerateRequirements()}
+                  >
+                    Переформувати меню-вимогу
+                  </button>
+                ) : null}
+                {isDirty ? <p>Спочатку збережіть зміни.</p> : null}
+              </div>
+            ) : (
+              <p role="status">Меню-вимога актуальна.</p>
+            )}
+            <DayMenuPanel
+              day={activeDay}
+              displayDate={resolveDayDate(selectedMenu.data, activeDay)}
+              groups={activeGroups}
+              readOnly={readOnly}
+              onDishChange={changeDish}
+              onAddItem={addItem}
+              onRemoveItem={removeItem}
+              onPortionYieldChange={changePortionYield}
+              onChildrenCountChange={changeChildrenCount}
+            />
+          </>
+        ) : null}
+      </section>
+    );
+  }
 
   return (
     <main className="nf-page nf-page-wide">

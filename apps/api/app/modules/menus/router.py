@@ -28,8 +28,10 @@ from app.modules.menus.schemas import (
     MenuChangeRequestListResponse,
     MenuChangeRequestResponse,
     MenuChangeRequestSchoolOption,
+    MonthDailyMenusResponse,
     PublishWeeklyMenuRequest,
     PublishWeeklyMenuResponse,
+    RegenerateDailyRequirementsRequest,
     UpdateWeeklyMenuRequest,
     WeeklyMenuImportCommitResponse,
     WeeklyMenuImportPreviewResponse,
@@ -141,6 +143,60 @@ def validate_xlsx_file(file: UploadFile) -> None:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Only .xlsx files are supported",
         )
+
+
+@router.get("/daily/schools")
+async def daily_menu_schools(current_user: CurrentUser):
+    from app.modules.menus.daily_management import list_daily_menu_schools
+
+    try:
+        schools = await list_daily_menu_schools(current_user)
+    except MenuAccessDeniedError as exc:
+        raise forbidden(exc) from exc
+    return [{"id": str(school.id), "name": school.name} for school in schools]
+
+
+@router.get("/daily/month", response_model=MonthDailyMenusResponse)
+async def month_daily_menus(
+    current_user: CurrentUser,
+    school_id: PydanticObjectId,
+    year: int = Query(ge=2000, le=2100),
+    month: int = Query(ge=1, le=12),
+):
+    from app.modules.menu_requirements.errors import MenuRequirementValidationError
+    from app.modules.menus.daily_management import list_month_daily_menus
+
+    try:
+        return await list_month_daily_menus(school_id, year, month, current_user)
+    except MenuAccessDeniedError as exc:
+        raise forbidden(exc) from exc
+    except (MenuValidationError, MenuRequirementValidationError) as exc:
+        raise bad_request(exc) from exc
+
+
+@router.post("/daily/{school_id}/{menu_id}/{weekday}/regenerate")
+async def regenerate_daily_menu_requirements(
+    school_id: PydanticObjectId,
+    menu_id: PydanticObjectId,
+    weekday: Weekday,
+    payload: RegenerateDailyRequirementsRequest,
+    current_user: CurrentUser,
+    _csrf: CsrfProtection,
+):
+    from app.modules.menu_requirements.errors import MenuRequirementValidationError
+    from app.modules.menus.daily_management import regenerate_daily_requirements
+
+    try:
+        await regenerate_daily_requirements(
+            school_id, menu_id, weekday, payload.revision, current_user
+        )
+    except MenuAccessDeniedError as exc:
+        raise forbidden(exc) from exc
+    except MenuNotFoundError as exc:
+        raise not_found(exc) from exc
+    except (MenuValidationError, MenuRequirementValidationError) as exc:
+        raise bad_request(exc) from exc
+    return {"ok": True}
 
 
 @router.get(

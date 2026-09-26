@@ -6,6 +6,7 @@ from beanie import PydanticObjectId
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.api.responses import PaginatedResponse
+from app.modules.admin.schemas import SchoolGroupResponse
 from app.modules.identity.models import AgeGroup
 from app.modules.menus.models import (
     DailyMenu,
@@ -463,3 +464,28 @@ class CurrentWeekClosedDaysResponse(BaseModel):
     week_starts_on: Date
     week_ends_on: Date
     items: list[CurrentWeekClosedDayResponse]
+
+
+class MonthDailyMenuResponse(BaseModel):
+    menu_id: PydanticObjectId
+    menu_title: str
+    meal_type: MealType
+    weekday: Weekday
+    date: Date
+    closed_at: datetime | None
+    reopened_at: datetime | None
+    revision: int
+    requirement_stale: bool
+
+
+class MonthDailyMenusResponse(BaseModel):
+    school_id: PydanticObjectId
+    year: int
+    month: int
+    today: Date
+    groups: list[SchoolGroupResponse]
+    items: list[MonthDailyMenuResponse]
+
+
+class RegenerateDailyRequirementsRequest(BaseModel):
+    revision: int = Field(ge=1)

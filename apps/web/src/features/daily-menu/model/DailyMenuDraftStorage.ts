@@ -18,8 +18,8 @@ const dailyMenuDraftSchema = z.object({
 
 export type DailyMenuDraft = z.infer<typeof dailyMenuDraftSchema>;
 
-export function prepareDailyMenuDays(sourceDays: DailyMenu[], groups: SchoolGroup[]): DailyMenu[] {
-  const activeGroups = groups.filter((group) => group.is_active);
+export function prepareDailyMenuDays(sourceDays: DailyMenu[], groups: SchoolGroup[], includeInactive = false): DailyMenu[] {
+  const activeGroups = groups.filter((group) => includeInactive || group.is_active);
 
   return sourceDays.map((day) => ({
     ...day,

@@ -161,10 +161,8 @@ async def reopen_weekly_menu_day(
         raise MenuValidationError("Daily menu date is required to reopen it")
 
     today = _today_in_school_timezone()
-    week_starts_on, week_end_on = _current_school_workweek(today)
-
-    if not week_starts_on <= service_date <= week_end_on:
-        raise MenuValidationError("Only current-week daily menus can be reopened")
+    if (service_date.year, service_date.month) != (today.year, today.month):
+        raise MenuValidationError("Only current-month daily menus can be reopened")
 
     if day.closed_at is None:
         return menu

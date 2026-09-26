@@ -1,4 +1,17 @@
 export const detailTranslations: Record<string, string> = {
+  'Only current-month daily menus can be reopened': 'Відкрити можна лише день поточного календарного місяця.',
+  'Only current-month daily menus can be edited': 'Редагувати можна лише день поточного календарного місяця.',
+  'Published school menu required': 'Потрібна опублікована копія меню цієї школи.',
+  'Invalid calendar month': 'Некоректний місяць календаря.',
+  'Daily menu is closed': 'День закрито. Спочатку відкрийте його для редагування.',
+  'Closed daily menus cannot be changed': 'Закриті дні не можна змінювати. Спочатку відкрийте день для редагування.',
+  'Only school menu copies can be reopened': 'Відкрити можна лише меню, розіслане школі.',
+  'Only published school menus can be reopened': 'Відкрити можна лише опубліковані меню школи.',
+  'Daily menu could not be reopened': 'Не вдалося відкрити денне меню.',
+  'Only administrators can reopen daily menus': 'Лише адміністратори можуть відкривати денні меню.',
+  'School users can only update daily menu data': 'Користувачі школи можуть оновлювати лише дані денного меню.',
+  'Technologists cannot modify school menu copies': 'Технологи не можуть змінювати копії меню шкіл.',
+
   'Invalid credentials': 'Неправильний логін або пароль.',
   'Invalid refresh token': 'Сесію завершено. Увійдіть знову.',
   'Invalid or expired access token': 'Термін дії сесії минув. Увійдіть знову.',

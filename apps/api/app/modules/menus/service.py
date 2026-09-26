@@ -13,6 +13,8 @@ from app.core.config import get_settings
 from app.db.mongo import get_mongo_client
 from app.modules.auth.service import user_has_permissions
 from app.modules.identity.models import AdminPermission, School, User, UserRole
+from app.modules.menus import day_closure
+from app.modules.menus.day_closure import _known_service_date
 from app.modules.menus.day_closure import (
     _resolve_auto_close_service_date as _resolve_auto_close_service_date,
 )
@@ -205,19 +207,49 @@ async def update_weekly_menu(
     previous_days = deepcopy(menu.days)
     converted_days: list[DailyMenu] | None = None
 
-    if current_user.role == UserRole.SCHOOL_USER:
+    if current_user.role == UserRole.TECHNOLOGIST and menu.school_id is not None:
+        raise MenuAccessDeniedError("Technologists cannot modify school menu copies")
+
+    school_copy_admin = (
+        current_user.role in {UserRole.ADMIN, UserRole.OWNER} and menu.school_id is not None
+    )
+    active_school: School | None = None
+    if school_copy_admin:
+        active_school = await _get_active_school_for_user(menu.school_id, current_user)
+    if current_user.role == UserRole.SCHOOL_USER or school_copy_admin:
         if menu.status != WeeklyMenuStatus.PUBLISHED:
             raise MenuAccessDeniedError("Menu access denied")
         if data.model_fields_set - {"days", "revision"}:
             raise MenuAccessDeniedError("School users can only update daily menu data")
         if "days" in data.model_fields_set:
+            submitted = {day.weekday: day for day in data.days or []}
             _ensure_closed_days_are_unchanged(previous_days, data.days or [])
             _ensure_school_menu_shape_is_stable(menu, data.days or [])
-            closed_days = {day.weekday: day for day in previous_days if day.closed_at is not None}
-            open_days = [day for day in data.days or [] if day.weekday not in closed_days]
+            if school_copy_admin:
+                today = day_closure._today_in_school_timezone()
+                for day in previous_days:
+                    if _day_content_dump(day) == _day_content_dump(submitted[day.weekday]):
+                        continue
+                    service_date = _known_service_date(menu, day)
+                    if service_date is None or (service_date.year, service_date.month) != (
+                        today.year,
+                        today.month,
+                    ):
+                        raise MenuValidationError("Only current-month daily menus can be edited")
+            preserved_days = {
+                day.weekday: day
+                for day in previous_days
+                if day.closed_at is not None
+                or (
+                    school_copy_admin
+                    and _day_content_dump(day) == _day_content_dump(submitted[day.weekday])
+                )
+            }
+            open_days = [day for day in data.days or [] if day.weekday not in preserved_days]
             await _ensure_school_servings_belong_to_school(
                 menu.school_id,
                 open_days,
+                school=active_school,
             )
             converted_days = await _to_daily_menus(open_days)
             previous_items_by_id = {item.id: item for day in previous_days for item in day.items}
@@ -234,7 +266,7 @@ async def update_weekly_menu(
                         item.is_school_added = True
                         item.is_school_customized = False
             # Closed snapshots are authoritative; never resolve their references again.
-            converted_days.extend(closed_days.values())
+            converted_days.extend(preserved_days.values())
             converted_days.sort(key=lambda day: list(Weekday).index(day.weekday))
             _copy_day_close_metadata(previous_days, converted_days)
     elif "days" in data.model_fields_set:
@@ -1506,6 +1538,7 @@ def _copy_day_close_metadata(
         current_day = current_by_weekday.get(submitted_day.weekday)
         if current_day is None:
             continue
+        submitted_day.requirements_generated_hash = current_day.requirements_generated_hash
         submitted_day.closed_at = current_day.closed_at
         submitted_day.closed_by = current_day.closed_by
         submitted_day.close_reason = current_day.close_reason
@@ -1517,6 +1550,7 @@ def _copy_day_close_metadata(
 
 def _day_content_dump(day: DailyMenu | DailyMenuPayload) -> dict[str, Any]:
     data = day.model_dump(mode="json")
+    data.pop("requirements_generated_hash", None)
     data.pop("closed_at", None)
     data.pop("closed_by", None)
     data.pop("close_reason", None)
@@ -1530,11 +1564,14 @@ def _day_content_dump(day: DailyMenu | DailyMenuPayload) -> dict[str, Any]:
 async def _ensure_school_servings_belong_to_school(
     school_id: PydanticObjectId | None,
     days: list[DailyMenuPayload],
+    *,
+    school: School | None = None,
 ) -> None:
     if school_id is None:
         raise MenuValidationError("School menu must belong to a school")
 
-    school = await School.get(school_id)
+    if school is None:
+        school = await School.get(school_id)
     if school is None:
         raise MenuValidationError("School not found")
     groups_by_id = {group.id: group for group in school.groups}

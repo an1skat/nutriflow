@@ -47,6 +47,10 @@ export function hasEveryPermission(
 export function canAccessPath(user: AuthUser, path: string): boolean {
   const pathname = path.split(/[?#]/, 1)[0];
 
+  if (pathname === '/admin/daily-menus') {
+    return (user.role === 'OWNER' || user.role === 'ADMIN') && hasPermission(user, 'menus.manage');
+  }
+
   if (pathname === '/admin' || pathname.startsWith('/admin/')) {
     return isBackofficeUser(user);
   }

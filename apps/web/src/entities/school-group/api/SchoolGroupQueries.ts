@@ -39,8 +39,8 @@ export function useAdminSchoolGroups(schoolId: string, request: PageRequest) {
   return useQuery(adminSchoolGroupsQueryOptions(schoolId, request));
 }
 
-export function useOwnSchoolGroups(request: PageRequest) {
-  return useQuery(ownSchoolGroupsQueryOptions(request));
+export function useOwnSchoolGroups(request: PageRequest, enabled = true) {
+  return useQuery({ ...ownSchoolGroupsQueryOptions(request), enabled });
 }
 
 export function useSchoolGroups(

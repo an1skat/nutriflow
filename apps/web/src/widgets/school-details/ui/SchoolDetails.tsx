@@ -91,7 +91,9 @@ export function SchoolDetails({ schoolId }: { schoolId: string }) {
 
       {canManageMenus ? (
         <>
-          <SchoolDayReopeningPanel schoolId={schoolId} />
+          {currentUser.data && ['OWNER', 'ADMIN'].includes(currentUser.data.role) ? (
+            <SchoolDayReopeningPanel schoolId={schoolId} />
+          ) : null}
           <SchoolMenusPanel schoolId={schoolId} />
         </>
       ) : null}

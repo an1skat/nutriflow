@@ -21,6 +21,7 @@ def resolve_service_date(menu: WeeklyMenu, day: DailyMenu, requested_date: Date)
 
 def hash_daily_menu(day: DailyMenu) -> str:
     day_data = day.model_dump(mode="json")
+    day_data.pop("requirements_generated_hash", None)
     day_data.pop("closed_at", None)
     day_data.pop("closed_by", None)
     day_data.pop("close_reason", None)

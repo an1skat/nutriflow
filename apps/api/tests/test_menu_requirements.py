@@ -686,7 +686,7 @@ def test_school_closes_day_and_admin_reopens_it(
 
     monkeypatch.setattr(
         "app.modules.menus.day_closure._today_in_school_timezone",
-        lambda: Date(2026, 7, 13),
+        lambda: Date(2026, 8, 1),
     )
     previous_workweek_response = client.post(
         f"/api/v1/menus/weekly/{menu['id']}/days/monday/reopen",
@@ -694,7 +694,7 @@ def test_school_closes_day_and_admin_reopens_it(
     )
     assert previous_workweek_response.status_code == 400
     assert previous_workweek_response.json()["detail"] == (
-        "Only current-week daily menus can be reopened"
+        "Only current-month daily menus can be reopened"
     )
 
     monkeypatch.setattr(
