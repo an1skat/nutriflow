@@ -1,4 +1,6 @@
 export const detailTranslations: Record<string, string> = {
+  'Future daily menus cannot be reopened': 'Не можна відкривати меню майбутніх днів.',
+  'Future daily menus cannot be edited': 'Не можна редагувати меню майбутніх днів.',
   'Only current-month daily menus can be reopened': 'Відкрити можна лише день поточного календарного місяця.',
   'Only current-month daily menus can be edited': 'Редагувати можна лише день поточного календарного місяця.',
   'Published school menu required': 'Потрібна опублікована копія меню цієї школи.',

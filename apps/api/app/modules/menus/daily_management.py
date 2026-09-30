@@ -112,8 +112,8 @@ async def regenerate_daily_requirements(
         raise MenuValidationError("Daily menu is closed")
     service_date = _known_service_date(menu, day)
     today = day_closure._today_in_school_timezone()
-    if service_date is None or (service_date.year, service_date.month) != (today.year, today.month):
-        raise MenuValidationError("Only current-month daily menus can be edited")
+    if service_date is None or service_date > today:
+        raise MenuValidationError("Future daily menus cannot be edited")
     return await _generate_requirements(
         menu, day, school, service_date, current_user, allow_empty=True
     )

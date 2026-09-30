@@ -48,7 +48,9 @@ export function useDailyMenuMonth(schoolId: string, month: string) {
           params: { school_id: schoolId, year, month: monthNumber },
         })
       ).data,
-    enabled: Boolean(schoolId && year && monthNumber),
+    enabled: Boolean(
+      schoolId && year >= 2000 && year <= 2100 && monthNumber >= 1 && monthNumber <= 12
+    ),
   });
 }
 export function useRegenerateDailyRequirements() {

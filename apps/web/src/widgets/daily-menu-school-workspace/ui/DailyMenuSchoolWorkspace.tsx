@@ -506,7 +506,7 @@ export function DailyMenuSchoolWorkspace({ admin }: { admin?: AdminDailyMenuCont
         {selectedMenu.isPending ? <LoadingSpinner label="Завантажуємо денне меню…" /> : null}
         {activeDay && selectedMenu.data ? (
           <>
-            {admin.readOnly ? <p>Цей місяць доступний лише для перегляду.</p> : null}
+            {admin.readOnly ? <p>Майбутні дні доступні лише для перегляду.</p> : null}
             <div className="flex flex-wrap items-center gap-3">
               {isActiveDayClosed && !admin.readOnly ? (
                 <button

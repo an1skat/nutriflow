@@ -74,9 +74,10 @@ def save_count(client, menu, count):
 @pytest.mark.parametrize(
     "service_date,allowed",
     [
+        ("2026-06-30", True),
         ("2026-07-01", True),
-        ("2026-07-31", True),
-        ("2026-06-30", False),
+        ("2026-07-25", True),
+        ("2026-07-26", False),
         ("2026-08-01", False),
     ],
 )
@@ -90,6 +91,8 @@ def test_reopen_calendar_month_boundaries(daily_menu, service_date, allowed):
         f"/api/v1/menus/weekly/{menu['id']}/days/monday/reopen", headers=csrf_headers(client)
     )
     assert response.status_code == (200 if allowed else 400), response.text
+    if not allowed:
+        assert response.json()["detail"] == "Future daily menus cannot be reopened"
     assert db.menu_requirements.count_documents({}) == 0
 
 
@@ -409,32 +412,74 @@ def test_dec_jan_calendar_month_boundaries(daily_menu, monkeypatch):
     resp = client.post(f"{url}/days/monday/reopen", headers=csrf_headers(client))
     assert resp.status_code == 200, resp.text
 
+    # Jan 01, 2027 is future relative to Dec 31, 2026
     db.weekly_menus.update_one(
         {"_id": ObjectId(menu["id"])},
         {"$set": {"days.0.date": "2027-01-01", "days.0.closed_at": datetime.now(UTC)}},
     )
     resp = client.post(f"{url}/days/monday/reopen", headers=csrf_headers(client))
     assert resp.status_code == 400, resp.text
-    assert resp.json()["detail"] == "Only current-month daily menus can be reopened"
+    assert resp.json()["detail"] == "Future daily menus cannot be reopened"
 
     # Today is Jan 01, 2027
     monkeypatch.setattr(
         "app.modules.menus.day_closure._today_in_school_timezone", lambda: date(2027, 1, 1)
     )
+    # Dec 31, 2026 is past relative to Jan 01, 2027 -> allowed!
     db.weekly_menus.update_one(
         {"_id": ObjectId(menu["id"])},
         {"$set": {"days.0.date": "2026-12-31", "days.0.closed_at": datetime.now(UTC)}},
     )
     resp = client.post(f"{url}/days/monday/reopen", headers=csrf_headers(client))
-    assert resp.status_code == 400, resp.text
-    assert resp.json()["detail"] == "Only current-month daily menus can be reopened"
+    assert resp.status_code == 200, resp.text
 
+    # Jan 01, 2027 is today relative to Jan 01, 2027 -> allowed!
     db.weekly_menus.update_one(
         {"_id": ObjectId(menu["id"])},
         {"$set": {"days.0.date": "2027-01-01", "days.0.closed_at": datetime.now(UTC)}},
     )
     resp = client.post(f"{url}/days/monday/reopen", headers=csrf_headers(client))
     assert resp.status_code == 200, resp.text
+
+    # Jan 02, 2027 is future relative to Jan 01, 2027 -> 400
+    db.weekly_menus.update_one(
+        {"_id": ObjectId(menu["id"])},
+        {"$set": {"days.0.date": "2027-01-02", "days.0.closed_at": datetime.now(UTC)}},
+    )
+    resp = client.post(f"{url}/days/monday/reopen", headers=csrf_headers(client))
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["detail"] == "Future daily menus cannot be reopened"
+
+
+def test_admin_past_month_edit_and_regenerate_allowed_but_future_blocked(daily_menu):
+    client, identities, db, menu = daily_menu
+    # Today is 2026-07-25
+    url = f"/api/v1/menus/weekly/{menu['id']}"
+
+    # Past month day: 2026-06-15
+    db.weekly_menus.update_one(
+        {"_id": ObjectId(menu["id"])},
+        {"$set": {"days.0.date": "2026-06-15"}},
+    )
+    current = client.get(url).json()
+    save_resp = save_count(client, current, 210)
+    assert save_resp.status_code == 200, save_resp.text
+    reg_resp = regenerate(client, identities, save_resp.json())
+    assert reg_resp.status_code == 200, reg_resp.text
+
+    # Future day: 2026-07-26
+    db.weekly_menus.update_one(
+        {"_id": ObjectId(menu["id"])},
+        {"$set": {"days.0.date": "2026-07-26"}},
+    )
+    current = client.get(url).json()
+    save_future = save_count(client, current, 215)
+    assert save_future.status_code == 400, save_future.text
+    assert save_future.json()["detail"] == "Future daily menus cannot be edited"
+
+    reg_future = regenerate(client, identities, current)
+    assert reg_future.status_code == 400, reg_future.text
+    assert reg_future.json()["detail"] == "Future daily menus cannot be edited"
 
 
 def test_school_user_generation_clears_stale_even_with_prior_admin_hash(daily_menu):
