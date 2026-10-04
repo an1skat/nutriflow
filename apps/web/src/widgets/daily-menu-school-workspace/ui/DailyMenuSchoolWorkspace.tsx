@@ -150,8 +150,9 @@ export function DailyMenuSchoolWorkspace({ admin }: { admin?: AdminDailyMenuCont
   const isActiveDayClosed = Boolean(activeDay?.closed_at);
   const canGenerateActiveDay =
     !isActiveDayClosed &&
-    (activeDay?.items.some((item) => item.servings.some((serving) => serving.children_count > 0)) ??
-      false);
+    (Boolean(activeDay?.not_served) ||
+      (activeDay?.items.some((item) => item.servings.some((serving) => serving.children_count > 0)) ??
+        false));
   const changeMenu = async (menuId: string) => {
     if (isDirty) {
       const confirmed = await confirm({
@@ -171,7 +172,7 @@ export function DailyMenuSchoolWorkspace({ admin }: { admin?: AdminDailyMenuCont
   };
 
   const changeDish = async (itemId: string, selectedItem: CatalogSelection) => {
-    if (!activeDay || activeDay.closed_at || adminReadOnly) {
+    if (!activeDay || activeDay.closed_at || activeDay.not_served || adminReadOnly) {
       return;
     }
 
@@ -204,7 +205,7 @@ export function DailyMenuSchoolWorkspace({ admin }: { admin?: AdminDailyMenuCont
   };
 
   const addItem = async (selectedItem: CatalogSelection) => {
-    if (!activeDay || activeDay.closed_at || adminReadOnly) {
+    if (!activeDay || activeDay.closed_at || activeDay.not_served || adminReadOnly) {
       return;
     }
 
@@ -229,7 +230,7 @@ export function DailyMenuSchoolWorkspace({ admin }: { admin?: AdminDailyMenuCont
   };
 
   const removeItem = (itemId: string) => {
-    if (!activeDay || activeDay.closed_at || adminReadOnly) {
+    if (!activeDay || activeDay.closed_at || activeDay.not_served || adminReadOnly) {
       return;
     }
 
@@ -256,7 +257,7 @@ export function DailyMenuSchoolWorkspace({ admin }: { admin?: AdminDailyMenuCont
   };
 
   const changePortionYield = (itemId: string, portionIndex: number, value: string) => {
-    if (!activeDay || activeDay.closed_at || adminReadOnly) {
+    if (!activeDay || activeDay.closed_at || activeDay.not_served || adminReadOnly) {
       return;
     }
 
@@ -313,7 +314,7 @@ export function DailyMenuSchoolWorkspace({ admin }: { admin?: AdminDailyMenuCont
   };
 
   const changeChildrenCount = (group: SchoolGroup, childrenCount: number) => {
-    if (!activeDay || activeDay.closed_at || adminReadOnly) {
+    if (!activeDay || activeDay.closed_at || activeDay.not_served || adminReadOnly) {
       return;
     }
 
@@ -334,7 +335,9 @@ export function DailyMenuSchoolWorkspace({ admin }: { admin?: AdminDailyMenuCont
       ? menu.days.map((day) => (day.weekday === activeDay?.weekday ? activeDay : day))
       : days;
     const daysToValidate = admin
-      ? (activeDay && !activeDay.closed_at ? [activeDay] : [])
+      ? activeDay && !activeDay.closed_at
+        ? [activeDay]
+        : []
       : savedDays.filter((day) => !day.closed_at);
     for (const day of daysToValidate) {
       for (const item of day.items) {
@@ -395,9 +398,11 @@ export function DailyMenuSchoolWorkspace({ admin }: { admin?: AdminDailyMenuCont
       });
       const groupsCount = response.items.length;
       toast.success(
-        groupsCount === 1
-          ? 'Меню-вимогу сформовано.'
-          : `Сформовано меню-вимоги для ${groupsCount} груп.`
+        groupsCount === 0
+          ? 'Не харчувалися. Попередні меню-вимоги за день очищено.'
+          : groupsCount === 1
+            ? 'Меню-вимогу сформовано.'
+            : `Сформовано меню-вимоги для ${groupsCount} груп.`
       );
       router.push('/menu-requirements');
     } catch (error) {
@@ -419,7 +424,9 @@ export function DailyMenuSchoolWorkspace({ admin }: { admin?: AdminDailyMenuCont
     const confirmed = await confirm({
       title: 'Закрити день?',
       description:
-        'Усі зміни буде збережено, а фінальну меню-вимогу сформовано автоматично. Після закриття день не можна буде редагувати.',
+        activeDay.not_served
+          ? 'Усі зміни буде збережено, а попередні меню-вимоги очищено. Після закриття день без харчування не можна буде редагувати.'
+          : 'Усі зміни буде збережено, а фінальну меню-вимогу сформовано автоматично. Після закриття день не можна буде редагувати.',
       confirmLabel: 'Закрити день',
       variant: 'danger',
     });
@@ -447,7 +454,9 @@ export function DailyMenuSchoolWorkspace({ admin }: { admin?: AdminDailyMenuCont
       setActiveWeekday(activeDay.weekday);
       setSavedAt(updatedMenu.updated_at);
       setIsDirty(false);
-      toast.success('День закрито, меню-вимогу сформовано.');
+      toast.success(
+        activeDay.not_served ? 'День без харчування закрито.' : 'День закрито, меню-вимогу сформовано.'
+      );
     } catch (error) {
       const serverDays = prepareDailyMenuDays(sortDays(savedMenu.days), activeGroups);
       setDays(serverDays);
@@ -456,6 +465,47 @@ export function DailyMenuSchoolWorkspace({ admin }: { admin?: AdminDailyMenuCont
       toast.error(getApiErrorMessage(error));
     }
   };
+
+  const notServedControl = (
+    <label className="flex items-center gap-2 text-sm">
+      <input
+        type="checkbox"
+        checked={Boolean(activeDay?.not_served)}
+        disabled={
+          !activeDay ||
+          adminReadOnly ||
+          isActiveDayClosed ||
+          updateWeeklyMenu.isPending ||
+          closeWeeklyMenuDay.isPending ||
+          generateMenuRequirements.isPending ||
+          reopenDay.isPending ||
+          regenerate.isPending
+        }
+        onChange={(event) => {
+          const notServed = event.target.checked;
+          setDays((current) =>
+            current.map((day) =>
+              day.weekday !== activeDay?.weekday
+                ? day
+                : {
+                    ...day,
+                    not_served: notServed,
+                    items: day.items.map((item) => ({
+                      ...item,
+                      servings: item.servings.map((serving) => ({
+                        ...serving,
+                        children_count: 0,
+                      })),
+                    })),
+                  }
+            )
+          );
+          setIsDirty(true);
+        }}
+      />
+      Не харчувалися
+    </label>
+  );
 
   if (admin) {
     const busy = updateWeeklyMenu.isPending || reopenDay.isPending || regenerate.isPending;
@@ -508,6 +558,7 @@ export function DailyMenuSchoolWorkspace({ admin }: { admin?: AdminDailyMenuCont
           <>
             {admin.readOnly ? <p>Майбутні дні доступні лише для перегляду.</p> : null}
             <div className="flex flex-wrap items-center gap-3">
+              {notServedControl}
               {isActiveDayClosed && !admin.readOnly ? (
                 <button
                   className="nf-button nf-button-primary"
@@ -528,6 +579,7 @@ export function DailyMenuSchoolWorkspace({ admin }: { admin?: AdminDailyMenuCont
               ) : null}
               {isDirty ? <p role="status">Є незбережені зміни</p> : null}
             </div>
+            {activeDay.not_served ? <p>Не харчувалися. Кількість дітей: 0.</p> : null}
             {stale ? (
               <div role="status" className="border border-amber-400 bg-amber-50 p-4">
                 <p>Дані дня змінено. Меню-вимогу потрібно сформувати повторно.</p>
@@ -549,7 +601,7 @@ export function DailyMenuSchoolWorkspace({ admin }: { admin?: AdminDailyMenuCont
               day={activeDay}
               displayDate={resolveDayDate(selectedMenu.data, activeDay)}
               groups={activeGroups}
-              readOnly={readOnly}
+              readOnly={readOnly || Boolean(activeDay.not_served)}
               onDishChange={changeDish}
               onAddItem={addItem}
               onRemoveItem={removeItem}
@@ -594,23 +646,29 @@ export function DailyMenuSchoolWorkspace({ admin }: { admin?: AdminDailyMenuCont
             )}
             <div>
               <p className="text-sm font-bold">
-                {isActiveDayClosed
-                  ? 'День закрито'
-                  : isDirty
-                    ? 'Є незбережені зміни'
-                    : savedAt
-                      ? 'Усі зміни збережено'
-                      : 'Зміни ще не зберігалися'}
+                {activeDay?.not_served
+                  ? 'Не харчувалися'
+                  : isActiveDayClosed
+                    ? 'День закрито'
+                    : isDirty
+                      ? 'Є незбережені зміни'
+                      : savedAt
+                        ? 'Усі зміни збережено'
+                        : 'Зміни ще не зберігалися'}
               </p>
               <p className="mt-0.5 text-xs">
                 {isActiveDayClosed
                   ? 'Закритий день доступний тільки для перегляду. Редагування, збереження і повторне формування меню-вимоги вимкнені.'
-                  : 'Збереження не виконується автоматично. Кількість дітей оновлюється без повідомлення технологу, а заміна страви потрапляє у його окрему вкладку.'}
+                  : activeDay?.not_served
+                    ? 'Не харчувалися. Кількість дітей: 0.'
+                    : 'Збереження не виконується автоматично. Кількість дітей оновлюється без повідомлення технологу, а заміна страви потрапляє у його окрему вкладку.'}
                 {savedAt ? ` Останнє збереження: ${formatDate(savedAt)}.` : ''}
+                {activeDay?.not_served && isDirty ? ' Є незбережені зміни.' : ''}
               </p>
             </div>
           </div>
           <div className="flex flex-wrap justify-end gap-2">
+            {notServedControl}
             <button
               type="button"
               className="nf-button nf-button-secondary shrink-0"
@@ -763,6 +821,7 @@ export function DailyMenuSchoolWorkspace({ admin }: { admin?: AdminDailyMenuCont
                   onClick={() => setActiveWeekday(day.weekday)}
                 >
                   {WEEKDAY_LABELS[day.weekday]}
+                  {day.not_served ? ' · Не харчувалися' : ''}
                   <span
                     className={`ml-2 font-normal ${isClosed ? 'text-slate-400' : 'text-slate-500'}`}
                   >
@@ -784,7 +843,7 @@ export function DailyMenuSchoolWorkspace({ admin }: { admin?: AdminDailyMenuCont
               day={activeDay}
               displayDate={resolveDayDate(selectedMenu.data, activeDay)}
               groups={activeGroups}
-              readOnly={Boolean(activeDay.closed_at)}
+              readOnly={Boolean(activeDay.closed_at || activeDay.not_served)}
               onDishChange={changeDish}
               onAddItem={addItem}
               onRemoveItem={removeItem}

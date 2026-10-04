@@ -295,10 +295,7 @@ function RequirementMonthGrid({
             <span className="text-sm font-bold text-slate-950">
               {monthNameFromDate(month.date_from)}
             </span>
-            <CalendarStatusBadge
-              status={month.status}
-              generated={month.generated_days}
-            />
+            <CalendarStatusBadge status={month.status} generated={month.generated_days} />
           </span>
           <span className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
             <Metric label="Днів" value={month.generated_days === 0 ? 0 : month.working_days} />
@@ -346,10 +343,7 @@ function RequirementWeekGrid({
                 {formatShortRange(week.date_from, week.date_to)}
               </span>
             </span>
-            <CalendarStatusBadge
-              status={week.status}
-              generated={week.generated_days}
-            />
+            <CalendarStatusBadge status={week.status} generated={week.generated_days} />
           </span>
           <span className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
             <Metric label="Є" value={week.generated_days} />
@@ -395,7 +389,13 @@ export function RequirementDayGrid({
                   {formatDayWithoutYear(day.service_date)}
                 </h3>
               </div>
-              {hasNoData ? <EmptyStatusBadge /> : <StatusBadge status={day.status} />}
+              {day.not_served ? (
+                <span className="text-xs font-bold text-slate-600">Не харчувалися</span>
+              ) : hasNoData ? (
+                <EmptyStatusBadge />
+              ) : (
+                <StatusBadge status={day.status} />
+              )}
             </div>
 
             <dl className="mt-4 grid gap-2 text-sm">

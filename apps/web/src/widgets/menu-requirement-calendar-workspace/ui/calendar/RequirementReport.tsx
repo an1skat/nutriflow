@@ -162,9 +162,7 @@ export function RequirementReportTable({
   compactHeader?: boolean;
 }) {
   const [internalAmountBasis, setInternalAmountBasis] = useState<MenuRequirementAmountBasis>('net');
-  const [selectedGroupKey, setSelectedGroupKey] = useState(
-    () => report.groups[0]?.group_key ?? ''
-  );
+  const [selectedGroupKey, setSelectedGroupKey] = useState(() => report.groups[0]?.group_key ?? '');
   const amountBasis = amountBasisProp ?? internalAmountBasis;
   const handleAmountBasisChange = onAmountBasisChange ?? setInternalAmountBasis;
   const selectedGroup =
@@ -177,7 +175,11 @@ export function RequirementReportTable({
         <div className="nf-panel-body">
           <div className="nf-empty">
             <FileSpreadsheet className="mx-auto mb-3 size-8 text-slate-400" aria-hidden />
-            <p>Немає даних меню-вимог за обраний період.</p>
+            <p>
+              {report.not_served
+                ? 'Не харчувалися. Кількість дітей: 0.'
+                : 'Немає даних меню-вимог за обраний період.'}
+            </p>
           </div>
         </div>
       </section>

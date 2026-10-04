@@ -164,16 +164,24 @@ async def _generate_requirements(
     weekday = day.weekday
     groups_by_id = {group.id: group for group in school.groups}
     eligible_groups = select_eligible_groups(day, groups_by_id)
-    if not eligible_groups and not allow_empty:
+    if not eligible_groups and not allow_empty and not day.not_served:
         raise MenuRequirementValidationError(
             "At least one dish must have a children count greater than zero"
         )
 
-    catalog = await Ingredient.find({"is_active": True}).sort("+normalized_name").to_list()
+    catalog = (
+        await Ingredient.find({"is_active": True}).sort("+normalized_name").to_list()
+        if eligible_groups
+        else []
+    )
     catalog_by_id = {ingredient.id: ingredient for ingredient in catalog}
     catalog_by_name = _catalog_by_normalized_name(catalog)
     source_day_hash = hash_daily_menu(day)
-    card_ids = {item.dish_card_id for item in day.items if item.dish_card_id is not None}
+    card_ids = {
+        item.dish_card_id
+        for item in day.items
+        if eligible_groups and item.dish_card_id is not None
+    }
     cards = await DishCard.find({"_id": {"$in": list(card_ids)}}).to_list() if card_ids else []
     dish_cards_by_id = {card.id: card for card in cards}
 
@@ -204,7 +212,7 @@ async def _generate_requirements(
 
     async def persist(session: Any) -> None:
         requirements.clear()
-        if current_user.role in {UserRole.ADMIN, UserRole.OWNER}:
+        if current_user.role in {UserRole.ADMIN, UserRole.OWNER} or day.not_served:
             # A real write makes concurrent edits/closure conflict with this transaction.
             result = await WeeklyMenu.get_pymongo_collection().update_one(
                 {"_id": menu.id, "revision": menu.revision, "days.weekday": weekday.value},

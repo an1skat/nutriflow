@@ -125,6 +125,7 @@ async def get_menu_requirement_calendar(
         meal_type=meal_type,
         school_group_id=school_group_id,
     )
+    requirements = _exclude_not_served_requirements(expected_days, requirements)
     requirement_statuses = await _requirement_statuses(requirements)
 
     groups_by_school_id = {school.id: {group.id: group for group in school.groups}}
@@ -176,8 +177,7 @@ async def get_community_menu_requirement_calendar(
     )
     school_ids = [school.id for school in schools]
     groups_by_school_id = {
-        school.id: {group.id: group for group in school.groups}
-        for school in schools
+        school.id: {group.id: group for group in school.groups} for school in schools
     }
 
     year_date_from = Date(year, 1, 1)
@@ -197,6 +197,7 @@ async def get_community_menu_requirement_calendar(
         date_to=date_to,
         meal_type=meal_type,
     )
+    requirements = _exclude_not_served_requirements(expected_days, requirements)
     requirement_statuses = await _requirement_statuses(requirements)
 
     day_summaries, _missing_requirement_keys = _build_scope_day_summaries(
@@ -207,17 +208,11 @@ async def get_community_menu_requirement_calendar(
     )
 
     expected_dates = set(expected_days)
-    generated_dates = {
-        requirement.service_date
-        for requirement in requirements
-    }
+    generated_dates = {requirement.service_date for requirement in requirements}
     stale_dates = {
         requirement.service_date
         for requirement in requirements
-        if (
-            requirement_statuses.get(requirement.id)
-            == MenuRequirementAggregateStatus.STALE
-        )
+        if (requirement_statuses.get(requirement.id) == MenuRequirementAggregateStatus.STALE)
     }
 
     months = [
@@ -286,6 +281,7 @@ async def get_menu_requirement_report(
             requirement for requirement in requirements if _is_weekday(requirement.service_date)
         ]
 
+    requirements = _exclude_not_served_requirements(expected_days, requirements)
     requirement_statuses = await _requirement_statuses(requirements)
 
     day_summaries, missing_requirement_keys = _build_scope_day_summaries(
@@ -313,7 +309,10 @@ async def get_menu_requirement_report(
             day_summaries=day_summaries,
         )
 
-    missing_dates = sorted({key.service_date for key in missing_requirement_keys})
+    missing_dates = sorted(
+        {key.service_date for key in missing_requirement_keys}
+        | {day for day, summary in day_summaries.items() if summary.missing_requirements > 0}
+    )
     stale_dates = sorted(
         {
             requirement.service_date
@@ -332,6 +331,7 @@ async def get_menu_requirement_report(
     )
 
     return MenuRequirementReportResponse(
+        not_served=bool(day_summaries) and all(day.not_served for day in day_summaries.values()),
         school_id=school.id,
         school_name=school.name,
         date_from=date_from,
@@ -409,6 +409,7 @@ async def get_community_menu_requirement_report(
             requirement for requirement in requirements if _is_weekday(requirement.service_date)
         ]
 
+    requirements = _exclude_not_served_requirements(expected_days, requirements)
     statuses = await _requirement_statuses(requirements)
     day_summaries, missing_requirement_keys = _build_scope_day_summaries(
         expected_days,
@@ -433,7 +434,10 @@ async def get_community_menu_requirement_report(
             day_summaries=day_summaries,
         )
 
-    missing_dates = sorted({key.service_date for key in missing_requirement_keys})
+    missing_dates = sorted(
+        {key.service_date for key in missing_requirement_keys}
+        | {day for day, summary in day_summaries.items() if summary.missing_requirements > 0}
+    )
     stale_dates = sorted(
         {
             requirement.service_date
@@ -443,6 +447,7 @@ async def get_community_menu_requirement_report(
     )
 
     return CommunityMenuRequirementReportResponse(
+        not_served=bool(day_summaries) and all(day.not_served for day in day_summaries.values()),
         community=community,
         community_name=community_record.name,
         school_count=len(schools),
@@ -513,6 +518,27 @@ def _ensure_school_group_exists(
         raise MenuRequirementNotFoundError("School group not found")
 
 
+def _exclude_not_served_requirements(
+    expected_days: dict[Date, list[ExpectedMenuDay]],
+    requirements: list[MenuRequirement],
+) -> list[MenuRequirement]:
+    excluded = {
+        (entry.weekly_menu_id, entry.weekday)
+        for entries in expected_days.values()
+        for entry in entries
+        if getattr(getattr(entry, "day", None), "not_served", False)
+    }
+    return (
+        [
+            requirement
+            for requirement in requirements
+            if (requirement.weekly_menu_id, requirement.weekday) not in excluded
+        ]
+        if excluded
+        else requirements
+    )
+
+
 async def _find_requirements_for_report(
     school_ids: list[PydanticObjectId],
     *,
@@ -560,9 +586,14 @@ async def _expected_menu_days(
             if service_date is None or service_date < date_from or service_date > date_to:
                 continue
 
-            if school_group_id is not None and not _day_has_group_serving(
-                day,
-                school_group_id,
+            if (
+                school_group_id is not None
+                and not day.not_served
+                and not _day_has_group_serving(
+                    day,
+                    school_group_id,
+                )
+                and any(s.children_count > 0 for item in day.items for s in item.servings)
             ):
                 continue
 
@@ -591,7 +622,7 @@ def _menu_day_service_date(menu: WeeklyMenu, day: DailyMenu) -> Date | None:
 
 def _day_has_group_serving(day: DailyMenu, school_group_id: PydanticObjectId) -> bool:
     return any(
-        serving.school_group_id == school_group_id and serving.children_count > 0
+        serving.school_group_id == school_group_id
         for item in day.items
         for serving in item.servings
     )
@@ -642,6 +673,11 @@ def _build_calendar_month(
         date_from + timedelta(days=offset) for offset in range((date_to - date_from).days + 1)
     }
     expected = expected_dates & month_dates
+    generated_dates = generated_dates | {
+        service_date
+        for service_date, summary in (day_summaries or {}).items()
+        if _is_complete_calendar_day(summary)
+    }
     generated = generated_dates & month_dates
     stale = stale_dates & month_dates
     resolved_day_summaries = day_summaries or {}
@@ -652,11 +688,7 @@ def _build_calendar_month(
         if summary.missing_requirements > 0
     }
 
-    missing = (
-        (expected - generated) | (summary_missing_dates & month_dates)
-        if generated
-        else set()
-    )
+    missing = (expected - generated) | (summary_missing_dates & month_dates) if generated else set()
 
     weeks = []
     for index, (block_from, block_to) in enumerate(
@@ -793,7 +825,12 @@ def _build_scope_day_summaries(
     ] = {}
     missing_requirement_keys: set[RequirementKey] = set()
 
-    all_dates = set(expected_keys_by_date) | set(generated_keys_by_date) | set(stale_keys_by_date)
+    all_dates = (
+        set(expected_days)
+        | set(expected_keys_by_date)
+        | set(generated_keys_by_date)
+        | set(stale_keys_by_date)
+    )
 
     for service_date in all_dates:
         expected_keys = expected_keys_by_date[service_date]
@@ -801,16 +838,31 @@ def _build_scope_day_summaries(
         missing_keys = expected_keys - generated_keys
         stale_keys = stale_keys_by_date[service_date]
 
+        entries = expected_days.get(service_date, [])
+        not_served_count = sum(
+            getattr(getattr(entry, "day", None), "not_served", False) for entry in entries
+        )
+        empty_count = sum(
+            not getattr(getattr(entry, "day", None), "not_served", False)
+            and not any(
+                school_group_id is None or group.id == school_group_id
+                for group in select_eligible_groups(
+                    entry.day, groups_by_school_id.get(entry.school_id, {})
+                )
+            )
+            for entry in entries
+        )
         missing_requirement_keys.update(missing_keys)
 
         summaries[service_date] = MenuRequirementCalendarDayResponse(
             service_date=service_date,
-            expected_requirements=len(expected_keys),
-            generated_requirements=len(generated_keys),
-            missing_requirements=len(missing_keys),
+            not_served=bool(entries) and not_served_count == len(entries),
+            expected_requirements=len(expected_keys) + not_served_count + empty_count,
+            generated_requirements=len(generated_keys) + not_served_count,
+            missing_requirements=len(missing_keys) + empty_count,
             stale_requirements=len(stale_keys),
             status=_aggregate_status(
-                missing_dates=([service_date] if missing_keys else []),
+                missing_dates=([service_date] if missing_keys or empty_count else []),
                 stale_dates=([service_date] if stale_keys else []),
             ),
         )

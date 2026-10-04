@@ -9,6 +9,7 @@ from beanie import PydanticObjectId
 
 from app.modules.identity.models import AgeGroup, School, SchoolGroup, User, UserRole
 from app.modules.menu_requirements.models import MenuRequirement, MenuRequirementDish
+from app.modules.menu_requirements.reporting import _exclude_not_served_requirements
 from app.modules.menu_requirements.service import hash_daily_menu
 from app.modules.menus.models import (
     DailyMenu,
@@ -64,7 +65,7 @@ class ExpectedRequirement:
     weekday: Weekday
     service_date: Date
     meal_type: MealType
-    school_group: SchoolGroup
+    school_group: SchoolGroup | None
     day: DailyMenu
 
 
@@ -161,6 +162,10 @@ async def get_norm_compliance_report(
         date_to,
         meal_type=meal_type,
     )
+    expected_days = defaultdict(list)
+    for item in expected:
+        expected_days[item.service_date].append(item)
+    requirements = _exclude_not_served_requirements(expected_days, requirements)
     if current_user.role != UserRole.OWNER:
         _validate_complete_requirement_week(requirements, expected, date_from, date_to)
     await _apply_manual_ingredient_rules(requirements)
@@ -281,7 +286,10 @@ def _build_sections(
             group_expected = [
                 item
                 for item in expected
-                if item.school_group.id == group.id and item.meal_type == current_meal
+                if item.school_group is not None
+                and item.school_group.id == group.id
+                and item.meal_type == current_meal
+                and not item.day.not_served
             ]
             if not group_requirements and not group_expected:
                 continue
@@ -306,6 +314,11 @@ def _validate_complete_requirement_week(
         (item.weekly_menu_id, item.weekday, item.school_group_id) for item in requirements
     }
     for item in expected:
+        if item.day.not_served:
+            continue
+        if item.school_group is None:
+            missing_dates.add(item.service_date)
+            continue
         key = (item.weekly_menu_id, item.weekday, item.school_group.id)
         if key not in requirement_keys:
             missing_dates.add(item.service_date)
@@ -329,6 +342,11 @@ def _build_section(
     missing_dates: set[Date] = set()
     stale_dates: set[Date] = set()
     for item in expected:
+        if item.day.not_served:
+            continue
+        if item.school_group is None:
+            missing_dates.add(item.service_date)
+            continue
         requirement = requirement_by_key.get(
             (item.weekly_menu_id, item.weekday, item.school_group.id)
         )
@@ -562,16 +580,20 @@ async def _find_expected_requirements(
                 serving.school_group_id
                 for item in day.items
                 for serving in item.servings
-                if serving.children_count > 0 and serving.school_group_id in groups_by_id
+                if not day.not_served
+                and serving.children_count > 0
+                and serving.school_group_id in groups_by_id
             }
-            for group_id in served_group_ids:
+            eligible_groups = [groups_by_id[group_id] for group_id in served_group_ids]
+            # Keep a day marker for explicit no-food and genuinely empty meals.
+            for group in eligible_groups or [None]:
                 result.append(
                     ExpectedRequirement(
                         weekly_menu_id=menu.id,
                         weekday=day.weekday,
                         service_date=service_date,
                         meal_type=menu.meal_type,
-                        school_group=groups_by_id[group_id],
+                        school_group=group,
                         day=day,
                     )
                 )

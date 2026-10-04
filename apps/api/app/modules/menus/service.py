@@ -659,6 +659,7 @@ def _merge_distributed_days(
 
         merged_day = deepcopy(source_day)
         if current_day is not None:
+            merged_day.not_served = current_day.not_served
             current_items_by_id = {
                 item.id: item for item in current_day.items if item.id is not None
             }
@@ -703,6 +704,10 @@ def _merge_distributed_days(
                 item.position = position
             merged_day.reopened_at = current_day.reopened_at
             merged_day.reopened_by = current_day.reopened_by
+        if merged_day.not_served:
+            for item in merged_day.items:
+                for serving in item.servings:
+                    serving.children_count = 0
         merged_days.append(merged_day)
 
     source_weekdays = {day.weekday for day in source_days}
@@ -1185,6 +1190,7 @@ async def _preview_weekly_menu_workbook_with_references(
 async def _to_daily_menus(data: list[DailyMenuPayload]) -> list[DailyMenu]:
     days = [
         DailyMenu(
+            not_served=day.not_served,
             weekday=day.weekday,
             date=day.date,
             items=sorted(

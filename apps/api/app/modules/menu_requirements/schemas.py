@@ -204,6 +204,7 @@ class MenuRequirementDishKeyReliability(StrEnum):
 
 
 class MenuRequirementCalendarDayResponse(BaseModel):
+    not_served: bool = False
     service_date: Date
     expected_requirements: int
     generated_requirements: int
@@ -305,6 +306,7 @@ class MenuRequirementReportGroupResponse(BaseModel):
 
 
 class MenuRequirementReportResponse(BaseModel):
+    not_served: bool = False
     school_id: PydanticObjectId
     school_name: str
     date_from: Date
@@ -330,6 +332,7 @@ class CommunityMenuRequirementCalendarResponse(MenuRequirementCommunityResponse)
 
 
 class CommunityMenuRequirementReportResponse(MenuRequirementCommunityResponse):
+    not_served: bool = False
     date_from: Date
     date_to: Date
     granularity: MenuRequirementReportGranularity

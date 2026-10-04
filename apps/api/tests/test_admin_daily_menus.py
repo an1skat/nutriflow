@@ -541,3 +541,51 @@ def test_month_daily_menus_maps_requirement_validation_error_to_400(daily_menu):
     assert response.json()["detail"] == "School group not found"
 
 
+@pytest.mark.parametrize("with_existing_requirements", [False, True])
+@pytest.mark.parametrize("viewer", ["lower_admin", "admin"])
+def test_school_saves_not_served_and_admin_calendar_shows_status(
+    daily_menu, with_existing_requirements, viewer
+):
+    client, identities, db, menu = daily_menu
+    if with_existing_requirements:
+        assert regenerate(client, identities, menu).status_code == 200
+        menu = client.get(f"/api/v1/menus/weekly/{menu['id']}").json()
+    login(client, identities.school_user.username, identities.school_user_password)
+    days = deepcopy(menu["days"])
+    days[0]["not_served"] = True
+    response = client.patch(
+        f"/api/v1/menus/weekly/{menu['id']}",
+        json={"revision": menu["revision"], "days": days},
+        headers=csrf_headers(client),
+    )
+    assert response.status_code == 200, response.text
+    saved = response.json()
+    assert saved["days"][0]["not_served"] is True
+    assert all(
+        s["children_count"] == 0 for item in saved["days"][0]["items"] for s in item["servings"]
+    )
+    login(client, getattr(identities, viewer).username, getattr(identities, f"{viewer}_password"))
+    calendar = month(client, identities)
+    assert calendar["items"][0]["not_served"] is True
+    assert calendar["items"][0]["requirement_stale"] is True
+    response = regenerate(client, identities, saved)
+    assert response.status_code == 200, response.text
+    assert db.menu_requirements.count_documents({"weekly_menu_id": ObjectId(menu["id"])}) == 0
+    assert month(client, identities)["items"][0]["requirement_stale"] is False
+    saved = client.get(f"/api/v1/menus/weekly/{menu['id']}").json()
+    # Change persisted day data while retaining the previous generation hash.
+    db.weekly_menus.update_one(
+        {"_id": ObjectId(menu["id"])},
+        {"$set": {"days.0.notes": "Уточнення дня без харчування"}},
+    )
+    assert month(client, identities)["items"][0]["requirement_stale"] is True
+    saved = client.get(f"/api/v1/menus/weekly/{menu['id']}").json()
+    login(client, identities.school_user.username, identities.school_user_password)
+    saved["days"][0]["not_served"] = False
+    response = client.patch(
+        f"/api/v1/menus/weekly/{menu['id']}",
+        json={"revision": saved["revision"], "days": saved["days"]},
+        headers=csrf_headers(client),
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["days"][0]["not_served"] is False

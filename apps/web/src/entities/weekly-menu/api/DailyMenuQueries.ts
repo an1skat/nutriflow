@@ -16,6 +16,7 @@ export type MonthDailyMenu = {
   meal_type: MealType;
   weekday: Weekday;
   date: string;
+  not_served?: boolean;
   closed_at: string | null;
   reopened_at: string | null;
   revision: number;

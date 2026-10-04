@@ -144,6 +144,7 @@ class DailyMenuItem(BaseModel):
 
 
 class DailyMenu(BaseModel):
+    not_served: bool = False
     weekday: Weekday
     date: Date | None = None
     items: list[DailyMenuItem] = Field(default_factory=list, min_length=1)
@@ -159,6 +160,10 @@ class DailyMenu(BaseModel):
 
     @model_validator(mode="after")
     def validate_item_positions(self) -> Self:
+        if self.not_served:
+            for item in self.items:
+                for serving in item.servings:
+                    serving.children_count = 0
         positions = [item.position for item in self.items]
         if len(positions) != len(set(positions)):
             raise ValueError("Daily menu item positions must be unique")

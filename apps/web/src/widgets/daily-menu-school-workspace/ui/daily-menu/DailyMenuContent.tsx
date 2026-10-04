@@ -618,12 +618,15 @@ export function buildProductMenuItem(
 }
 
 export function createNewDailyMenuItem(day: DailyMenu, groups: SchoolGroup[]): DailyMenuItem {
-  const maxPosition = day.items.length > 0 ? Math.max(...day.items.map((item) => item.position)) : 0;
+  const maxPosition =
+    day.items.length > 0 ? Math.max(...day.items.map((item) => item.position)) : 0;
   const activeGroups = groups.filter((group) => group.is_active);
   const relevantGroups = activeGroups.length > 0 ? activeGroups : groups;
 
   const standardOrder: Array<'6-11' | '11-14' | '14-18'> = ['6-11', '11-14', '14-18'];
-  const dayAgeGroups = day.items.flatMap((item) => item.portions.map((portion) => portion.age_group));
+  const dayAgeGroups = day.items.flatMap((item) =>
+    item.portions.map((portion) => portion.age_group)
+  );
   const groupAgeGroups = relevantGroups.map((group) => group.age_group);
   const allAgeGroups = Array.from(new Set([...dayAgeGroups, ...groupAgeGroups]));
   const sortedAgeGroups = (allAgeGroups.length > 0 ? allAgeGroups : standardOrder).sort(
@@ -738,6 +741,7 @@ export function buildDailyMenuUpdatePayload(
           : localDay;
 
       return {
+        not_served: Boolean(day.not_served),
         weekday: day.weekday,
         date: day.date,
         notes: day.notes,

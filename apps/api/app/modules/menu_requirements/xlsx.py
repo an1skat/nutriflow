@@ -14,10 +14,7 @@ from app.modules.menu_requirements.schemas import (
     MenuRequirementReportResponse,
 )
 
-type MenuRequirementReport = (
-    MenuRequirementReportResponse
-    | CommunityMenuRequirementReportResponse
-)
+type MenuRequirementReport = MenuRequirementReportResponse | CommunityMenuRequirementReportResponse
 
 TITLE_FILL = PatternFill("solid", fgColor="166534")
 HEADER_FILL = PatternFill("solid", fgColor="DCFCE7")
@@ -140,7 +137,13 @@ def build_menu_requirement_report_workbook(
             ("Тип ваги", AMOUNT_BASIS_LABELS[amount_basis.value]),
         ]
         message_row = _write_sheet_heading(sheet, "МЕНЮ-ВИМОГА", metadata)
-        sheet.cell(message_row, 1, "Немає даних меню-вимог за обраний період.")
+        sheet.cell(
+            message_row,
+            1,
+            "Не харчувалися. Кількість дітей: 0."
+            if getattr(report, "not_served", False)
+            else "Немає даних меню-вимог за обраний період.",
+        )
         sheet.column_dimensions["A"].width = 48
     else:
         used_titles: set[str] = set()
@@ -231,11 +234,7 @@ def _write_report_group(
 def _report_metadata(
     report: MenuRequirementReport,
 ) -> list[tuple[str, Any]]:
-    meal_type = (
-        MEAL_TYPE_LABELS[report.meal_type.value]
-        if report.meal_type
-        else "Усі"
-    )
+    meal_type = MEAL_TYPE_LABELS[report.meal_type.value] if report.meal_type else "Усі"
 
     if isinstance(report, CommunityMenuRequirementReportResponse):
         scope_metadata: list[tuple[str, Any]] = [
@@ -251,10 +250,7 @@ def _report_metadata(
         *scope_metadata,
         (
             "Період",
-            (
-                f"{report.date_from.strftime('%d.%m.%Y')} – "
-                f"{report.date_to.strftime('%d.%m.%Y')}"
-            ),
+            (f"{report.date_from.strftime('%d.%m.%Y')} – {report.date_to.strftime('%d.%m.%Y')}"),
         ),
         ("Групування", GRANULARITY_LABELS[report.granularity.value]),
         ("Прийом їжі", meal_type),

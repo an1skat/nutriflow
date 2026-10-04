@@ -1,9 +1,6 @@
 import { z } from 'zod';
 
-import {
-  type SchoolCommunity,
-  schoolCommunitySchema,
-} from '@/entities/school/model/School';
+import { type SchoolCommunity, schoolCommunitySchema } from '@/entities/school/model/School';
 import {
   ageGroupSchema,
   mealTypeSchema,
@@ -105,6 +102,7 @@ export const menuRequirementCommunityListSchema = z.array(menuRequirementCommuni
 
 export const menuRequirementCalendarDaySchema = z.object({
   service_date: z.string().min(1),
+  not_served: z.boolean().optional(),
   expected_requirements: z.number().int().nonnegative(),
   generated_requirements: z.number().int().nonnegative(),
   missing_requirements: z.number().int().nonnegative(),
@@ -146,8 +144,9 @@ export const schoolMenuRequirementCalendarSchema = menuRequirementCalendarBaseSc
   school_name: z.string().min(1),
 });
 
-export const communityMenuRequirementCalendarSchema =
-  menuRequirementCalendarBaseSchema.extend(menuRequirementCommunitySchema.shape);
+export const communityMenuRequirementCalendarSchema = menuRequirementCalendarBaseSchema.extend(
+  menuRequirementCommunitySchema.shape
+);
 
 export const menuRequirementCalendarSchema = z.union([
   schoolMenuRequirementCalendarSchema,
@@ -216,6 +215,7 @@ export const menuRequirementReportGroupSchema = z.object({
 });
 
 const menuRequirementReportBaseSchema = z.object({
+  not_served: z.boolean().optional(),
   date_from: z.string().min(1),
   date_to: z.string().min(1),
   granularity: menuRequirementReportGranularitySchema,
@@ -232,8 +232,9 @@ export const schoolMenuRequirementReportSchema = menuRequirementReportBaseSchema
   school_group_id: z.string().nullable(),
 });
 
-export const communityMenuRequirementReportSchema =
-  menuRequirementReportBaseSchema.extend(menuRequirementCommunitySchema.shape);
+export const communityMenuRequirementReportSchema = menuRequirementReportBaseSchema.extend(
+  menuRequirementCommunitySchema.shape
+);
 
 export const menuRequirementReportSchema = z.union([
   schoolMenuRequirementReportSchema,

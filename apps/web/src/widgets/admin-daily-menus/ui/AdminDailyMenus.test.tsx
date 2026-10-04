@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import { AdminDailyMenus } from './AdminDailyMenus';
 
@@ -17,7 +17,11 @@ vi.mock('@/widgets/daily-menu-school-workspace/ui/DailyMenuSchoolWorkspace', () 
   ),
 }));
 
+afterEach(() => vi.useRealTimers());
+
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-09-26T12:00:00Z'));
   mocks.month.mockReturnValue({
     data: {
       today: '2026-09-26',
@@ -142,4 +146,15 @@ it('marks past days editable and future days readonly regardless of month', asyn
   fireEvent.click(screen.getByRole('button', { name: 'Вер' }));
   fireEvent.click(screen.getByRole('button', { name: /2026-09-28/ }));
   expect(await screen.findByText('Editor future-day readonly')).toBeInTheDocument();
+});
+
+it('labels a day without meals as Не харчувалися', () => {
+  const data = mocks.month().data;
+  data.items[0].not_served = true;
+  mocks.month.mockReturnValue({ data });
+  render(<AdminDailyMenus initialSchoolId="owned" />);
+  expect(
+    screen.getByRole('button', { name: /2026-09-01: Сніданок · Не харчувалися/ })
+  ).toBeInTheDocument();
+  expect(screen.getByText('Сніданок · Не харчувалися')).toBeInTheDocument();
 });

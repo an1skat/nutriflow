@@ -97,6 +97,7 @@ export const dailyMenuItemSchema = z.object({
 });
 
 export const dailyMenuSchema = z.object({
+  not_served: z.boolean().optional(),
   weekday: weekdaySchema,
   date: z.string().min(1).nullable(),
   items: z.array(dailyMenuItemSchema).min(1),
@@ -232,6 +233,7 @@ export type WeeklyMenuPayload = {
       is_school_added?: boolean;
       is_school_customized?: boolean;
     }>;
+    not_served?: boolean;
     notes?: string | null;
   }>;
   notes?: string | null;

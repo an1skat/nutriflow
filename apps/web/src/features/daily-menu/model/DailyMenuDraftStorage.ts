@@ -34,8 +34,10 @@ export function prepareDailyMenuDays(sourceDays: DailyMenu[], groups: SchoolGrou
         school_group_id: group.id,
         age_group: group.age_group,
         children_count:
-          item.servings.find((serving) => serving.school_group_id === group.id)?.children_count ??
-          0,
+          day.not_served
+            ? 0
+            : (item.servings.find((serving) => serving.school_group_id === group.id)?.children_count ??
+              0),
       })),
     })),
   }));
@@ -48,7 +50,7 @@ export function updateDailyMenuGroupChildrenCount(
   childrenCount: number
 ): DailyMenu[] {
   return days.map((day) =>
-    day.weekday !== weekday
+    day.weekday !== weekday || day.not_served
       ? day
       : {
           ...day,

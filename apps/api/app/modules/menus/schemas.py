@@ -106,6 +106,7 @@ class DailyMenuItemPayload(BaseModel):
 
 
 class DailyMenuPayload(BaseModel):
+    not_served: bool = False
     weekday: Weekday
     date: Date | None = None
     items: list[DailyMenuItemPayload] = Field(min_length=1)
@@ -245,6 +246,7 @@ class DailyMenuResponse(DailyMenuPayload):
     @classmethod
     def from_day(cls, day: DailyMenu) -> "DailyMenuResponse":
         return cls(
+            not_served=day.not_served,
             weekday=day.weekday,
             date=day.date,
             items=[DailyMenuItemResponse.from_item(item) for item in day.items],
@@ -467,6 +469,7 @@ class CurrentWeekClosedDaysResponse(BaseModel):
 
 
 class MonthDailyMenuResponse(BaseModel):
+    not_served: bool = False
     menu_id: PydanticObjectId
     menu_title: str
     meal_type: MealType

@@ -301,7 +301,9 @@ describe('school daily menu item additions', () => {
     expect(isSchoolAddedDailyMenuItem(savedSchoolItem)).toBe(true);
 
     const props = renderPanel({ day: day([menuItem('db-item-1'), savedSchoolItem]) });
-    expect(screen.getByRole('button', { name: 'Видалити позицію Хліб пшеничний' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Видалити позицію Хліб пшеничний' })
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Видалити позицію Хліб пшеничний' }));
     expect(props.onRemoveItem).toHaveBeenCalledWith('db-item-6');
 
@@ -310,4 +312,15 @@ describe('school daily menu item additions', () => {
     });
     expect(props.onPortionYieldChange).toHaveBeenCalledWith('db-item-6', 0, '45');
   });
+});
+
+it('includes the not served flag and zero servings when saving a day', () => {
+  const marked = day();
+  marked.not_served = true;
+  marked.items[0].servings[0].children_count = 0;
+  const payload = buildDailyMenuUpdatePayload([marked]);
+  expect(payload.days?.[0].not_served).toBe(true);
+  expect(payload.days?.[0].items[0].servings?.[0].children_count).toBe(0);
+  marked.not_served = false;
+  expect(buildDailyMenuUpdatePayload([marked]).days?.[0].not_served).toBe(false);
 });

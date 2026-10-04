@@ -21,6 +21,8 @@ def resolve_service_date(menu: WeeklyMenu, day: DailyMenu, requested_date: Date)
 
 def hash_daily_menu(day: DailyMenu) -> str:
     day_data = day.model_dump(mode="json")
+    if not day.not_served:
+        day_data.pop("not_served", None)
     day_data.pop("requirements_generated_hash", None)
     day_data.pop("closed_at", None)
     day_data.pop("closed_by", None)
@@ -49,6 +51,8 @@ def select_eligible_groups(
     day: DailyMenu,
     groups_by_id: dict[PydanticObjectId, SchoolGroup],
 ) -> list[SchoolGroup]:
+    if day.not_served:
+        return []
     eligible_ids: set[PydanticObjectId] = set()
     for item in day.items:
         for serving in item.servings:

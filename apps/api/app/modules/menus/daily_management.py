@@ -52,7 +52,9 @@ async def list_month_daily_menus(
             existing = requirements_by_day[(menu.id, day.weekday)]
             day_hash = hash_daily_menu(day)
             expected_ids = {group.id for group in select_eligible_groups(day, groups)}
-            if existing:
+            if day.not_served:
+                stale = bool(existing) or day.requirements_generated_hash != day_hash
+            elif existing:
                 stale = {r.school_group_id for r in existing} != expected_ids or any(
                     r.source_day_hash != day_hash or r.service_date != service_date
                     for r in existing
@@ -69,6 +71,7 @@ async def list_month_daily_menus(
                     meal_type=menu.meal_type,
                     weekday=day.weekday,
                     date=service_date,
+                    not_served=day.not_served,
                     closed_at=day.closed_at,
                     reopened_at=day.reopened_at,
                     revision=menu.revision,

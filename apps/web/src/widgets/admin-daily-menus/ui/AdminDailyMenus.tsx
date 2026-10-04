@@ -303,7 +303,7 @@ export function AdminDailyMenus({ initialSchoolId = '' }: { initialSchoolId?: st
                 <button
                   key={dateValue}
                   type="button"
-                  aria-label={`${dateValue}: ${items.map((item) => `${item.meal_type === 'lunch' ? 'Обід' : 'Сніданок'} · ${item.closed_at ? 'Закрито' : 'Відкрито'}`).join(', ') || 'Немає меню'}`}
+                  aria-label={`${dateValue}: ${items.map((item) => `${item.meal_type === 'lunch' ? 'Обід' : 'Сніданок'} · ${item.not_served ? 'Не харчувалися' : item.closed_at ? 'Закрито' : 'Відкрито'}`).join(', ') || 'Немає меню'}`}
                   aria-pressed={isSelected}
                   disabled={!hasMenu}
                   className={`group relative min-h-24 border p-2.5 text-left transition-colors ${
@@ -332,9 +332,7 @@ export function AdminDailyMenus({ initialSchoolId = '' }: { initialSchoolId?: st
                     >
                       {index + 1}
                     </span>
-                    {hasMenu ? (
-                      <span className="size-1.5 rounded-full bg-(--nf-brand)" />
-                    ) : null}
+                    {hasMenu ? <span className="size-1.5 rounded-full bg-(--nf-brand)" /> : null}
                   </div>
                   <div className="space-y-1">
                     {items.map((item) => (
@@ -347,7 +345,11 @@ export function AdminDailyMenus({ initialSchoolId = '' }: { initialSchoolId?: st
                         }`}
                       >
                         {item.meal_type === 'lunch' ? 'Обід' : 'Сніданок'} ·{' '}
-                        {item.closed_at ? 'Закрито' : 'Відкрито'}
+                        {item.not_served
+                          ? 'Не харчувалися'
+                          : item.closed_at
+                            ? 'Закрито'
+                            : 'Відкрито'}
                       </span>
                     ))}
                     {!hasMenu ? (
@@ -391,10 +393,7 @@ export function AdminDailyMenus({ initialSchoolId = '' }: { initialSchoolId?: st
                           {item.meal_type === 'lunch' ? 'Обід' : 'Сніданок'}
                         </span>
                         {isSelected ? (
-                          <span
-                            className="size-1.5 rounded-full bg-white/80"
-                            aria-hidden="true"
-                          />
+                          <span className="size-1.5 rounded-full bg-white/80" aria-hidden="true" />
                         ) : null}
                       </div>
                       <span
