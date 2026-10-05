@@ -23,7 +23,7 @@ def menu(doc_id, meal, starts_on, *, school=None, source=None, status="published
         "meal_type": meal,
         "status": status,
         "starts_on": starts_on,
-        "ends_on": starts_on + timedelta(days=4),
+        "ends_on": None,
         "revision": Int64(7),
         "created_at": datetime(2026, 9, 1, tzinfo=UTC),
         "published_at": datetime(2026, 9, 2, tzinfo=UTC),
@@ -165,10 +165,23 @@ def test_plan_cli_is_read_only_and_records_exact_before_images(audited_db, tmp_p
     assert "SCHOOL COPIES DATE-RESTORED: 3" in plan["summary"]
     assert "COPIES REVOKED: 3" in plan["summary"]
     assert "EXPECTED PUBLISHED DUPLICATES: 0" in plan["summary"]
+    cycle_one_id = ObjectId("6a84840bf9867d3ec9e6c8a8")
+    correct_family = {
+        doc["_id"]
+        for doc in plan["weekly_menus_before"]
+        if doc["_id"] == cycle_one_id or doc.get("source_menu_id") == cycle_one_id
+    }
+    repaired_ids = {entry["before"]["_id"] for entry in plan["entries"]}
+    assert repaired_ids & correct_family == {ObjectId("6ab625491038d4c31d4e525b")}
+    assert all("ends_on" not in entry["set"] for entry in plan["entries"])
 
 
-def test_apply_preserves_operational_history_requirements_and_untouched_pairs(audited_db):
+@pytest.mark.parametrize("legacy_end", [None, datetime(2026, 10, 9, tzinfo=UTC)])
+def test_apply_preserves_operational_history_requirements_and_untouched_pairs(
+    audited_db, legacy_end
+):
     db, actor = audited_db
+    db.weekly_menus.update_many({}, {"$set": {"ends_on": legacy_end}})
     before = {doc["_id"]: doc for doc in db.weekly_menus.find()}
     requirements = collection_bytes(db.menu_requirements)
     plan = repair.build_plan(db, actor)
@@ -183,6 +196,10 @@ def test_apply_preserves_operational_history_requirements_and_untouched_pairs(au
     entries = {entry["before"]["_id"]: entry for entry in plan["entries"]}
     for doc in after:
         original = before[doc["_id"]]
+        assert BSON.encode({"ends_on": doc["ends_on"]}) == BSON.encode(
+            {"ends_on": original["ends_on"]}
+        )
+        assert doc["ends_on"] == legacy_end
         if doc["_id"] not in entries:
             assert BSON.encode(doc) == BSON.encode(original)
             continue
@@ -303,10 +320,18 @@ def test_lunch_cycle_one_is_only_rewritten_for_individual_date_mismatch(audited_
     db, actor = audited_db
     cycle_id = ObjectId("6a84840bf9867d3ec9e6c8a8")
     db.weekly_menus.update_one({"_id": cycle_id}, {"$set": {"days.2.date": datetime(2026, 10, 7)}})
+    before = db.weekly_menus.find_one({"_id": cycle_id})
+    requirements = collection_bytes(db.menu_requirements)
     plan = repair.build_plan(db, actor)
     entry = next(e for e in plan["entries"] if e["before"]["_id"] == cycle_id)
     assert entry["set"] == {"days.2.date": datetime(2026, 9, 30, tzinfo=UTC)}
     repair.apply_plan(db, plan)
+    after = db.weekly_menus.find_one({"_id": cycle_id})
+    assert after["ends_on"] is None
+    expected = {**before, "revision": before["revision"] + 1}
+    expected["days"][2]["date"] = datetime(2026, 9, 30, tzinfo=UTC)
+    assert after == expected
+    assert collection_bytes(db.menu_requirements) == requirements
 
 
 def test_school_week_index_allows_history_but_rejects_two_published(seeded_client):

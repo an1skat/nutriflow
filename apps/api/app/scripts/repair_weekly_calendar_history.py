@@ -76,9 +76,9 @@ def published_duplicates(documents: list[dict]) -> list[list[ObjectId]]:
 
 def calendar_changes(document: dict, starts_on: datetime) -> dict:
     changes = {}
-    for key, value in {"starts_on": starts_on, "ends_on": starts_on + timedelta(days=4)}.items():
-        if document.get(key) != value:
-            changes[key] = value
+    # ends_on is optional legacy metadata, not part of the audited corruption.
+    if document.get("starts_on") != starts_on:
+        changes["starts_on"] = starts_on
     weekdays = [day["weekday"] for day in document["days"]]
     if not weekdays or len(set(weekdays)) != len(weekdays) or set(weekdays) - set(WEEKDAYS):
         raise RuntimeError(f"Unexpected weekday shape: {document['_id']}")
@@ -300,7 +300,7 @@ def summary(plan: dict) -> str:
     source_count = copy_count = revoke_count = 0
     for entry in plan["entries"]:
         doc, changes = entry["before"], entry["set"]
-        if any(key in {"starts_on", "ends_on"} or key.startswith("days.") for key in changes):
+        if any(key == "starts_on" or key.startswith("days.") for key in changes):
             if doc["_id"] in RESTORATIONS:
                 source_count += 1
                 lines.append(
