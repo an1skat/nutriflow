@@ -264,6 +264,7 @@ class WeeklyMenuResponse(BaseModel):
     title: str
     school_id: PydanticObjectId | None
     source_menu_id: PydanticObjectId | None
+    cycle_template_id: PydanticObjectId | None = None
     meal_type: MealType
     cycle_week: int | None
     starts_on: Date | None
@@ -290,6 +291,7 @@ class WeeklyMenuResponse(BaseModel):
             title=menu.title,
             school_id=menu.school_id,
             source_menu_id=menu.source_menu_id,
+            cycle_template_id=menu.cycle_template_id,
             meal_type=menu.meal_type,
             cycle_week=menu.cycle_week,
             starts_on=menu.starts_on,
@@ -389,6 +391,14 @@ class MenuChangeRequestSchoolOption(BaseModel):
 class PublishWeeklyMenuRequest(BaseModel):
     school_ids: list[PydanticObjectId] | None = None
     replace_existing: bool = False
+    starts_on: Date | None = None
+
+    @field_validator("starts_on")
+    @classmethod
+    def validate_monday(cls, value: Date | None) -> Date | None:
+        if value is not None and value.weekday() != 0:
+            raise ValueError("Week must start on Monday")
+        return value
 
 
 class PublishWeeklyMenuResponse(BaseModel):

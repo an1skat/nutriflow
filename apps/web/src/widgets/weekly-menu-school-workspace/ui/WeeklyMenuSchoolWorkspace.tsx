@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 
 import { useWeeklyMenu, useWeeklyMenus } from '@/entities/weekly-menu/api/WeeklyMenuQueries';
 import type { WeeklyMenu } from '@/entities/weekly-menu/model/WeeklyMenu';
+import { getDefaultWeeklyMenuId } from '@/entities/weekly-menu/model/WeeklyMenu';
 import {
   useArchiveSchoolWeeklyMenu,
   useRestoreSchoolWeeklyMenu,
@@ -32,7 +33,8 @@ export function WeeklyMenuSchoolWorkspace() {
     status: 'archived',
   });
   const [selectedMenuId, setSelectedMenuId] = useState<string | null>(null);
-  const effectiveSelectedMenuId = selectedMenuId ?? menus.data?.items[0]?.id ?? null;
+  const effectiveSelectedMenuId =
+    selectedMenuId ?? getDefaultWeeklyMenuId(menus.data?.items ?? []) ?? null;
   const selectedMenu = useWeeklyMenu(effectiveSelectedMenuId ?? '');
   const archiveSelectedMenu = useArchiveSchoolWeeklyMenu(selectedMenu.data?.id ?? '');
 
@@ -191,12 +193,10 @@ export function WeeklyMenuSchoolWorkspace() {
               key={`${selectedMenu.data.id}:${selectedMenu.data.updated_at}`}
               menu={selectedMenu.data}
             />
-          ) : menus.isPending || selectedMenu.isPending ? null : (
+          ) : menus.isPending || (effectiveSelectedMenuId && selectedMenu.isPending) ? null : (
             <section className="nf-panel">
               <div className="nf-panel-body">
-                <div className="nf-empty">
-                  Немає опублікованого меню. Дочекайтеся розсилки від адміністратора або власника.
-                </div>
+                <div className="nf-empty">На цей тиждень меню не призначено.</div>
               </div>
             </section>
           )}

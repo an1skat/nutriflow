@@ -2,12 +2,14 @@ import asyncio
 import re
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
+from datetime import date as Date
 from typing import Any
 
 from beanie import PydanticObjectId
 from beanie.odm.utils.dump import get_dict
 from fastapi import UploadFile
 from pymongo import ReturnDocument
+from pymongo.errors import DuplicateKeyError
 
 from app.core.config import get_settings
 from app.db.mongo import get_mongo_client
@@ -93,9 +95,12 @@ async def list_weekly_menus(
     school_id: PydanticObjectId | None = None,
     source_menu_id: PydanticObjectId | None = None,
     template_only: bool = False,
+    instances_only: bool = False,
     status: WeeklyMenuStatus | None = None,
     meal_type: MealType | None = None,
 ) -> tuple[list[WeeklyMenu], int]:
+    if instances_only and (template_only or current_user.role == UserRole.SCHOOL_USER):
+        return [], 0
     filters: dict[str, Any] = {}
 
     if current_user.role == UserRole.SCHOOL_USER:
@@ -128,6 +133,11 @@ async def list_weekly_menus(
 
     if source_menu_id is not None:
         filters["source_menu_id"] = source_menu_id
+    if template_only:
+        filters["cycle_template_id"] = None
+    if instances_only:
+        filters["school_id"] = None
+        filters["cycle_template_id"] = {"$type": "objectId"}
 
     if status is not None:
         filters["status"] = status.value
@@ -192,7 +202,11 @@ async def create_weekly_menu(
         created_at=now,
         updated_at=now,
     )
-    await menu.insert()
+    _validate_calendar_dates(menu)
+    try:
+        await menu.insert()
+    except DuplicateKeyError as exc:
+        raise MenuVersionConflictError("На цей тиждень уже призначено меню") from exc
     return menu
 
 
@@ -577,8 +591,27 @@ async def _save_template_and_propagate(
 
     copies = await WeeklyMenu.find(
         WeeklyMenu.source_menu_id == source.id,
-        {"status": {"$ne": WeeklyMenuStatus.REVOKED.value}},
     ).to_list()
+    previous_source = await WeeklyMenu.get(source.id)
+    if previous_source is not None:
+        dates_changed = (
+            source.starts_on != previous_source.starts_on
+            or source.ends_on != previous_source.ends_on
+            or {day.weekday: day.date for day in source.days}
+            != {day.weekday: day.date for day in previous_source.days}
+        )
+        if dates_changed and (
+            source.cycle_template_id is not None
+            or copies
+            or previous_source.published_at is not None
+        ):
+            raise MenuValidationError(
+                "Published weekly menu dates cannot be changed. "
+                "Assign the cycle to a new week instead."
+            )
+        if dates_changed:
+            _validate_calendar_dates(source)
+    copies = [copy for copy in copies if copy.status != WeeklyMenuStatus.REVOKED]
     now = datetime.now(UTC)
     copy_revisions = [copy.revision for copy in copies]
     for copy in copies:
@@ -609,12 +642,15 @@ async def _replace_weekly_menu_if_current(
         revision_filter = {"revision": expected_revision}
 
     menu.revision = expected_revision + 1
-    result = await WeeklyMenu.get_pymongo_collection().find_one_and_replace(
-        {"_id": menu.id, **revision_filter},
-        get_dict(menu),
-        return_document=ReturnDocument.AFTER,
-        session=session,
-    )
+    try:
+        result = await WeeklyMenu.get_pymongo_collection().find_one_and_replace(
+            {"_id": menu.id, "cycle_template_id": menu.cycle_template_id, **revision_filter},
+            get_dict(menu),
+            return_document=ReturnDocument.AFTER,
+            session=session,
+        )
+    except DuplicateKeyError as exc:
+        raise MenuVersionConflictError("На цей тиждень уже призначено меню") from exc
     if result is None:
         raise MenuVersionConflictError("Weekly menu was changed by another user")
 
@@ -781,6 +817,195 @@ def _republish_previous_source_days(
     return previous_days
 
 
+def _validate_calendar_dates(menu: WeeklyMenu) -> None:
+    if menu.starts_on is None:
+        return
+    if menu.starts_on.weekday() != 0:
+        raise MenuValidationError("Week must start on Monday")
+    if menu.ends_on is not None and menu.ends_on < menu.starts_on:
+        raise MenuValidationError("Weekly menu end date cannot be before start date")
+    for day in menu.days:
+        expected = menu.starts_on + timedelta(days=list(Weekday).index(day.weekday))
+        if day.date is not None and day.date != expected:
+            raise MenuValidationError("Daily menu date must match its calendar week")
+
+
+def _build_scheduled_menu(source: WeeklyMenu, starts_on: Date) -> WeeklyMenu:
+    days = [
+        DailyMenu(
+            weekday=day.weekday,
+            date=starts_on + timedelta(days=list(Weekday).index(day.weekday)),
+            notes=day.notes,
+            items=[
+                item.model_copy(
+                    deep=True,
+                    update={
+                        "id": PydanticObjectId(),
+                        "servings": [],
+                        "is_school_added": False,
+                        "is_school_customized": False,
+                    },
+                )
+                for item in day.items
+            ],
+        )
+        for day in source.days
+    ]
+    return WeeklyMenu(
+        id=PydanticObjectId(),
+        cycle_template_id=source.cycle_template_id or source.id,
+        title=f"{source.title[:230]} · {starts_on:%d.%m.%Y}",
+        meal_type=source.meal_type,
+        cycle_week=source.cycle_week,
+        starts_on=starts_on,
+        ends_on=starts_on + timedelta(days=4),
+        days=days,
+        notes=source.notes,
+        source_file_name=source.source_file_name,
+        source_sheet_name=source.source_sheet_name,
+        created_by=source.created_by,
+    )
+
+
+def _build_school_copy(source: WeeklyMenu, school: School, actor: User) -> WeeklyMenu:
+    now = datetime.now(UTC)
+    return WeeklyMenu(
+        id=PydanticObjectId(),
+        title=source.title,
+        school_id=school.id,
+        source_menu_id=source.id,
+        meal_type=source.meal_type,
+        cycle_week=source.cycle_week,
+        starts_on=source.starts_on,
+        ends_on=source.ends_on,
+        status=WeeklyMenuStatus.PUBLISHED,
+        days=deepcopy(source.days),
+        notes=source.notes,
+        source_file_name=source.source_file_name,
+        source_sheet_name=source.source_sheet_name,
+        published_at=now,
+        created_by=actor.id,
+        updated_by=actor.id,
+        created_at=now,
+        updated_at=now,
+    )
+
+
+async def _assign_cycle_to_week(
+    template_id: PydanticObjectId,
+    starts_on: Date,
+    schools: list[School],
+    actor: User,
+) -> PublishWeeklyMenuResponse:
+    school_ids = [school.id for school in schools if school.id is not None]
+
+    async def assign(session: Any) -> PublishWeeklyMenuResponse:
+        template = await WeeklyMenu.get(template_id, session=session)
+        if template is None:
+            raise MenuNotFoundError("Weekly menu not found")
+        await _authorize_menu_access(template, actor)
+        if template.cycle_template_id is not None:
+            template = await WeeklyMenu.get(template.cycle_template_id, session=session)
+            if template is None:
+                raise MenuNotFoundError("Weekly menu not found")
+            await _authorize_menu_access(template, actor)
+        if template.status in {WeeklyMenuStatus.ARCHIVED, WeeklyMenuStatus.REVOKED}:
+            raise MenuValidationError("Archived weekly menus cannot be published")
+        if template.starts_on is not None and (
+            template.published_at is not None
+            or template.status == WeeklyMenuStatus.PUBLISHED
+            or await WeeklyMenu.find_one({"source_menu_id": template.id}, session=session)
+        ):
+            legacy = template
+            template = _build_scheduled_menu(legacy, legacy.starts_on)
+            template.cycle_template_id = None
+            template.title = legacy.title
+            template.starts_on = None
+            template.ends_on = None
+            template.updated_by = actor.id
+            for day in template.days:
+                day.date = None
+            await template.insert(session=session)
+            # Updating the same legacy document serializes concurrent promotions in the transaction.
+            # Keep its historical payload, revision and timestamps intact.
+            await WeeklyMenu.get_pymongo_collection().update_one(
+                {"_id": legacy.id},
+                {"$set": {"cycle_template_id": template.id}},
+                session=session,
+            )
+            await WeeklyMenu.get_pymongo_collection().update_many(
+                {"cycle_template_id": legacy.id},
+                {"$set": {"cycle_template_id": template.id}},
+                session=session,
+            )
+        source = await WeeklyMenu.find_one(
+            {"cycle_template_id": template.id, "starts_on": starts_on}, session=session
+        )
+        is_new = source is None
+        if source is None:
+            source = _build_scheduled_menu(template, starts_on)
+            source.status = WeeklyMenuStatus.PUBLISHED
+            source.published_at = datetime.now(UTC)
+            source.updated_by = actor.id
+        else:
+            await _authorize_menu_access(source, actor)
+            if source.status in {WeeklyMenuStatus.ARCHIVED, WeeklyMenuStatus.REVOKED}:
+                raise MenuValidationError("Призначений тиждень в архіві або відкликаний")
+        _validate_calendar_dates(source)
+        try:
+            await resolve_menu_item_references(
+                deepcopy([item for day in source.days for item in day.items])
+            )
+        except MenuReferenceError as exc:
+            raise MenuValidationError(str(exc)) from exc
+
+        occupied = await WeeklyMenu.find(
+            {
+                "school_id": {"$in": school_ids},
+                "meal_type": source.meal_type.value,
+                "starts_on": starts_on,
+            },
+            session=session,
+        ).to_list()
+        if any(copy.source_menu_id != source.id for copy in occupied):
+            raise MenuVersionConflictError(
+                "На цей тиждень школі вже призначено інше меню. Заміна не дозволена."
+            )
+        existing = await WeeklyMenu.find(
+            {"source_menu_id": source.id, "school_id": {"$in": school_ids}},
+            session=session,
+        ).to_list()
+        existing_school_ids = {copy.school_id for copy in existing}
+        copies = [
+            _build_school_copy(source, school, actor)
+            for school in schools
+            if school.id not in existing_school_ids
+        ]
+        if is_new:
+            await source.insert(session=session)
+        if copies:
+            await WeeklyMenu.insert_many(copies, session=session)
+        return PublishWeeklyMenuResponse(
+            source_menu_id=source.id,
+            target_school_ids=school_ids,
+            created_menu_ids=[copy.id for copy in copies],
+            replaced_menu_ids=[],
+            skipped_existing_school_ids=[sid for sid in school_ids if sid in existing_school_ids],
+        )
+
+    for attempt in range(2):
+        try:
+            async with get_mongo_client().start_session() as session:
+                return await session.with_transaction(assign)
+        except DuplicateKeyError as exc:
+            # Re-read after an identical concurrent assignment wins its unique-key race.
+            if attempt:
+                raise MenuVersionConflictError(
+                    "На цей тиждень уже призначено меню. Повторіть запит."
+                ) from exc
+    raise RuntimeError("Unreachable assignment retry")
+
+
 async def publish_weekly_menu(
     menu_id: PydanticObjectId,
     data: PublishWeeklyMenuRequest,
@@ -790,9 +1015,16 @@ async def publish_weekly_menu(
 
     if source.school_id is not None:
         raise MenuValidationError("Only template weekly menus can be published")
+    if data.starts_on is not None and source.cycle_template_id is not None:
+        source = await get_weekly_menu(source.cycle_template_id, admin)
     if source.status == WeeklyMenuStatus.ARCHIVED:
         raise MenuValidationError("Archived weekly menus cannot be published")
 
+    target_schools = await _get_publish_target_schools(data.school_ids, admin)
+    if data.starts_on is not None:
+        return await _assign_cycle_to_week(source.id, data.starts_on, target_schools, admin)
+    _validate_calendar_dates(source)
+    source_revision = source.revision
     try:
         # Validate a copy: publishing must preserve stored version IDs and nutrition snapshots.
         await resolve_menu_item_references(
@@ -800,8 +1032,6 @@ async def publish_weekly_menu(
         )
     except MenuReferenceError as exc:
         raise MenuValidationError(str(exc)) from exc
-
-    target_schools = await _get_publish_target_schools(data.school_ids, admin)
     target_school_ids = [school.id for school in target_schools if school.id is not None]
     existing_copies = await WeeklyMenu.find(
         WeeklyMenu.source_menu_id == source.id,
@@ -843,39 +1073,25 @@ async def publish_weekly_menu(
     source.updated_by = admin.id
     source.updated_at = now
     new_copies = [
-        WeeklyMenu(
-            id=PydanticObjectId(),
-            title=source.title,
-            school_id=school.id,
-            source_menu_id=source.id,
-            meal_type=source.meal_type,
-            cycle_week=source.cycle_week,
-            starts_on=source.starts_on,
-            ends_on=source.ends_on,
-            status=WeeklyMenuStatus.PUBLISHED,
-            days=deepcopy(source.days),
-            notes=source.notes,
-            source_file_name=source.source_file_name,
-            source_sheet_name=source.source_sheet_name,
-            published_at=now,
-            created_by=admin.id,
-            updated_by=admin.id,
-            created_at=now,
-            updated_at=now,
-        )
+        _build_school_copy(source, school, admin)
         for school in target_schools
         if school.id not in existing_copies_by_school_id
     ]
 
     async def save_publication(session: Any) -> None:
-        await source.save(session=session)
+        await _replace_weekly_menu_if_current(source, source_revision, session=session)
         if new_copies:
             await WeeklyMenu.insert_many(new_copies, session=session)
         for copy, revision in zip(replaced_copies, replaced_copy_revisions, strict=True):
             await _replace_weekly_menu_if_current(copy, revision, session=session)
 
-    async with get_mongo_client().start_session() as session:
-        await session.with_transaction(save_publication)
+    try:
+        async with get_mongo_client().start_session() as session:
+            await session.with_transaction(save_publication)
+    except DuplicateKeyError as exc:
+        raise MenuVersionConflictError(
+            "Меню вже призначається на цей тиждень. Повторіть запит"
+        ) from exc
 
     return PublishWeeklyMenuResponse(
         source_menu_id=source.id,

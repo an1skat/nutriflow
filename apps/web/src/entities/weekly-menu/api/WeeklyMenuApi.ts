@@ -24,6 +24,7 @@ export async function fetchWeeklyMenus(request: WeeklyMenuListRequest): Promise<
       school_id: request.school_id,
       source_menu_id: request.source_menu_id,
       template_only: request.template_only || undefined,
+      instances_only: request.instances_only || undefined,
       status: request.status,
       meal_type: request.meal_type,
     },

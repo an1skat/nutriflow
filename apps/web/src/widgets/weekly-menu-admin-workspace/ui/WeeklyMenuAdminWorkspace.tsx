@@ -49,12 +49,14 @@ export function WeeklyMenuAdminWorkspace() {
     template_only: true,
   });
   const createWeeklyMenu = useCreateWeeklyMenu();
+  const assignments = useWeeklyMenus({ offset: 0, limit: 100, instances_only: true });
   const [selectedMenuId, setSelectedMenuId] = useState<string | null>(null);
   const [isCreatingNewMenu, setIsCreatingNewMenu] = useState(false);
   const [newMenuDraftChecked, setNewMenuDraftChecked] = useState(false);
   const [newMenuRevision, setNewMenuRevision] = useState(0);
   const [menuOverride, setMenuOverride] = useState<WeeklyMenu | null>(null);
   const [replaceExisting, setReplaceExisting] = useState(true);
+  const [weekStartsOn, setWeekStartsOn] = useState('');
   const [selectedSchoolIds, setSelectedSchoolIds] = useState<string[]>([]);
   const [selectedRevokeCopyIds, setSelectedRevokeCopyIds] = useState<string[]>([]);
 
@@ -276,25 +278,25 @@ export function WeeklyMenuAdminWorkspace() {
     setSelectedMenuId(firstMenu.id);
   };
 
-  const handlePublish = async () => {
+  const handlePublish = async (assignWeek = false) => {
     if (!selectedMenu) {
       return;
     }
 
-    const result = await publishWeeklyMenu.mutateAsync(
-      canSelectTargetSchools
-        ? {
-            school_ids: effectiveSelectedSchoolIds,
-            replace_existing: replaceExisting,
-          }
-        : {
-            replace_existing: replaceExisting,
-          }
-    );
-
-    toast.success(
-      `Розсилку завершено. Створено: ${result.created_menu_ids.length}, оновлено: ${result.replaced_menu_ids.length}, пропущено: ${result.skipped_existing_school_ids.length}.`
-    );
+    try {
+      const result = await publishWeeklyMenu.mutateAsync({
+        school_ids: canSelectTargetSchools ? effectiveSelectedSchoolIds : undefined,
+        replace_existing: assignWeek ? false : replaceExisting,
+        starts_on: assignWeek ? weekStartsOn : undefined,
+      });
+      toast.success(
+        assignWeek
+          ? `Цикл призначено на тиждень ${weekStartsOn}. Нових копій: ${result.created_menu_ids.length}, наявних: ${result.skipped_existing_school_ids.length}.`
+          : `Розсилку завершено. Створено: ${result.created_menu_ids.length}, оновлено: ${result.replaced_menu_ids.length}, пропущено: ${result.skipped_existing_school_ids.length}.`
+      );
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
+    }
   };
 
   const handleArchiveSelected = async () => {
@@ -396,6 +398,27 @@ export function WeeklyMenuAdminWorkspace() {
           onArchiveSelected={() => void handleArchiveSelected()}
         />
 
+        <section className="nf-panel">
+          <div className="nf-panel-header">
+            <h2 className="nf-panel-title">Календарні призначення</h2>
+          </div>
+          <div className="nf-panel-body space-y-2">
+            {assignments.isPending ? <LoadingSpinner label="Завантажуємо призначення…" /> : null}
+            {assignments.isError ? (
+              <RequestError error={assignments.error} onRetry={() => void assignments.refetch()} />
+            ) : null}
+            {assignments.data?.items.length === 0 ? (
+              <p>Цикли ще не призначено на календарні тижні.</p>
+            ) : null}
+            {assignments.data?.items.map((menu) => (
+              <p key={menu.id}>
+                {menu.starts_on} — {menu.ends_on} → цикл {menu.cycle_week ?? 'без номера'} ·{' '}
+                {menu.meal_type === 'lunch' ? 'Обід' : 'Сніданок'}
+              </p>
+            ))}
+          </div>
+        </section>
+
         <WeeklyMenuEditorForm
           key={editorKey}
           initialValues={editorInitialValues}
@@ -434,6 +457,30 @@ export function WeeklyMenuAdminWorkspace() {
                 <h2 className="nf-panel-title">Розсилка</h2>
               </div>
               <div className="nf-panel-body space-y-4">
+                <div className="space-y-2">
+                  <label className="nf-label" htmlFor="cycle-week-start">
+                    Призначити цей цикл на новий тиждень
+                  </label>
+                  <input
+                    id="cycle-week-start"
+                    type="date"
+                    className="nf-input"
+                    value={weekStartsOn}
+                    onChange={(event) => setWeekStartsOn(event.target.value)}
+                  />
+                  <p className="text-sm text-slate-600">
+                    Оберіть понеділок і школи нижче. Буде створено новий тиждень без кількості дітей
+                    і закриттів. Попередні тижні залишаться в історії.
+                  </p>
+                  <button
+                    type="button"
+                    className="nf-button nf-button-primary"
+                    disabled={publishDisabled || !weekStartsOn}
+                    onClick={() => void handlePublish(true)}
+                  >
+                    Призначити цикл на тиждень
+                  </button>
+                </div>
                 <label className="nf-checkbox-row">
                   <input
                     type="checkbox"

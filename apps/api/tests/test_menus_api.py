@@ -107,6 +107,98 @@ def weekly_menu_payload(
     return payload
 
 
+def test_assign_cycle_to_week_preserves_history_and_is_repeatable(seeded_client):
+    client, identities = seeded_client
+    login(client, identities.admin.username, identities.admin_password)
+    create_confirmed_dish_card(client, card_number="1.54")
+    payload = weekly_menu_payload(items=[dish_item()])
+    payload.update(starts_on="2026-09-28", ends_on="2026-10-02")
+    payload["days"][0]["date"] = "2026-09-28"
+    source = client.post("/api/v1/menus/weekly", json=payload, headers=csrf_headers(client)).json()
+    url = f"/api/v1/menus/weekly/{source['id']}/publish"
+    school_ids = [str(identities.own_school.id)]
+    old_publication = client.post(
+        url, json={"school_ids": school_ids}, headers=csrf_headers(client)
+    )
+    assert old_publication.status_code == 200, old_publication.text
+    old_copy_id = old_publication.json()["created_menu_ids"][0]
+    settings = get_settings()
+    with MongoClient(settings.mongo_uri, tz_aware=True) as mongo:
+        mongo[settings.mongo_db].weekly_menus.update_one(
+            {"_id": PydanticObjectId(old_copy_id)},
+            {"$set": {"days.0.closed_at": datetime.now(UTC)}},
+        )
+    old_copy = client.get(f"/api/v1/menus/weekly/{old_copy_id}").json()
+    assigned = client.post(
+        url,
+        json={"school_ids": school_ids, "starts_on": "2026-10-05"},
+        headers=csrf_headers(client),
+    )
+    assert assigned.status_code == 200, assigned.text
+    assigned_id = assigned.json()["created_menu_ids"][0]
+    assigned_copy = client.get(f"/api/v1/menus/weekly/{assigned_id}").json()
+    assert assigned_copy["starts_on"] == "2026-10-05"
+    assert assigned_copy["ends_on"] == "2026-10-09"
+    assert assigned_copy["days"][0]["date"] == "2026-10-05"
+    assert assigned_copy["days"][0]["closed_at"] is None
+    assert assigned_copy["days"][0]["items"][0]["servings"] == []
+    assert assigned_copy["days"][0]["items"][0]["id"] != old_copy["days"][0]["items"][0]["id"]
+    repeated = client.post(
+        url,
+        json={"school_ids": school_ids, "starts_on": "2026-10-05"},
+        headers=csrf_headers(client),
+    )
+    assert repeated.status_code == 200, repeated.text
+    assert repeated.json()["source_menu_id"] == assigned.json()["source_menu_id"]
+    assert repeated.json()["created_menu_ids"] == []
+    assert repeated.json()["skipped_existing_school_ids"] == school_ids
+    assert client.get(f"/api/v1/menus/weekly/{old_copy_id}").json() == old_copy
+    assert client.get(f"/api/v1/menus/weekly/{source['id']}").json()["starts_on"] == "2026-09-28"
+
+    current_source = client.get(f"/api/v1/menus/weekly/{source['id']}").json()
+    moved = client.patch(
+        f"/api/v1/menus/weekly/{source['id']}",
+        json={
+            "starts_on": "2026-10-05",
+            "ends_on": "2026-10-09",
+            "revision": current_source["revision"],
+        },
+        headers=csrf_headers(client),
+    )
+    assert moved.status_code == 400, moved.text
+    assert client.get(f"/api/v1/menus/weekly/{old_copy_id}").json() == old_copy
+    invalid = client.post(
+        url,
+        json={"school_ids": school_ids, "starts_on": "2026-10-06"},
+        headers=csrf_headers(client),
+    )
+    assert invalid.status_code == 422
+
+    template = client.get(f"/api/v1/menus/weekly/{current_source['cycle_template_id']}").json()
+    renamed = client.patch(
+        f"/api/v1/menus/weekly/{template['id']}",
+        json={"title": "Оновлений цикл", "revision": template["revision"]},
+        headers=csrf_headers(client),
+    )
+    assert renamed.status_code == 200, renamed.text
+    assert client.get(f"/api/v1/menus/weekly/{assigned_id}").json() == assigned_copy
+    next_week = client.post(
+        f"/api/v1/menus/weekly/{assigned.json()['source_menu_id']}/publish",
+        json={"school_ids": school_ids, "starts_on": "2026-10-12"},
+        headers=csrf_headers(client),
+    )
+    assert next_week.status_code == 200, next_week.text
+    next_copy = client.get(f"/api/v1/menus/weekly/{next_week.json()['created_menu_ids'][0]}").json()
+    assert next_copy["title"] == "Оновлений цикл · 12.10.2026"
+    assert next_copy["days"][0]["date"] == "2026-10-12"
+
+    login(client, identities.school_user.username, identities.school_user_password)
+    school_menu = client.get(f"/api/v1/menus/weekly/{assigned_id}")
+    assert school_menu.status_code == 200
+    denied = client.post(url, json={"starts_on": "2026-10-12"}, headers=csrf_headers(client))
+    assert denied.status_code == 403
+
+
 @pytest.mark.parametrize("items", [[], None], ids=["empty", "omitted"])
 def test_create_weekly_menu_requires_nonempty_items_at_api_boundary(seeded_client, items):
     client, identities = seeded_client
@@ -512,8 +604,6 @@ def test_publish_replace_existing_updates_copy_and_preserves_school_data(seeded_
 
     login(client, identities.admin.username, identities.admin_password)
     source_days = deepcopy(source["days"])
-    for index, day in enumerate(source_days):
-        day["date"] = f"2026-09-{14 + index}"
     source_days[0]["items"].append(dish_item(position=3, name="Нова страва шаблону"))
     source_days[1]["items"][0]["name"] = "Оновлена страва 2"
     source_update = client.patch(
@@ -522,11 +612,9 @@ def test_publish_replace_existing_updates_copy_and_preserves_school_data(seeded_
             "title": "Оновлене осіннє меню",
             "meal_type": "breakfast",
             "cycle_week": 3,
-            "starts_on": "2026-09-14",
-            "ends_on": "2026-09-18",
             "days": source_days,
             "notes": "Оновлені нотатки",
-            "revision": source["revision"],
+            "revision": client.get(f"/api/v1/menus/weekly/{source_id}").json()["revision"],
         },
         headers=csrf_headers(client),
     )
@@ -534,13 +622,13 @@ def test_publish_replace_existing_updates_copy_and_preserves_school_data(seeded_
     new_template_item_id = source_update.json()["days"][0]["items"][2]["id"]
 
     reloaded_source = client.get(f"/api/v1/menus/weekly/{source_id}").json()
-    assert reloaded_source["starts_on"] == "2026-09-14"
+    assert reloaded_source["starts_on"] == "2026-09-21"
     assert [day["date"] for day in reloaded_source["days"]] == [
-        "2026-09-14",
-        "2026-09-15",
-        "2026-09-16",
-        "2026-09-17",
-        "2026-09-18",
+        "2026-09-21",
+        "2026-09-22",
+        "2026-09-23",
+        "2026-09-24",
+        "2026-09-25",
     ]
 
     settings = get_settings()
@@ -598,18 +686,18 @@ def test_publish_replace_existing_updates_copy_and_preserves_school_data(seeded_
     assert replaced_copy["title"] == "Оновлене осіннє меню"
     assert replaced_copy["meal_type"] == "breakfast"
     assert replaced_copy["cycle_week"] == 3
-    assert replaced_copy["starts_on"] == "2026-09-14"
-    assert replaced_copy["ends_on"] == "2026-09-18"
+    assert replaced_copy["starts_on"] == "2026-09-21"
+    assert replaced_copy["ends_on"] == "2026-09-25"
     assert replaced_copy["notes"] == "Оновлені нотатки"
     assert replaced_copy["updated_by"] == str(identities.admin.id)
     assert replaced_copy["updated_at"] != stale_copy["updated_at"]
     assert replaced_copy["revision"] == stale_copy["revision"] + 1
     assert [day["date"] for day in replaced_copy["days"]] == [
-        "2026-09-14",
-        "2026-09-15",
-        "2026-09-16",
-        "2026-09-17",
-        "2026-09-18",
+        "2026-09-21",
+        "2026-09-22",
+        "2026-09-23",
+        "2026-09-24",
+        "2026-09-25",
     ]
     monday_items = replaced_copy["days"][0]["items"]
     assert removed_school_item_id not in {item["id"] for item in monday_items}
@@ -624,7 +712,7 @@ def test_publish_replace_existing_updates_copy_and_preserves_school_data(seeded_
 
     created_copy = client.get(f"/api/v1/menus/weekly/{result['created_menu_ids'][0]}").json()
     assert created_copy["school_id"] == other_school_id
-    assert created_copy["starts_on"] == "2026-09-14"
+    assert created_copy["starts_on"] == "2026-09-21"
     copies = client.get(f"/api/v1/menus/weekly?source_menu_id={source_id}").json()["items"]
     assert len(copies) == 2
     assert len({copy["school_id"] for copy in copies}) == 2
@@ -716,7 +804,7 @@ def test_template_update_propagates_to_existing_school_copy(seeded_client):
         json={
             "title": "Оновлене меню",
             "days": updated_days,
-            "revision": create_response.json()["revision"],
+            "revision": client.get(f"/api/v1/menus/weekly/{source_id}").json()["revision"],
         },
         headers=csrf_headers(client),
     )
@@ -754,6 +842,7 @@ def test_template_update_rejects_copy_changed_after_merge_read(seeded_client, mo
         headers=csrf_headers(client),
     ).json()["created_menu_ids"][0]
     before = client.get(f"/api/v1/menus/weekly/{copy_id}").json()
+    source = client.get(f"/api/v1/menus/weekly/{source['id']}").json()
     removed_id = before["days"][0]["items"][0]["id"]
     original_replace = menu_service._replace_weekly_menu_if_current
     injected = False

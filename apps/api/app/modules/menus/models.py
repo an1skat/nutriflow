@@ -174,6 +174,7 @@ class WeeklyMenu(Document):
     title: MenuText
     school_id: PydanticObjectId | None = None
     source_menu_id: PydanticObjectId | None = None
+    cycle_template_id: PydanticObjectId | None = None
     meal_type: MealType
     cycle_week: int | None = Field(default=None, ge=1, le=53)
     starts_on: Date | None = None
@@ -210,6 +211,22 @@ class WeeklyMenu(Document):
     class Settings:
         name = "weekly_menus"
         indexes = [
+            IndexModel(
+                [("cycle_template_id", ASCENDING), ("starts_on", ASCENDING)],
+                unique=True,
+                partialFilterExpression={"cycle_template_id": {"$type": "objectId"}},
+                name="uq_weekly_menu_cycle_week",
+            ),
+            IndexModel(
+                [("school_id", ASCENDING), ("meal_type", ASCENDING), ("starts_on", ASCENDING)],
+                unique=True,
+                partialFilterExpression={
+                    "school_id": {"$type": "objectId"},
+                    "starts_on": {"$type": "date"},
+                    "status": "published",
+                },
+                name="uq_weekly_menu_school_meal_week",
+            ),
             IndexModel(
                 [
                     ("school_id", ASCENDING),

@@ -39,6 +39,11 @@ export const detailTranslations: Record<string, string> = {
   'School user not found': 'Користувача школи не знайдено.',
   'School group not found': 'Групу школи не знайдено.',
   'Weekly menu not found': 'Тижневе меню не знайдено.',
+  'Published weekly menu dates cannot be changed. Assign the cycle to a new week instead.':
+    'Дати розповсюдженого меню змінювати не можна. Призначте цикл на новий тиждень.',
+  'Week must start on Monday': 'Тиждень має починатися з понеділка.',
+  'Daily menu date must match its calendar week':
+    'Дата дня має відповідати календарному тижню меню.',
   'Weekly menu was changed by another user':
     'Меню вже змінив інший користувач. Оновіть меню та перенесіть свої зміни.',
   'Menu access denied': 'Немає доступу до цього меню.',

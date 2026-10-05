@@ -112,6 +112,7 @@ export const weeklyMenuSchema = z.object({
   title: z.string().min(1),
   school_id: z.string().min(1).nullable(),
   source_menu_id: z.string().min(1).nullable(),
+  cycle_template_id: z.string().min(1).nullable().optional(),
   meal_type: mealTypeSchema,
   cycle_week: z.number().int().positive().max(53).nullable(),
   starts_on: z.string().min(1).nullable(),
@@ -185,6 +186,7 @@ export type WeeklyMenuListRequest = {
   school_id?: string;
   source_menu_id?: string;
   template_only?: boolean;
+  instances_only?: boolean;
   status?: WeeklyMenuStatus;
   meal_type?: MealType;
   enabled?: boolean;
@@ -244,9 +246,20 @@ export type WeeklyMenuPayload = {
 export type WeeklyMenuUpdatePayload = Partial<WeeklyMenuPayload> & { revision: number };
 
 export type PublishWeeklyMenuPayload = {
+  starts_on?: string;
   school_ids?: string[];
   replace_existing?: boolean;
 };
 
 export type CurrentWeekClosedDay = z.infer<typeof currentWeekClosedDaySchema>;
 export type CurrentWeekClosedDays = z.infer<typeof currentWeekClosedDaysSchema>;
+
+export function getDefaultWeeklyMenuId(
+  menus: Pick<WeeklyMenu, 'id' | 'starts_on' | 'ends_on'>[],
+  today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Kyiv' }).format(new Date())
+) {
+  const monday = new Date(`${today}T00:00:00Z`);
+  monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
+  const startsOn = monday.toISOString().slice(0, 10);
+  return menus.find((menu) => menu.starts_on === startsOn)?.id;
+}

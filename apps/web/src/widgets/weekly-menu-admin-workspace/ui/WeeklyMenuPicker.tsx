@@ -104,7 +104,7 @@ export function WeeklyMenuPicker({
     <section className="nf-panel">
       <div className="nf-panel-body flex flex-col gap-3 lg:flex-row lg:items-end">
         <div ref={rootRef} className="relative min-w-0 flex-1">
-          <span className="nf-label">Меню</span>
+          <span className="nf-label">Багаторазові цикли</span>
           <button
             ref={triggerRef}
             type="button"

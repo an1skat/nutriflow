@@ -18,7 +18,7 @@ import {
 } from '@/entities/weekly-menu/api/DailyMenuQueries';
 import { useWeeklyMenu, useWeeklyMenus } from '@/entities/weekly-menu/api/WeeklyMenuQueries';
 import type { DailyMenu, DailyMenuItem, WeeklyMenu } from '@/entities/weekly-menu/model/WeeklyMenu';
-import { WEEKDAY_LABELS } from '@/entities/weekly-menu/model/WeeklyMenu';
+import { WEEKDAY_LABELS, getDefaultWeeklyMenuId } from '@/entities/weekly-menu/model/WeeklyMenu';
 import {
   clearDailyMenuDraft,
   loadDailyMenuDraft,
@@ -82,7 +82,8 @@ export function DailyMenuSchoolWorkspace({ admin }: { admin?: AdminDailyMenuCont
   const regenerate = useRegenerateDailyRequirements();
   const [adminStale, setAdminStale] = useState(false);
   const [selectedMenuId, setSelectedMenuId] = useState<string | null>(null);
-  const effectiveMenuId = admin?.menuId ?? selectedMenuId ?? menus.data?.items[0]?.id ?? '';
+  const effectiveMenuId =
+    admin?.menuId ?? selectedMenuId ?? getDefaultWeeklyMenuId(menus.data?.items ?? []) ?? '';
   const selectedMenu = useWeeklyMenu(effectiveMenuId);
   const updateWeeklyMenu = useUpdateWeeklyMenu(effectiveMenuId);
   const closeWeeklyMenuDay = useCloseWeeklyMenuDay(effectiveMenuId);
@@ -768,42 +769,49 @@ export function DailyMenuSchoolWorkspace({ admin }: { admin?: AdminDailyMenuCont
         </section>
       ) : null}
 
-      {menus.data?.items.length === 0 ? (
+      {!menus.isPending && !menus.isError && !effectiveMenuId ? (
         <section className="nf-panel">
           <div className="nf-panel-body">
-            <div className="nf-empty">Денне меню з’явиться після публікації тижневого меню.</div>
+            <div className="nf-empty">На цей тиждень меню не призначено.</div>
+          </div>
+        </section>
+      ) : null}
+
+      {menus.data?.items.length ? (
+        <section className="nf-panel">
+          <div className="nf-panel-body flex flex-wrap items-end justify-between gap-4">
+            <div className="min-w-60 flex-1">
+              <label htmlFor="daily-menu-source" className="nf-label">
+                Тижневе меню
+              </label>
+              <select
+                id="daily-menu-source"
+                className="nf-input max-w-xl"
+                value={effectiveMenuId}
+                onChange={(event) => void changeMenu(event.target.value)}
+              >
+                <option value="" disabled>
+                  Оберіть тижневе меню
+                </option>
+                {menus.data?.items.map((menu) => (
+                  <option key={menu.id} value={menu.id}>
+                    {menu.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {selectedMenu.data ? (
+              <div className="text-xs text-slate-600">
+                {selectedMenu.data.meal_type === 'lunch' ? 'Обід' : 'Сніданок'}
+                {selectedMenu.data.cycle_week ? ` · цикл ${selectedMenu.data.cycle_week}` : ''}
+              </div>
+            ) : null}
           </div>
         </section>
       ) : null}
 
       {selectedMenu.data && days.length ? (
         <div className="space-y-5">
-          <section className="nf-panel">
-            <div className="nf-panel-body flex flex-wrap items-end justify-between gap-4">
-              <div className="min-w-60 flex-1">
-                <label htmlFor="daily-menu-source" className="nf-label">
-                  Тижневе меню
-                </label>
-                <select
-                  id="daily-menu-source"
-                  className="nf-input max-w-xl"
-                  value={effectiveMenuId}
-                  onChange={(event) => void changeMenu(event.target.value)}
-                >
-                  {menus.data?.items.map((menu) => (
-                    <option key={menu.id} value={menu.id}>
-                      {menu.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="text-xs text-slate-600">
-                {selectedMenu.data.meal_type === 'lunch' ? 'Обід' : 'Сніданок'}
-                {selectedMenu.data.cycle_week ? ` · цикл ${selectedMenu.data.cycle_week}` : ''}
-              </div>
-            </div>
-          </section>
-
           <div className="nf-tabs overflow-x-auto" role="tablist" aria-label="Дні тижневого меню">
             {days.map((day) => {
               const isActive = day.weekday === activeDay?.weekday;

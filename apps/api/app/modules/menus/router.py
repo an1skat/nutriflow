@@ -302,6 +302,7 @@ async def list_weekly_menus(
     school_id: PydanticObjectId | None = None,
     source_menu_id: PydanticObjectId | None = None,
     template_only: bool = False,
+    instances_only: bool = False,
     status_filter: Annotated[
         WeeklyMenuStatus | None,
         Query(alias="status"),
@@ -316,6 +317,7 @@ async def list_weekly_menus(
             school_id=school_id,
             source_menu_id=source_menu_id,
             template_only=template_only,
+            instances_only=instances_only,
             status=status_filter,
             meal_type=meal_type,
         )
@@ -342,6 +344,8 @@ async def create_weekly_menu(
 ) -> WeeklyMenuResponse:
     try:
         menu = await create_weekly_menu_record(payload, current_user=admin)
+    except MenuVersionConflictError as exc:
+        raise conflict(exc) from exc
     except MenuAccessDeniedError as exc:
         raise forbidden(exc) from exc
     except MenuValidationError as exc:
