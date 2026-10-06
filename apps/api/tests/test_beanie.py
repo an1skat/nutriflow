@@ -45,6 +45,9 @@ async def test_init_odm_drops_stale_indexes_before_initializing_beanie(
     async def fake_drop_stale_menu_import_preview_indexes() -> None:
         calls.append("drop")
 
+    async def fake_upgrade_school_copy_index() -> None:
+        calls.append("upgrade")
+
     async def fake_init_beanie(*, database, document_models) -> None:
         calls.append("init")
 
@@ -52,10 +55,11 @@ async def test_init_odm_drops_stale_indexes_before_initializing_beanie(
         "app.db.beanie.drop_stale_menu_import_preview_indexes",
         fake_drop_stale_menu_import_preview_indexes,
     )
+    monkeypatch.setattr("app.db.beanie.upgrade_school_copy_index", fake_upgrade_school_copy_index)
     monkeypatch.setattr("app.db.beanie.init_beanie", fake_init_beanie)
     monkeypatch.setattr("app.db.beanie.get_database", lambda: object())
     monkeypatch.setattr("app.db.beanie.get_document_models", lambda: [])
 
     await init_odm()
 
-    assert calls == ["drop", "init"]
+    assert calls == ["drop", "upgrade", "init"]

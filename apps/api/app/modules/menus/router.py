@@ -20,6 +20,7 @@ from app.modules.identity.models import AdminPermission, User
 from app.modules.menus.models import MealType, MenuChangeRequestStatus, Weekday, WeeklyMenuStatus
 from app.modules.menus.notifications import send_menu_change_request_notification
 from app.modules.menus.schemas import (
+    CancelAssignmentRequest,
     CloseDueWeeklyMenuDaysResponse,
     CommitWeeklyMenuImportRequest,
     CreateWeeklyMenuRequest,
@@ -39,6 +40,7 @@ from app.modules.menus.schemas import (
     WeeklyMenuResponse,
 )
 from app.modules.menus.service import (
+    AssignmentConflictError,
     MenuAccessDeniedError,
     MenuImportError,
     MenuNotFoundError,
@@ -592,6 +594,8 @@ async def revoke_weekly_menu(
 ) -> WeeklyMenuResponse:
     try:
         menu = await revoke_weekly_menu_record(menu_id, admin)
+    except MenuVersionConflictError as exc:
+        raise conflict(exc) from exc
     except MenuNotFoundError as exc:
         raise not_found(exc) from exc
     except MenuAccessDeniedError as exc:
@@ -599,6 +603,26 @@ async def revoke_weekly_menu(
     except MenuValidationError as exc:
         raise bad_request(exc) from exc
 
+    return WeeklyMenuResponse.from_menu(menu)
+
+
+@router.post("/weekly/{menu_id}/cancel-assignment", response_model=WeeklyMenuResponse)
+async def cancel_assignment(
+    menu_id: PydanticObjectId,
+    payload: CancelAssignmentRequest,
+    admin: AdminUser,
+    _csrf: CsrfProtection,
+) -> WeeklyMenuResponse:
+    try:
+        menu = await revoke_weekly_menu_record(menu_id, admin, payload.revision)
+    except MenuNotFoundError as exc:
+        raise not_found(exc) from exc
+    except MenuAccessDeniedError as exc:
+        raise forbidden(exc) from exc
+    except MenuVersionConflictError as exc:
+        raise conflict(exc) from exc
+    except MenuValidationError as exc:
+        raise bad_request(exc) from exc
     return WeeklyMenuResponse.from_menu(menu)
 
 
@@ -701,6 +725,15 @@ async def publish_weekly_menu(
 ) -> PublishWeeklyMenuResponse:
     try:
         return await publish_weekly_menu_record(menu_id, payload, admin)
+    except AssignmentConflictError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "assignment_conflict",
+                "message": str(exc),
+                "conflicts": exc.conflicts,
+            },
+        ) from exc
     except MenuNotFoundError as exc:
         raise not_found(exc) from exc
     except MenuAccessDeniedError as exc:

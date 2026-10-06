@@ -187,12 +187,21 @@ export function getApiErrorMessage(
 
   const data = error.response.data as
     | {
-        detail?: string | Array<{ msg?: string }>;
+        detail?: string | Array<{ msg?: string }> | { message?: string };
       }
     | undefined;
 
   if (typeof data?.detail === 'string') {
     return translateApiDetail(data.detail);
+  }
+
+  if (
+    data?.detail &&
+    !Array.isArray(data.detail) &&
+    typeof data.detail === 'object' &&
+    typeof data.detail.message === 'string'
+  ) {
+    return translateApiDetail(data.detail.message);
   }
 
   if (Array.isArray(data?.detail)) {

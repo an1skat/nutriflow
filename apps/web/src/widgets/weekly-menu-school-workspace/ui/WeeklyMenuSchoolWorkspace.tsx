@@ -33,8 +33,9 @@ export function WeeklyMenuSchoolWorkspace() {
     status: 'archived',
   });
   const [selectedMenuId, setSelectedMenuId] = useState<string | null>(null);
-  const effectiveSelectedMenuId =
-    selectedMenuId ?? getDefaultWeeklyMenuId(menus.data?.items ?? []) ?? null;
+  const effectiveSelectedMenuId = menus.data?.items.some((menu) => menu.id === selectedMenuId)
+    ? selectedMenuId
+    : (getDefaultWeeklyMenuId(menus.data?.items ?? []) ?? null);
   const selectedMenu = useWeeklyMenu(effectiveSelectedMenuId ?? '');
   const archiveSelectedMenu = useArchiveSchoolWeeklyMenu(selectedMenu.data?.id ?? '');
 

@@ -768,7 +768,7 @@ def test_weekly_menu_source_school_index_is_unique_and_partial(seeded_client):
     mongo_client = MongoClient(settings.mongo_uri, tz_aware=True)
     try:
         index = mongo_client[settings.mongo_db]["weekly_menus"].index_information()[
-            "uq_weekly_menu_source_school"
+            "uq_weekly_menu_published_source_school"
         ]
     finally:
         mongo_client.close()
@@ -777,6 +777,7 @@ def test_weekly_menu_source_school_index_is_unique_and_partial(seeded_client):
     assert index["partialFilterExpression"] == {
         "source_menu_id": {"$type": "objectId"},
         "school_id": {"$type": "objectId"},
+        "status": "published",
     }
 
 

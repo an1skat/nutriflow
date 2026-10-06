@@ -33,6 +33,7 @@ from app.modules.menus.day_closure import (
     reopen_weekly_menu_day as reopen_weekly_menu_day,
 )
 from app.modules.menus.errors import (
+    AssignmentConflictError,
     MenuAccessDeniedError,
     MenuImportError,
     MenuNotFoundError,
@@ -62,6 +63,7 @@ from app.modules.menus.reference_resolver import (
     resolve_menu_item_references,
 )
 from app.modules.menus.schemas import (
+    AssignmentExpectation,
     CreateWeeklyMenuRequest,
     DailyMenuItemPayload,
     DailyMenuPayload,
@@ -503,27 +505,66 @@ async def delete_weekly_menu(
     await menu.delete()
 
 
+async def _revoke_copy(menu: WeeklyMenu, actor: User, reason: str, session: Any) -> WeeklyMenu:
+    now = datetime.now(UTC)
+    result = await WeeklyMenu.get_pymongo_collection().find_one_and_update(
+        {
+            "_id": menu.id,
+            "status": menu.status.value,
+            **(
+                {"$or": [{"revision": 1}, {"revision": {"$exists": False}}]}
+                if menu.revision == 1
+                else {"revision": menu.revision}
+            ),
+        },
+        {
+            "$set": {
+                "status": WeeklyMenuStatus.REVOKED.value,
+                "revoked_at": now,
+                "revoked_by": actor.id,
+                "revoke_reason": reason,
+                "updated_by": actor.id,
+                "updated_at": now,
+                "revision": menu.revision + 1,
+            },
+        },
+        return_document=ReturnDocument.AFTER,
+        session=session,
+    )
+    if result is None:
+        raise MenuVersionConflictError("Weekly menu was changed by another user")
+    return WeeklyMenu.model_validate(result)
+
+
 async def revoke_weekly_menu(
     menu_id: PydanticObjectId,
     current_user: User,
+    expected_revision: int | None = None,
 ) -> WeeklyMenu:
     await _ensure_menu_permission(current_user)
-    menu = await get_weekly_menu(menu_id, current_user)
 
-    if menu.school_id is None:
-        raise MenuValidationError("Only school menu copies can be revoked")
-    if menu.status == WeeklyMenuStatus.REVOKED:
-        return menu
+    async def cancel(session: Any) -> WeeklyMenu:
+        menu = await WeeklyMenu.get(menu_id, session=session)
+        if menu is None:
+            raise MenuNotFoundError("Weekly menu not found")
+        await _authorize_menu_access(menu, current_user)
+        if menu.school_id is None:
+            raise MenuValidationError("Only school menu copies can be revoked")
+        if menu.status == WeeklyMenuStatus.REVOKED:
+            return menu
+        if expected_revision is not None:
+            if menu.revision != expected_revision:
+                raise MenuVersionConflictError("Weekly menu was changed by another user")
+            if (
+                menu.status != WeeklyMenuStatus.PUBLISHED
+                or menu.source_menu_id is None
+                or menu.starts_on is None
+            ):
+                raise MenuValidationError("Only published school assignments can be cancelled")
+        return await _revoke_copy(menu, current_user, "manual", session)
 
-    now = datetime.now(UTC)
-    menu.status = WeeklyMenuStatus.REVOKED
-    menu.revoked_at = now
-    menu.revoked_by = current_user.id
-    menu.revoke_reason = "manual"
-    menu.updated_by = current_user.id
-    menu.updated_at = now
-    await menu.save()
-    return menu
+    async with get_mongo_client().start_session() as session:
+        return await session.with_transaction(cancel)
 
 
 async def archive_school_weekly_menu(
@@ -879,7 +920,25 @@ def _build_school_copy(source: WeeklyMenu, school: School, actor: User) -> Weekl
         starts_on=source.starts_on,
         ends_on=source.ends_on,
         status=WeeklyMenuStatus.PUBLISHED,
-        days=deepcopy(source.days),
+        days=[
+            DailyMenu(
+                weekday=day.weekday,
+                date=day.date,
+                notes=day.notes,
+                items=[
+                    item.model_copy(
+                        deep=True,
+                        update={
+                            "servings": [],
+                            "is_school_added": False,
+                            "is_school_customized": False,
+                        },
+                    )
+                    for item in day.items
+                ],
+            )
+            for day in source.days
+        ],
         notes=source.notes,
         source_file_name=source.source_file_name,
         source_sheet_name=source.source_sheet_name,
@@ -896,10 +955,14 @@ async def _assign_cycle_to_week(
     starts_on: Date,
     schools: list[School],
     actor: User,
+    *,
+    replace_existing: bool = False,
+    expected_conflicts: list[AssignmentExpectation] | None = None,
 ) -> PublishWeeklyMenuResponse:
     school_ids = [school.id for school in schools if school.id is not None]
 
     async def assign(session: Any) -> PublishWeeklyMenuResponse:
+        target_schools = await _get_publish_target_schools(school_ids, actor, session=session)
         template = await WeeklyMenu.get(template_id, session=session)
         if template is None:
             raise MenuNotFoundError("Weekly menu not found")
@@ -964,32 +1027,65 @@ async def _assign_cycle_to_week(
                 "school_id": {"$in": school_ids},
                 "meal_type": source.meal_type.value,
                 "starts_on": starts_on,
+                "status": WeeklyMenuStatus.PUBLISHED.value,
             },
             session=session,
         ).to_list()
-        if any(copy.source_menu_id != source.id for copy in occupied):
-            raise MenuVersionConflictError(
-                "На цей тиждень школі вже призначено інше меню. Заміна не дозволена."
-            )
-        existing = await WeeklyMenu.find(
-            {"source_menu_id": source.id, "school_id": {"$in": school_ids}},
-            session=session,
-        ).to_list()
-        existing_school_ids = {copy.school_id for copy in existing}
+        conflicts = [copy for copy in occupied if copy.source_menu_id != source.id]
+        details = [
+            {
+                "school_id": str(copy.school_id),
+                "menu_id": str(copy.id),
+                "revision": copy.revision,
+                "existing_title": copy.title,
+                "source_menu_id": str(copy.source_menu_id) if copy.source_menu_id else None,
+                "requested_title": source.title,
+            }
+            for copy in conflicts
+        ]
+        if conflicts and not replace_existing:
+            raise AssignmentConflictError(details)
+        if replace_existing:
+            expected = {
+                (item.school_id, item.menu_id, item.revision) for item in expected_conflicts or []
+            }
+            actual = {(copy.school_id, copy.id, copy.revision) for copy in conflicts}
+            # A disappeared conflict is safe; a new/edited assignment needs fresh confirmation.
+            if not actual.issubset(expected):
+                raise AssignmentConflictError(details)
+        existing_school_ids = {
+            copy.school_id for copy in occupied if copy.source_menu_id == source.id
+        }
         copies = [
             _build_school_copy(source, school, actor)
-            for school in schools
+            for school in target_schools
             if school.id not in existing_school_ids
         ]
+        for copy in conflicts:
+            await _authorize_menu_access(copy, actor)
+            await _revoke_copy(copy, actor, "replaced", session)
         if is_new:
             await source.insert(session=session)
         if copies:
             await WeeklyMenu.insert_many(copies, session=session)
+        active = await WeeklyMenu.find(
+            {
+                "school_id": {"$in": school_ids},
+                "meal_type": source.meal_type.value,
+                "starts_on": starts_on,
+                "status": WeeklyMenuStatus.PUBLISHED.value,
+            },
+            session=session,
+        ).to_list()
+        if len(active) != len(school_ids) or any(
+            copy.source_menu_id != source.id for copy in active
+        ):
+            raise MenuVersionConflictError("Assignment postconditions failed")
         return PublishWeeklyMenuResponse(
             source_menu_id=source.id,
             target_school_ids=school_ids,
             created_menu_ids=[copy.id for copy in copies],
-            replaced_menu_ids=[],
+            replaced_menu_ids=[copy.id for copy in conflicts],
             skipped_existing_school_ids=[sid for sid in school_ids if sid in existing_school_ids],
         )
 
@@ -1022,7 +1118,14 @@ async def publish_weekly_menu(
 
     target_schools = await _get_publish_target_schools(data.school_ids, admin)
     if data.starts_on is not None:
-        return await _assign_cycle_to_week(source.id, data.starts_on, target_schools, admin)
+        return await _assign_cycle_to_week(
+            source.id,
+            data.starts_on,
+            target_schools,
+            admin,
+            replace_existing=data.replace_existing,
+            expected_conflicts=data.expected_conflicts,
+        )
     _validate_calendar_dates(source)
     source_revision = source.revision
     try:
@@ -1516,6 +1619,8 @@ async def _get_active_school_for_user(
 async def _get_publish_target_schools(
     school_ids: list[PydanticObjectId] | None,
     current_user: User,
+    *,
+    session: Any = None,
 ) -> list[School]:
     if school_ids is None:
         if current_user.role == UserRole.ADMIN:
@@ -1531,7 +1636,7 @@ async def _get_publish_target_schools(
         return await School.find(School.is_active == True).sort("name").to_list()  # noqa: E712
 
     unique_school_ids = list(dict.fromkeys(school_ids))
-    schools = await School.find({"_id": {"$in": unique_school_ids}}).to_list()
+    schools = await School.find({"_id": {"$in": unique_school_ids}}, session=session).to_list()
     schools_by_id = {school.id: school for school in schools}
 
     ordered_schools: list[School] = []

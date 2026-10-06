@@ -388,9 +388,20 @@ class MenuChangeRequestSchoolOption(BaseModel):
     name: str
 
 
+class AssignmentExpectation(BaseModel):
+    school_id: PydanticObjectId
+    menu_id: PydanticObjectId
+    revision: int = Field(ge=1)
+
+
+class CancelAssignmentRequest(BaseModel):
+    revision: int = Field(ge=1)
+
+
 class PublishWeeklyMenuRequest(BaseModel):
     school_ids: list[PydanticObjectId] | None = None
     replace_existing: bool = False
+    expected_conflicts: list[AssignmentExpectation] | None = None
     starts_on: Date | None = None
 
     @field_validator("starts_on")

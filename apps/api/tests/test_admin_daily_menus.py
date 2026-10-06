@@ -1,5 +1,5 @@
 from copy import deepcopy
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from bson import ObjectId
@@ -295,6 +295,11 @@ def test_zero_children_stale_semantics(daily_menu):
     virgin = db.weekly_menus.find_one({"_id": ObjectId(menu["id"])})
     virgin["_id"] = ObjectId()
     virgin["source_menu_id"] = ObjectId()
+    # Keep the independent zero-children case in a different published school/week slot.
+    virgin["starts_on"] += timedelta(days=7)
+    virgin["ends_on"] += timedelta(days=7)
+    for day in virgin["days"]:
+        day["date"] += timedelta(days=7)
     virgin["days"][0]["items"][0]["servings"][0]["children_count"] = 0
     virgin["days"][0]["requirements_generated_hash"] = None
     virgin["days"][0]["closed_at"] = None

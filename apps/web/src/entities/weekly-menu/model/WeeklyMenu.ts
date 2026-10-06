@@ -245,10 +245,26 @@ export type WeeklyMenuPayload = {
 
 export type WeeklyMenuUpdatePayload = Partial<WeeklyMenuPayload> & { revision: number };
 
+export const assignmentConflictSchema = z.object({
+  code: z.literal('assignment_conflict'),
+  message: z.string(),
+  conflicts: z.array(
+    z.object({
+      school_id: z.string(),
+      menu_id: z.string(),
+      revision: z.number().int().positive(),
+      existing_title: z.string(),
+      source_menu_id: z.string().nullable(),
+      requested_title: z.string(),
+    })
+  ),
+});
+
 export type PublishWeeklyMenuPayload = {
   starts_on?: string;
   school_ids?: string[];
   replace_existing?: boolean;
+  expected_conflicts?: { school_id: string; menu_id: string; revision: number }[];
 };
 
 export type CurrentWeekClosedDay = z.infer<typeof currentWeekClosedDaySchema>;

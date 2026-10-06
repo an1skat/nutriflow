@@ -331,8 +331,12 @@ def test_different_cycle_conflicts_and_rolls_back_all_schools(seeded_client, cyc
     conflicting = publish(
         client, other, [str(identities.other_school.id), school], starts_on="2026-10-05"
     )
+    if status != "published":
+        assert conflicting.status_code == 200, conflicting.text
+        assert len(conflicting.json()["created_menu_ids"]) == 2
+        return
     assert conflicting.status_code == 409, conflicting.text
-    assert "Заміна не дозволена" in conflicting.json()["detail"]
+    assert conflicting.json()["detail"]["code"] == "assignment_conflict"
     settings = get_settings()
     with MongoClient(settings.mongo_uri) as mongo:
         db = mongo[settings.mongo_db]

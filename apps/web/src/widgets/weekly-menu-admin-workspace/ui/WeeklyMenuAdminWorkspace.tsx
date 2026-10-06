@@ -5,6 +5,7 @@ import { startTransition, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 
 import { useQuery } from '@tanstack/react-query';
+import axios from 'axios';
 import { toast } from 'sonner';
 
 import { useCommunities } from '@/entities/community/api/CommunityQueries';
@@ -12,10 +13,15 @@ import { menuRequirementCommunitiesQueryOptions } from '@/entities/menu-requirem
 import { schoolsQueryOptions } from '@/entities/school/api/SchoolQueries';
 import { useCurrentUser } from '@/entities/session/api/SessionQueries';
 import { useWeeklyMenus } from '@/entities/weekly-menu/api/WeeklyMenuQueries';
-import type { WeeklyMenu } from '@/entities/weekly-menu/model/WeeklyMenu';
+import {
+  type PublishWeeklyMenuPayload,
+  type WeeklyMenu,
+  assignmentConflictSchema,
+} from '@/entities/weekly-menu/model/WeeklyMenu';
 import { hasPermission } from '@/features/access/model/AccessPolicy';
 import {
   useArchiveWeeklyMenu,
+  useCancelAssignment,
   useCreateWeeklyMenu,
   usePublishWeeklyMenu,
   useRevokeWeeklyMenus,
@@ -49,7 +55,10 @@ export function WeeklyMenuAdminWorkspace() {
     template_only: true,
   });
   const createWeeklyMenu = useCreateWeeklyMenu();
+  const cancelAssignment = useCancelAssignment();
   const assignments = useWeeklyMenus({ offset: 0, limit: 100, instances_only: true });
+  const [assignmentBusy, setAssignmentBusy] = useState(false);
+  const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
   const [selectedMenuId, setSelectedMenuId] = useState<string | null>(null);
   const [isCreatingNewMenu, setIsCreatingNewMenu] = useState(false);
   const [newMenuDraftChecked, setNewMenuDraftChecked] = useState(false);
@@ -113,14 +122,14 @@ export function WeeklyMenuAdminWorkspace() {
   const publishedMenuCopies = useWeeklyMenus({
     offset: 0,
     limit: 100,
-    source_menu_id: selectedMenu?.id,
+    source_menu_id: selectedInstanceId ?? selectedMenu?.id,
     status: 'published',
     enabled: Boolean(selectedMenu),
   });
   const archivedMenuCopies = useWeeklyMenus({
     offset: 0,
     limit: 100,
-    source_menu_id: selectedMenu?.id,
+    source_menu_id: selectedInstanceId ?? selectedMenu?.id,
     status: 'archived',
     enabled: Boolean(selectedMenu),
   });
@@ -219,6 +228,7 @@ export function WeeklyMenuAdminWorkspace() {
   const savePending = createWeeklyMenu.isPending || updateWeeklyMenu.isPending;
 
   const publishDisabled =
+    assignmentBusy ||
     !selectedMenu ||
     publishWeeklyMenu.isPending ||
     (canSelectTargetSchools && effectiveSelectedSchoolIds.length === 0) ||
@@ -248,6 +258,7 @@ export function WeeklyMenuAdminWorkspace() {
     const createdMenu = await createWeeklyMenu.mutateAsync(payload);
     setMenuOverride(createdMenu);
     setIsCreatingNewMenu(false);
+    setSelectedInstanceId(null);
     setSelectedMenuId(createdMenu.id);
     toast.success('Тижневе меню створено.');
     return true;
@@ -275,25 +286,91 @@ export function WeeklyMenuAdminWorkspace() {
 
     setIsCreatingNewMenu(false);
     setMenuOverride(firstMenu);
+    setSelectedInstanceId(null);
     setSelectedMenuId(firstMenu.id);
   };
 
   const handlePublish = async (assignWeek = false) => {
-    if (!selectedMenu) {
-      return;
-    }
-
+    if (!selectedMenu || assignmentBusy) return;
+    const payload: PublishWeeklyMenuPayload = {
+      school_ids: canSelectTargetSchools ? effectiveSelectedSchoolIds : undefined,
+      replace_existing: assignWeek ? false : replaceExisting,
+      starts_on: assignWeek ? weekStartsOn : undefined,
+    };
+    setAssignmentBusy(true);
     try {
-      const result = await publishWeeklyMenu.mutateAsync({
-        school_ids: canSelectTargetSchools ? effectiveSelectedSchoolIds : undefined,
-        replace_existing: assignWeek ? false : replaceExisting,
-        starts_on: assignWeek ? weekStartsOn : undefined,
-      });
+      let result;
+      try {
+        result = await publishWeeklyMenu.mutateAsync(payload);
+      } catch (error) {
+        const parsed = assignmentConflictSchema.safeParse(
+          axios.isAxiosError(error) && error.response?.status === 409
+            ? error.response.data?.detail
+            : undefined
+        );
+        if (!assignWeek || !parsed.success) throw error;
+        const conflicts = parsed.data.conflicts;
+        const confirmed = await confirm({
+          title: 'На цей тиждень уже призначено інше меню',
+          description: (
+            <div className="space-y-2">
+              <p>
+                Для частини вибраних закладів на цей тиждень уже є призначене меню. Під час заміни
+                поточне призначення буде відкликано, а нове створено окремо. Історичні дані не
+                видаляються.
+              </p>
+              {conflicts.map((item) => (
+                <div key={item.menu_id}>
+                  <p>{schoolById.get(item.school_id)?.name ?? item.school_id}</p>
+                  <p>Було: {item.existing_title}</p>
+                  <p>Буде: {item.requested_title}</p>
+                </div>
+              ))}
+            </div>
+          ),
+          confirmLabel: 'Замінити призначення',
+          cancelLabel: 'Скасувати',
+          variant: 'danger',
+        });
+        if (!confirmed) return;
+        result = await publishWeeklyMenu.mutateAsync({
+          ...payload,
+          replace_existing: true,
+          expected_conflicts: conflicts.map(({ school_id, menu_id, revision }) => ({
+            school_id,
+            menu_id,
+            revision,
+          })),
+        });
+      }
+      if (assignWeek) {
+        setSelectedInstanceId(result.source_menu_id);
+        setSelectedRevokeCopyIds([]);
+      }
       toast.success(
         assignWeek
-          ? `Цикл призначено на тиждень ${weekStartsOn}. Нових копій: ${result.created_menu_ids.length}, наявних: ${result.skipped_existing_school_ids.length}.`
+          ? `Цикл призначено на тиждень ${payload.starts_on}. Нових копій: ${result.created_menu_ids.length}, замінено: ${result.replaced_menu_ids.length}, наявних: ${result.skipped_existing_school_ids.length}.`
           : `Розсилку завершено. Створено: ${result.created_menu_ids.length}, оновлено: ${result.replaced_menu_ids.length}, пропущено: ${result.skipped_existing_school_ids.length}.`
       );
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
+    } finally {
+      setAssignmentBusy(false);
+    }
+  };
+
+  const handleCancelAssignment = async (copy: WeeklyMenu) => {
+    const confirmed = await confirm({
+      title: 'Скасувати призначення?',
+      description: `Меню «${copy.title}» більше не буде активним для цього закладу на цьому тижні. Історичні дані та сформовані вимоги залишаться збереженими.`,
+      confirmLabel: 'Скасувати призначення',
+      cancelLabel: 'Назад',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+    try {
+      await cancelAssignment.mutateAsync({ id: copy.id, revision: copy.revision });
+      toast.success('Призначення скасовано. Історичні дані збережено.');
     } catch (error) {
       toast.error(getApiErrorMessage(error));
     }
@@ -321,6 +398,7 @@ export function WeeklyMenuAdminWorkspace() {
     try {
       await archiveWeeklyMenu.mutateAsync();
       setMenuOverride((currentMenu) => (currentMenu?.id === archivedMenuId ? null : currentMenu));
+      setSelectedInstanceId(null);
       setSelectedMenuId(nextMenu?.id ?? null);
       setIsCreatingNewMenu(false);
       toast.success('Тижневе меню перенесено в архів і відкликано у школах.');
@@ -387,10 +465,12 @@ export function WeeklyMenuAdminWorkspace() {
           onRetry={() => void menus.refetch()}
           onSelect={(menuId) => {
             setIsCreatingNewMenu(false);
+            setSelectedInstanceId(null);
             setSelectedMenuId(menuId);
           }}
           onCreateNew={() => {
             setIsCreatingNewMenu(true);
+            setSelectedInstanceId(null);
             setSelectedMenuId(null);
             setMenuOverride(null);
             setNewMenuRevision((value) => value + 1);
@@ -411,10 +491,22 @@ export function WeeklyMenuAdminWorkspace() {
               <p>Цикли ще не призначено на календарні тижні.</p>
             ) : null}
             {assignments.data?.items.map((menu) => (
-              <p key={menu.id}>
-                {menu.starts_on} — {menu.ends_on} → цикл {menu.cycle_week ?? 'без номера'} ·{' '}
-                {menu.meal_type === 'lunch' ? 'Обід' : 'Сніданок'}
-              </p>
+              <button
+                key={menu.id}
+                type="button"
+                className="nf-button nf-button-secondary"
+                aria-pressed={selectedInstanceId === menu.id}
+                onClick={() => {
+                  setSelectedInstanceId(menu.id);
+                  setSelectedMenuId(menu.cycle_template_id ?? null);
+                  setIsCreatingNewMenu(false);
+                  setSelectedRevokeCopyIds([]);
+                }}
+              >
+                {menu.title} · {menu.starts_on} — {menu.ends_on} → цикл{' '}
+                {menu.cycle_week ?? 'без номера'} ·{' '}
+                {menu.meal_type === 'lunch' ? 'Обід' : 'Сніданок'} · Переглянути призначення
+              </button>
             ))}
           </div>
         </section>
@@ -452,14 +544,16 @@ export function WeeklyMenuAdminWorkspace() {
 
         {selectedMenu ? (
           <>
-            <section className="nf-panel">
+            <section className="nf-panel" aria-labelledby="calendar-assignment-title">
               <div className="nf-panel-header">
-                <h2 className="nf-panel-title">Розсилка</h2>
+                <h2 id="calendar-assignment-title" className="nf-panel-title">
+                  Призначити цей цикл на новий тиждень
+                </h2>
               </div>
               <div className="nf-panel-body space-y-4">
                 <div className="space-y-2">
                   <label className="nf-label" htmlFor="cycle-week-start">
-                    Призначити цей цикл на новий тиждень
+                    Початок тижня (понеділок)
                   </label>
                   <input
                     id="cycle-week-start"
@@ -470,27 +564,10 @@ export function WeeklyMenuAdminWorkspace() {
                   />
                   <p className="text-sm text-slate-600">
                     Оберіть понеділок і школи нижче. Буде створено новий тиждень без кількості дітей
-                    і закриттів. Попередні тижні залишаться в історії.
+                    і закриттів. Попередні тижні залишаться в історії. Заміна вже призначеного меню
+                    потребує окремого підтвердження.
                   </p>
-                  <button
-                    type="button"
-                    className="nf-button nf-button-primary"
-                    disabled={publishDisabled || !weekStartsOn}
-                    onClick={() => void handlePublish(true)}
-                  >
-                    Призначити цикл на тиждень
-                  </button>
                 </div>
-                <label className="nf-checkbox-row">
-                  <input
-                    type="checkbox"
-                    checked={replaceExisting}
-                    onChange={(event) => setReplaceExisting(event.target.checked)}
-                  />
-                  <span className="text-sm text-slate-700">
-                    Оновлювати вже розіслані копії меню
-                  </span>
-                </label>
 
                 {canSelectTargetSchools ? (
                   <div className="space-y-4">
@@ -576,6 +653,39 @@ export function WeeklyMenuAdminWorkspace() {
 
                 <button
                   type="button"
+                  className="nf-button nf-button-primary"
+                  disabled={publishDisabled || !weekStartsOn}
+                  onClick={() => void handlePublish(true)}
+                >
+                  Призначити цикл на тиждень
+                </button>
+              </div>
+            </section>
+
+            <section className="nf-panel" aria-labelledby="general-distribution-title">
+              <div className="nf-panel-header">
+                <h2 id="general-distribution-title" className="nf-panel-title">
+                  Звичайна розсилка
+                </h2>
+              </div>
+              <div className="nf-panel-body space-y-4">
+                <p className="text-sm text-slate-600">
+                  Розсилка цього меню для вибраних вище закладів. Дата календарного призначення не
+                  застосовується до звичайної розсилки.
+                </p>
+                <label className="nf-checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={replaceExisting}
+                    onChange={(event) => setReplaceExisting(event.target.checked)}
+                  />
+                  <span className="text-sm text-slate-700">
+                    Оновлювати вже створені копії під час звичайної розсилки
+                  </span>
+                </label>
+
+                <button
+                  type="button"
                   disabled={publishDisabled}
                   className="nf-button nf-button-primary w-full sm:w-auto"
                   onClick={() => void handlePublish()}
@@ -591,7 +701,7 @@ export function WeeklyMenuAdminWorkspace() {
 
             <section className="nf-panel">
               <div className="nf-panel-header">
-                <h2 className="nf-panel-title">Відкликання</h2>
+                <h2 className="nf-panel-title">Призначення та відкликання</h2>
               </div>
               <div className="nf-panel-body space-y-4">
                 <div className="flex flex-wrap gap-2">
@@ -643,23 +753,38 @@ export function WeeklyMenuAdminWorkspace() {
                         const school = copy.school_id ? schoolById.get(copy.school_id) : undefined;
 
                         return (
-                          <label key={copy.id} className="nf-checkbox-row">
-                            <input
-                              type="checkbox"
-                              checked={effectiveSelectedRevokeCopyIds.includes(copy.id)}
-                              onChange={(event) =>
-                                setSelectedRevokeCopyIds((previous) =>
-                                  event.target.checked
-                                    ? [...previous, copy.id]
-                                    : previous.filter((id) => id !== copy.id)
-                                )
-                              }
-                            />
-                            <span className="text-sm text-slate-700">
-                              {school?.name ?? `Школа ${copy.school_id ?? copy.id}`}
-                              {copy.status === 'archived' ? ' · архів школи' : ''}
-                            </span>
-                          </label>
+                          <div key={copy.id} className="space-y-2">
+                            <label className="nf-checkbox-row">
+                              <input
+                                type="checkbox"
+                                checked={effectiveSelectedRevokeCopyIds.includes(copy.id)}
+                                onChange={(event) =>
+                                  setSelectedRevokeCopyIds((previous) =>
+                                    event.target.checked
+                                      ? [...previous, copy.id]
+                                      : previous.filter((id) => id !== copy.id)
+                                  )
+                                }
+                              />
+                              <span className="text-sm text-slate-700">
+                                {school?.name ?? `Школа ${copy.school_id ?? copy.id}`}
+                                {copy.starts_on ? ` · ${copy.starts_on} · ${copy.title}` : ''}
+                                {copy.status === 'archived' ? ' · архів школи' : ''}
+                              </span>
+                            </label>
+                            {copy.status === 'published' &&
+                            copy.starts_on &&
+                            copy.source_menu_id ? (
+                              <button
+                                type="button"
+                                className="nf-button nf-button-danger"
+                                disabled={cancelAssignment.isPending}
+                                onClick={() => void handleCancelAssignment(copy)}
+                              >
+                                Скасувати призначення
+                              </button>
+                            ) : null}
+                          </div>
                         );
                       })}
                     </div>

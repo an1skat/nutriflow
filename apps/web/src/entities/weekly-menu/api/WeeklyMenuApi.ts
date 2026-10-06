@@ -93,6 +93,15 @@ export async function closeWeeklyMenuDay(menuId: string, weekday: Weekday): Prom
   return weeklyMenuSchema.parse(response.data);
 }
 
+export async function cancelAssignment(menuId: string, revision: number): Promise<WeeklyMenu> {
+  const response = await apiClient.post<unknown>(
+    `/menus/weekly/${menuId}/cancel-assignment`,
+    { revision },
+    { headers: getCsrfHeaders() }
+  );
+  return weeklyMenuSchema.parse(response.data);
+}
+
 export async function revokeWeeklyMenu(menuId: string): Promise<WeeklyMenu> {
   const response = await apiClient.post<unknown>(`/menus/weekly/${menuId}/revoke`, null, {
     headers: getCsrfHeaders(),

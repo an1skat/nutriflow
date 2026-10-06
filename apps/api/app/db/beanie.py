@@ -58,6 +58,22 @@ async def drop_stale_menu_import_preview_indexes() -> None:
         await collection.drop_index(index_name)
 
 
+async def upgrade_school_copy_index() -> None:
+    collection = get_database()[WeeklyMenu.Settings.name]
+    indexes = await collection.index_information()
+    if "uq_weekly_menu_source_school" not in indexes:
+        return
+    # Build the new constraint first; never leave active copies unprotected.
+    published_index = next(
+        index
+        for index in WeeklyMenu.Settings.indexes
+        if index.document["name"] == "uq_weekly_menu_published_source_school"
+    )
+    await collection.create_indexes([published_index])
+    await collection.drop_index("uq_weekly_menu_source_school")
+
+
 async def init_odm() -> None:
     await drop_stale_menu_import_preview_indexes()
+    await upgrade_school_copy_index()
     await init_beanie(database=get_database(), document_models=get_document_models())

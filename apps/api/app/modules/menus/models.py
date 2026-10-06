@@ -245,8 +245,9 @@ class WeeklyMenu(Document):
                 partialFilterExpression={
                     "source_menu_id": {"$type": "objectId"},
                     "school_id": {"$type": "objectId"},
+                    "status": "published",
                 },
-                name="uq_weekly_menu_source_school",
+                name="uq_weekly_menu_published_source_school",
             ),
             IndexModel([("created_at", ASCENDING)], name="ix_weekly_menu_created_at"),
         ]

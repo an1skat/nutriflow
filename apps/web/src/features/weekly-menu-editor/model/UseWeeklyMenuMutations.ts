@@ -6,6 +6,7 @@ import { menuRequirementQueryKeys } from '@/entities/menu-requirement/api/MenuRe
 import {
   archiveSchoolWeeklyMenu,
   archiveWeeklyMenu,
+  cancelAssignment,
   closeWeeklyMenuDay,
   createWeeklyMenu,
   deleteWeeklyMenu,
@@ -149,6 +150,18 @@ export function useCloseWeeklyMenuDay(menuId: string) {
           queryKey: menuRequirementQueryKeys.reports(),
         }),
       ]);
+    },
+  });
+}
+
+export function useCancelAssignment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, revision }: { id: string; revision: number }) =>
+      cancelAssignment(id, revision),
+    onSuccess: async (menu) => {
+      queryClient.setQueryData(weeklyMenuQueryKeys.detail(menu.id), menu);
+      await queryClient.invalidateQueries({ queryKey: weeklyMenuQueryKeys.all });
     },
   });
 }

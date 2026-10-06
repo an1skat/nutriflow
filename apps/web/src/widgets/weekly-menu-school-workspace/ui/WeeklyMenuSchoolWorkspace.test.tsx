@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import type { WeeklyMenu } from '@/entities/weekly-menu/model/WeeklyMenu';
 
@@ -11,14 +11,20 @@ const menus = [
   { id: 'next', title: 'Наступне меню', starts_on: '2026-10-12', ends_on: '2026-10-16' },
 ];
 
+let availableMenus = menus;
+
+beforeEach(() => {
+  availableMenus = menus;
+});
+
 vi.mock('@/entities/weekly-menu/api/WeeklyMenuQueries', () => ({
   useWeeklyMenus: (request: { status: string }) => ({
-    data: { items: request.status === 'published' ? menus : [] },
+    data: { items: request.status === 'published' ? availableMenus : [] },
     isPending: false,
     isError: false,
   }),
   useWeeklyMenu: (id: string) => ({
-    data: menus.find((menu) => menu.id === id),
+    data: availableMenus.find((menu) => menu.id === id),
     isPending: !id,
     isError: false,
   }),
@@ -54,4 +60,31 @@ it('shows a missing assignment and still allows selecting a historical menu', ()
   expect(screen.queryByTestId('selected-menu')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: /Вересневе меню/ }));
   expect(screen.getByTestId('selected-menu')).toHaveTextContent('Вересневе меню');
+});
+
+it.each(['replace', 'cancel'])('drops a manually selected revoked menu after %s', (action) => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-10-06T12:00:00Z'));
+  const view = render(<WeeklyMenuSchoolWorkspace />);
+  fireEvent.click(screen.getByRole('button', { name: /Поточне меню/ }));
+  availableMenus = menus.filter((menu) => menu.id !== 'current');
+  if (action === 'replace') {
+    availableMenus = [
+      ...availableMenus,
+      {
+        id: 'replacement',
+        title: 'Правильне меню',
+        starts_on: '2026-10-05',
+        ends_on: '2026-10-09',
+      },
+    ];
+  }
+  view.rerender(<WeeklyMenuSchoolWorkspace />);
+  expect(screen.queryByText('Поточне меню')).not.toBeInTheDocument();
+  if (action === 'replace')
+    expect(screen.getByTestId('selected-menu')).toHaveTextContent('Правильне меню');
+  else {
+    expect(screen.getByText('На цей тиждень меню не призначено.')).toBeInTheDocument();
+    expect(screen.queryByTestId('selected-menu')).not.toBeInTheDocument();
+  }
 });
