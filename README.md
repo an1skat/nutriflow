@@ -12,6 +12,17 @@ examples only.
 
 ---
 
+## Project at a glance
+
+| | |
+| --- | --- |
+| **Type** | Internal software for a real school-catering operation |
+| **My role** | Full-stack development, backend architecture, business logic, and integrations |
+| **Users** | Technologists, administrators, and school staff |
+| **Main workflows** | Menu planning, recipe cards, school-specific changes, ingredient calculations, Excel imports/exports |
+| **Outcome** | Iterative improvements based on staff feedback; no quantified time-saving claims |
+| **Status** | Active development; public screenshots use synthetic data |
+
 ## Why NutriFlow exists
 
 School catering involves much more than storing a list of dishes.
