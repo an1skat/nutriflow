@@ -34,6 +34,7 @@ import type {
   SelectedReportCell,
   SelectedWeekRange,
 } from './calendar/RequirementCalendarContent';
+import type { MealCalendarStatus } from './calendar/RequirementMealStatus';
 
 export {
   buildNormComplianceHref,
@@ -80,9 +81,7 @@ export function MenuRequirementCalendarWorkspace({
     ? currentSchoolRequirementPeriod.year
     : currentDate.getFullYear();
   const [selectedSchoolId, setSelectedSchoolId] = useState('');
-  const [selectedCommunity, setSelectedCommunity] = useState<
-    MenuRequirementCommunityCode | ''
-  >('');
+  const [selectedCommunity, setSelectedCommunity] = useState<MenuRequirementCommunityCode | ''>('');
   const [scopeKind, setScopeKind] = useState<RequirementScopeKind>('school');
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMealType, setSelectedMealType] = useState<'' | MealType>('');
@@ -132,6 +131,31 @@ export function MenuRequirementCalendarWorkspace({
         };
   const calendar = useMenuRequirementCalendar(calendarRequest);
   const visibleCalendar = calendar.isPlaceholderData ? undefined : calendar.data;
+  const breakfastCalendar = useMenuRequirementCalendar({
+    ...calendarRequest,
+    meal_type: 'breakfast',
+    enabled: scopeReady && !selectedMealType,
+  });
+  const lunchCalendar = useMenuRequirementCalendar({
+    ...calendarRequest,
+    meal_type: 'lunch',
+    enabled: scopeReady && !selectedMealType,
+  });
+  const mealQueries = selectedMealType
+    ? [{ mealType: selectedMealType, query: calendar }]
+    : [
+        { mealType: 'breakfast' as const, query: breakfastCalendar },
+        { mealType: 'lunch' as const, query: lunchCalendar },
+      ];
+  const mealCalendars: MealCalendarStatus[] = mealQueries.map(({ mealType, query }) => ({
+    mealType,
+    months: query.isPlaceholderData ? undefined : query.data?.months,
+    state: query.isError
+      ? 'error'
+      : query.isPending || query.isPlaceholderData
+        ? 'pending'
+        : 'ready',
+  }));
 
   const selectedMonth = useMemo(
     () => visibleCalendar?.months.find((month) => month.month === selectedMonthNumber) ?? null,
@@ -143,10 +167,7 @@ export function MenuRequirementCalendarWorkspace({
       return null;
     }
     return (
-      selectedMonth.weeks.find(
-        (week) =>
-          week.date_from === selectedWeekRange.dateFrom && week.date_to === selectedWeekRange.dateTo
-      ) ?? null
+      selectedMonth.weeks.find((week) => week.date_from === selectedWeekRange.dateFrom) ?? null
     );
   }, [selectedMonth, selectedWeekRange]);
 
@@ -291,9 +312,7 @@ export function MenuRequirementCalendarWorkspace({
                   className="nf-input"
                   value={effectiveCommunity}
                   onChange={(event) => {
-                    setSelectedCommunity(
-                      event.target.value as MenuRequirementCommunityCode | ''
-                    );
+                    setSelectedCommunity(event.target.value as MenuRequirementCommunityCode | '');
                     resetNavigation();
                   }}
                 >
@@ -341,7 +360,8 @@ export function MenuRequirementCalendarWorkspace({
                     aria-pressed={selected}
                     onClick={() => {
                       setSelectedMealType(option.value);
-                      resetNavigation();
+                      setReportRange(null);
+                      setSelectedCell(null);
                     }}
                   >
                     {option.label}
@@ -421,6 +441,7 @@ export function MenuRequirementCalendarWorkspace({
             <div className="nf-panel-body">
               <RequirementDayGrid
                 days={selectedWeek.days}
+                mealCalendars={mealCalendars}
                 onOpenReport={(day) =>
                   openReport({
                     dateFrom: day.service_date,
@@ -444,6 +465,7 @@ export function MenuRequirementCalendarWorkspace({
             selectedMonth={selectedMonth}
             selectedWeek={selectedWeek}
             year={selectedYear}
+            mealCalendars={mealCalendars}
             onSelectMonth={(month) => {
               setSelectedMonthNumber(month.month);
               setSelectedWeekRange(null);

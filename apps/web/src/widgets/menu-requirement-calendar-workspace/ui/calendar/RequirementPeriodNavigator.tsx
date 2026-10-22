@@ -20,6 +20,7 @@ import {
   weekdayName,
 } from './CalendarFormatting';
 import type { SelectedRange } from './RequirementCalendarTypes';
+import { type MealCalendarStatus, RequirementMealStatus } from './RequirementMealStatus';
 import { RequirementRangePicker } from './RequirementRangePicker';
 import { CalendarStatusBadge, EmptyStatusBadge, Metric, StatusBadge } from './RequirementStatus';
 
@@ -40,6 +41,7 @@ export function RequirementPeriodNavigator({
   onOpenReport,
   allowIncompleteReports = false,
   normComplianceHref,
+  mealCalendars,
 }: {
   months: MenuRequirementCalendarMonth[];
   selectedMonth: MenuRequirementCalendarMonth | null;
@@ -52,6 +54,7 @@ export function RequirementPeriodNavigator({
   onOpenReport: (range: SelectedRange) => void;
   allowIncompleteReports?: boolean;
   normComplianceHref?: string;
+  mealCalendars?: MealCalendarStatus[];
 }) {
   const selectedPeriodBlockReason = allowIncompleteReports
     ? null
@@ -190,6 +193,7 @@ export function RequirementPeriodNavigator({
         {selectedWeek ? (
           <RequirementDayGrid
             days={selectedWeek.days}
+            mealCalendars={mealCalendars}
             onOpenReport={(day) =>
               onOpenReport({
                 dateFrom: day.service_date,
@@ -206,10 +210,18 @@ export function RequirementPeriodNavigator({
               month={selectedMonth}
               onOpenReport={onOpenReport}
             />
-            <RequirementWeekGrid weeks={selectedMonth.weeks} onSelect={onSelectWeek} />
+            <RequirementWeekGrid
+              weeks={selectedMonth.weeks}
+              onSelect={onSelectWeek}
+              mealCalendars={mealCalendars}
+            />
           </>
         ) : (
-          <RequirementMonthGrid months={months} onSelect={onSelectMonth} />
+          <RequirementMonthGrid
+            months={months}
+            onSelect={onSelectMonth}
+            mealCalendars={mealCalendars}
+          />
         )}
       </div>
     </>
@@ -278,8 +290,10 @@ function getMonthReportBlockReason(month: MenuRequirementCalendarMonth): string 
 function RequirementMonthGrid({
   months,
   onSelect,
+  mealCalendars,
 }: {
   months: MenuRequirementCalendarMonth[];
+  mealCalendars?: MealCalendarStatus[];
   onSelect: (month: MenuRequirementCalendarMonth) => void;
 }) {
   return (
@@ -305,6 +319,7 @@ function RequirementMonthGrid({
               value={month.generated_days === 0 ? 0 : month.missing_days + month.stale_days}
             />
           </span>
+          <RequirementMealStatus calendars={mealCalendars} monthNumber={month.month} />
           <span className="mt-3 flex items-center justify-between text-xs font-bold text-emerald-800">
             Перейти до тижнів
             <ChevronRight
@@ -321,8 +336,10 @@ function RequirementMonthGrid({
 function RequirementWeekGrid({
   weeks,
   onSelect,
+  mealCalendars,
 }: {
   weeks: MenuRequirementCalendarWeek[];
+  mealCalendars?: MealCalendarStatus[];
   onSelect: (week: MenuRequirementCalendarWeek) => void;
 }) {
   return (
@@ -350,6 +367,7 @@ function RequirementWeekGrid({
             <Metric label="Проп." value={week.generated_days === 0 ? 0 : week.missing_days} />
             <Metric label="Заст." value={week.stale_days} />
           </span>
+          <RequirementMealStatus calendars={mealCalendars} weekFrom={week.date_from} />
           <span className="mt-3 flex items-center justify-between text-xs font-bold text-emerald-800">
             Перейти до робочих днів
             <ChevronRight
@@ -366,8 +384,10 @@ function RequirementWeekGrid({
 export function RequirementDayGrid({
   days,
   onOpenReport,
+  mealCalendars,
 }: {
   days: MenuRequirementCalendarDay[];
+  mealCalendars?: MealCalendarStatus[];
   onOpenReport: (day: MenuRequirementCalendarDay) => void;
 }) {
   return (
@@ -420,6 +440,7 @@ export function RequirementDayGrid({
                 </div>
               ) : null}
             </dl>
+            <RequirementMealStatus calendars={mealCalendars} serviceDate={day.service_date} />
 
             <button
               type="button"

@@ -3,16 +3,16 @@ import type { ReactNode } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import type {
-  MenuRequirementCalendarMonth,
-  MenuRequirementCalendarWeek,
-  MenuRequirementReport,
-} from '@/entities/menu-requirement/model/MenuRequirement';
 import {
   useMenuRequirementCalendar,
   useMenuRequirementCommunities,
   useMenuRequirementReport,
 } from '@/entities/menu-requirement/api/MenuRequirementQueries';
+import type {
+  MenuRequirementCalendarMonth,
+  MenuRequirementCalendarWeek,
+  MenuRequirementReport,
+} from '@/entities/menu-requirement/model/MenuRequirement';
 import { useSchools } from '@/entities/school/api/SchoolQueries';
 import { useCurrentUser } from '@/entities/session/api/SessionQueries';
 import {
@@ -278,6 +278,70 @@ const rangeReadyCalendarMonth: MenuRequirementCalendarMonth = {
 };
 
 describe('MenuRequirementCalendarWorkspace', () => {
+  it.each(['school', 'community'] as const)(
+    'keeps the selected month and week when changing meal filters in the %s calendar',
+    (scope) => {
+      vi.mocked(useCurrentUser).mockReturnValue({
+        data: { role: 'OWNER' },
+      } as ReturnType<typeof useCurrentUser>);
+      vi.mocked(useSchools).mockReturnValue({
+        data: { items: [{ id: 'school-1', name: 'Ліцей №1' }] },
+      } as ReturnType<typeof useSchools>);
+      vi.mocked(useMenuRequirementCommunities).mockReturnValue({
+        data: [{ community: 'obukhivska', community_name: 'Обухівська громада', school_count: 2 }],
+      } as ReturnType<typeof useMenuRequirementCommunities>);
+      vi.mocked(useMenuRequirementCalendar).mockImplementation(
+        (request) =>
+          ({
+            data: {
+              school_id: 'school-1',
+              school_name: 'Ліцей №1',
+              year: 2026,
+              months: [
+                {
+                  ...completeCalendarMonth,
+                  weeks: [
+                    {
+                      ...completeCalendarWeek,
+                      // One meal may include weekend activity; the selected workweek is still the same.
+                      date_to: request.meal_type === 'lunch' ? '2026-07-12' : '2026-07-10',
+                    },
+                  ],
+                },
+              ],
+            },
+            isPending: false,
+            isPlaceholderData: false,
+            isError: false,
+          }) as ReturnType<typeof useMenuRequirementCalendar>
+      );
+      vi.mocked(useMenuRequirementReport).mockReturnValue({
+        data: undefined,
+        isPending: false,
+        isPlaceholderData: false,
+        isError: false,
+      } as unknown as ReturnType<typeof useMenuRequirementReport>);
+
+      render(<MenuRequirementCalendarWorkspace />);
+      if (scope === 'community') fireEvent.click(screen.getByRole('button', { name: 'Громада' }));
+      fireEvent.click(screen.getByRole('button', { name: /липень.*Перейти до тижнів/ }));
+      for (const meal of ['Сніданок', 'Обід', 'Усі']) {
+        fireEvent.click(screen.getByRole('button', { name: meal }));
+        expect(screen.getByRole('heading', { name: 'Тижні · липень 2026 р.' })).toBeInTheDocument();
+      }
+      fireEvent.click(screen.getByRole('button', { name: /Тиждень 2.*Перейти до робочих днів/ }));
+      for (const meal of ['Сніданок', 'Обід', 'Усі']) {
+        fireEvent.click(screen.getByRole('button', { name: meal }));
+        expect(screen.getByRole('heading', { name: 'Робочі дні · тиждень 2' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: '6 липня' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: meal })).toHaveAttribute(
+          'aria-pressed',
+          'true'
+        );
+      }
+    }
+  );
+
   it('switches an owner from a school calendar to a community calendar', () => {
     vi.mocked(useCurrentUser).mockReturnValue({
       data: {
@@ -614,6 +678,57 @@ describe('RequirementPeriodNavigator', () => {
       granularity: 'range',
       label: expect.stringContaining('10 липня'),
     });
+  });
+
+  it('explains which meal is missing directly on month, week, and day cards', () => {
+    const lunchMonth: MenuRequirementCalendarMonth = {
+      ...completeCalendarMonth,
+      weeks: [
+        {
+          ...completeCalendarWeek,
+          days: completeCalendarWeek.days.map((day) => ({
+            ...day,
+            expected_requirements: 1,
+            generated_requirements: 0,
+            missing_requirements: 1,
+            status: 'missing',
+          })),
+        },
+      ],
+    };
+    const props = {
+      ...defaultProps,
+      mealCalendars: [
+        {
+          mealType: 'breakfast' as const,
+          months: [completeCalendarMonth],
+          state: 'ready' as const,
+        },
+        { mealType: 'lunch' as const, months: [lunchMonth], state: 'ready' as const },
+      ],
+    };
+    const { rerender } = render(
+      <RequirementPeriodNavigator {...props} selectedMonth={null} selectedWeek={null} />
+    );
+    const monthCard = screen.getByRole('button', { name: /липень.*Перейти до тижнів/ });
+    expect(within(monthCard).getByText('Сніданок: готово')).toBeInTheDocument();
+    expect(within(monthCard).getByText('Обід: не сформовано за 5 дн.')).toBeInTheDocument();
+
+    rerender(
+      <RequirementPeriodNavigator {...props} selectedMonth={calendarMonth} selectedWeek={null} />
+    );
+    const weekCard = screen.getByRole('button', { name: /Тиждень 2.*Перейти до робочих днів/ });
+    expect(within(weekCard).getByText('Обід: не сформовано за 5 дн.')).toBeInTheDocument();
+
+    rerender(
+      <RequirementPeriodNavigator
+        {...props}
+        selectedMonth={calendarMonth}
+        selectedWeek={calendarWeek}
+      />
+    );
+    const dayCard = screen.getByRole('heading', { name: '6 липня' }).closest('article');
+    expect(within(dayCard!).getByText('Обід: не сформовано (0 із 1)')).toBeInTheDocument();
   });
 
   it('offers norm compliance only for the selected concrete week', () => {
