@@ -10,6 +10,7 @@ import {
 export function buildNormComplianceParams(request: NormComplianceReportRequest) {
   return {
     school_id: request.school_id,
+    ...(request.dates ? { dates: request.dates } : {}),
     date_from: request.date_from,
     date_to: request.date_to,
     meal_type: request.meal_type || undefined,
@@ -22,6 +23,7 @@ export async function fetchNormComplianceReport(
 ): Promise<NormComplianceReport> {
   const response = await apiClient.get<unknown>('/norm-compliance/report', {
     params: buildNormComplianceParams(request),
+    paramsSerializer: { indexes: null },
   });
   return normComplianceReportSchema.parse(response.data);
 }
@@ -31,6 +33,7 @@ export async function downloadNormComplianceReport(
 ): Promise<void> {
   const file = await downloadFile('/norm-compliance/report/export.xlsx', 'norm-compliance.xlsx', {
     params: buildNormComplianceParams(request),
+    paramsSerializer: { indexes: null },
   });
   triggerFileDownload(file);
 }

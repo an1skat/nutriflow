@@ -134,20 +134,18 @@ export function MenuRequirementCalendarWorkspace({
   const breakfastCalendar = useMenuRequirementCalendar({
     ...calendarRequest,
     meal_type: 'breakfast',
-    enabled: scopeReady && !selectedMealType,
+    enabled: scopeReady,
   });
   const lunchCalendar = useMenuRequirementCalendar({
     ...calendarRequest,
     meal_type: 'lunch',
-    enabled: scopeReady && !selectedMealType,
+    enabled: scopeReady,
   });
-  const mealQueries = selectedMealType
-    ? [{ mealType: selectedMealType, query: calendar }]
-    : [
-        { mealType: 'breakfast' as const, query: breakfastCalendar },
-        { mealType: 'lunch' as const, query: lunchCalendar },
-      ];
-  const mealCalendars: MealCalendarStatus[] = mealQueries.map(({ mealType, query }) => ({
+  const mealQueries = [
+    { mealType: 'breakfast' as const, query: breakfastCalendar },
+    { mealType: 'lunch' as const, query: lunchCalendar },
+  ];
+  const normMealCalendars: MealCalendarStatus[] = mealQueries.map(({ mealType, query }) => ({
     mealType,
     months: query.isPlaceholderData ? undefined : query.data?.months,
     state: query.isError
@@ -156,6 +154,10 @@ export function MenuRequirementCalendarWorkspace({
         ? 'pending'
         : 'ready',
   }));
+
+  const mealCalendars = normMealCalendars.filter(
+    ({ mealType }) => !selectedMealType || mealType === selectedMealType
+  );
 
   const selectedMonth = useMemo(
     () => visibleCalendar?.months.find((month) => month.month === selectedMonthNumber) ?? null,
@@ -462,6 +464,7 @@ export function MenuRequirementCalendarWorkspace({
         ) : visibleCalendar ? (
           <RequirementPeriodNavigator
             months={visibleCalendar.months}
+            normMealCalendars={normMealCalendars}
             selectedMonth={selectedMonth}
             selectedWeek={selectedWeek}
             year={selectedYear}
@@ -484,11 +487,11 @@ export function MenuRequirementCalendarWorkspace({
             onOpenReport={openReport}
             allowIncompleteReports={currentUser.data?.role === 'OWNER'}
             normComplianceHref={
-              selectedWeek && effectiveScopeKind === 'school'
+              selectedMonth && effectiveScopeKind === 'school' && !isSchoolUser
                 ? buildNormComplianceHref({
                     schoolId: effectiveSchoolId,
-                    dateFrom: selectedWeek.date_from,
-                    dateTo: selectedWeek.date_to,
+                    dateFrom: selectedMonth.date_from,
+                    dateTo: selectedMonth.date_to,
                     mealType: selectedMealType || undefined,
                   })
                 : undefined

@@ -96,3 +96,4 @@ class NormComplianceReportResponse(BaseModel):
     date_to: Date
     status: ComplianceStatus
     groups: list[ComplianceGroupResponse]
+    selected_dates: list[Date] = []

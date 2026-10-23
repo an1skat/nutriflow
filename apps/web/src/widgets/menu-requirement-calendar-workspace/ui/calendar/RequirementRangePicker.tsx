@@ -217,7 +217,7 @@ export function RequirementRangePicker({
   );
 }
 
-function buildRangeCalendarDays(month: MenuRequirementCalendarMonth): RangeCalendarDay[] {
+export function buildRangeCalendarDays(month: MenuRequirementCalendarMonth): RangeCalendarDay[] {
   const summaries = new Map(
     month.weeks
       .flatMap((week) => week.days)
@@ -247,7 +247,7 @@ function buildRangeCalendarDays(month: MenuRequirementCalendarMonth): RangeCalen
   return days;
 }
 
-function getLeadingEmptyDays(dateFrom: string): number {
+export function getLeadingEmptyDays(dateFrom: string): number {
   const parsed = parseLocalDate(dateFrom);
   return parsed ? (parsed.getDay() + 6) % 7 : 0;
 }

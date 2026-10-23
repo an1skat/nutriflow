@@ -53,6 +53,13 @@ def build_norm_compliance_workbook(report: NormComplianceReportResponse) -> byte
             f"{report.date_from.strftime('%d.%m.%Y')} - {report.date_to.strftime('%d.%m.%Y')}",
         ]
     )
+    if report.selected_dates:
+        sheet["B3"] = "Обрані дні: " + ", ".join(
+            day.strftime("%d.%m.%Y") for day in report.selected_dates
+        )
+        sheet["B3"].alignment = Alignment(wrap_text=True)
+        sheet.row_dimensions[3].height = 60
+        sheet.merge_cells("B3:J3")
     sheet.append(["Загальний статус", STATUS_LABELS[report.status]])
     sheet.append([])
     sheet.append(HEADERS)

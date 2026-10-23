@@ -598,3 +598,195 @@ def test_lunch_dairy_production_week_ignores_milk() -> None:
         (Decimal("15"), date(2026, 9, 15)),
         (Decimal("14"), date(2026, 9, 18)),
     ]
+
+
+@pytest.mark.parametrize("week_count", [1, 2, 3, 4, 5])
+def test_selected_period_scales_mass_portions_and_percentage(week_count: int) -> None:
+    group, day, expected = _expected_fixture()
+    requirement = _requirement_fixture(group, day, expected.weekly_menu_id, amount=Decimal("100"))
+    baseline = _build_section(group.age_group, MealType.BREAKFAST, [requirement], [expected])
+    scaled = _build_section(
+        group.age_group,
+        MealType.BREAKFAST,
+        [requirement] * week_count,
+        [expected],
+        week_count=week_count,
+    )
+    for base, row in zip(baseline.rows, scaled.rows, strict=True):
+        assert row.required_amount == base.required_amount * week_count
+        assert row.required_portions == base.required_portions * week_count
+        assert row.actual_amount == base.actual_amount * week_count
+        assert row.actual_portions == base.actual_portions * week_count
+        assert row.percent == base.percent
+        assert row.deviation == base.deviation * week_count
+        assert row.status == base.status
+
+
+@pytest.mark.parametrize(
+    "dates",
+    [
+        [],
+        [date(2026, 7, 1)],
+        [date(2026, 7, 1)] * 5,
+        [date(2026, 7, n) for n in [1, 2, 3, 4, 6]],
+        [date(2026, 7, n) for n in [1, 2, 3, 6]] + [date(2026, 8, 3)],
+    ],
+)
+def test_selected_dates_reject_invalid_counts_duplicates_weekends_and_months(dates) -> None:
+    from app.modules.norm_compliance.service import _validate_selected_dates
+
+    with pytest.raises(NormComplianceValidationError):
+        _validate_selected_dates(
+            dates,
+            min(dates) if dates else date(2026, 7, 1),
+            max(dates) if dates else date(2026, 7, 31),
+        )
+
+
+def test_selected_dates_allow_gaps_and_reject_inconsistent_bounds() -> None:
+    from app.modules.norm_compliance.service import _validate_selected_dates
+
+    dates = [date(2026, 7, n) for n in [1, 3, 7, 9, 15]]
+    _validate_selected_dates(dates, dates[0], dates[-1])
+    with pytest.raises(NormComplianceValidationError):
+        _validate_selected_dates(dates, dates[0], date(2026, 7, 31))
+
+
+@pytest.mark.asyncio
+async def test_report_filters_unselected_days_and_rejects_not_served(monkeypatch) -> None:
+    from dataclasses import replace
+
+    from app.modules.identity.models import School
+    from app.modules.norm_compliance import service
+
+    group, day, expected = _expected_fixture()
+    dates = [date(2026, 7, n) for n in [1, 3, 6, 8, 10, 13, 15, 17, 22, 24]]
+    expected_items = [
+        replace(expected, service_date=value, day=day.model_copy(update={"date": value}))
+        for value in dates + [date(2026, 7, 7)]
+    ]
+    requirements = [
+        _requirement_fixture(group, item.day, item.weekly_menu_id, amount=Decimal("100"))
+        for item in expected_items
+    ]
+    school = School.model_construct(id=PydanticObjectId(), name="School", groups=[group])
+
+    async def get_school(*args, **kwargs):
+        return school
+
+    async def get_requirements(*args, **kwargs):
+        return requirements
+
+    async def get_expected(*args, **kwargs):
+        return expected_items
+
+    async def apply_rules(*args):
+        pass
+
+    monkeypatch.setattr(service, "_get_accessible_school", get_school)
+    monkeypatch.setattr(service, "_find_requirements", get_requirements)
+    monkeypatch.setattr(service, "_find_expected_requirements", get_expected)
+    monkeypatch.setattr(service, "_apply_manual_ingredient_rules", apply_rules)
+    owner = User.model_construct(role=UserRole.OWNER)
+    report = await service.get_norm_compliance_report(
+        school.id, dates[0], dates[-1], owner, dates=dates
+    )
+    assert report.selected_dates == dates
+    section = report.groups[0].sections[0]
+    vegetables = next(
+        row for row in section.rows if row.normative_group_code == NormativeGroupCode.VEGETABLES
+    )
+    assert vegetables.actual_amount == Decimal("1000")
+    assert {entry.service_date for entry in vegetables.breakdown} == set(dates)
+    norm = get_norm(MealType.BREAKFAST, group.age_group, NormativeGroupCode.VEGETABLES)
+    assert vegetables.required_amount == norm.required_amount_per_week * 2
+    expected_items[0] = replace(expected_items[0], day=day.model_copy(update={"not_served": True}))
+    with pytest.raises(NormComplianceValidationError, match="не харчувалися"):
+        await service.get_norm_compliance_report(school.id, dates[0], dates[-1], owner, dates=dates)
+
+
+@pytest.mark.parametrize("path", ["/report", "/report/export.xlsx"])
+def test_report_routes_preserve_selected_dates(path: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from app.modules.auth.dependencies import get_current_user
+    from app.modules.norm_compliance import router as routes
+
+    dates = [date(2026, 7, n) for n in [1, 3, 6, 8, 10]]
+    school_id = PydanticObjectId()
+    received = []
+
+    async def get_report(*args, **kwargs):
+        received.append(kwargs["dates"])
+        return NormComplianceReportResponse(
+            school_id=school_id,
+            school_name="School",
+            date_from=dates[0],
+            date_to=dates[-1],
+            selected_dates=kwargs["dates"],
+            status=ComplianceStatus.COMPLETE,
+            groups=[],
+        )
+
+    monkeypatch.setattr(routes, "get_norm_compliance_report", get_report)
+    app = FastAPI()
+    app.include_router(routes.router)
+    app.dependency_overrides[get_current_user] = lambda: User.model_construct(role=UserRole.OWNER)
+    client = TestClient(app)
+    params = [
+        ("school_id", str(school_id)),
+        ("date_from", dates[0].isoformat()),
+        ("date_to", dates[-1].isoformat()),
+    ]
+    params.extend(("dates", day.isoformat()) for day in dates)
+    response = client.get(path, params=params)
+    assert response.status_code == 200
+    assert received == [dates]
+    if path.endswith("xlsx"):
+        workbook = openpyxl.load_workbook(BytesIO(response.content))
+        assert workbook.active["B3"].value == "Обрані дні: " + ", ".join(
+            day.strftime("%d.%m.%Y") for day in dates
+        )
+    else:
+        assert response.json()["selected_dates"] == [day.isoformat() for day in dates]
+    invalid_params = [(key, value) for key, value in params if key != "dates"]
+    assert client.get(path, params=invalid_params + [("dates", "bad-date")]).status_code == 422
+    assert len(received) == 1
+
+
+def test_completeness_checks_selected_days_instead_of_gaps() -> None:
+    from dataclasses import replace
+
+    group, base_day, expected = _expected_fixture()
+    dates = [date(2026, 7, n) for n in [1, 3, 6, 8, 10]]
+    items = [
+        replace(expected, service_date=value, day=base_day.model_copy(update={"date": value}))
+        for value in dates
+    ]
+    requirements = [
+        _requirement_fixture(group, item.day, item.weekly_menu_id, amount=None) for item in items
+    ]
+    _validate_complete_requirement_week(
+        requirements, items, dates[0], dates[-1], dates=dates, meal_type=MealType.BREAKFAST
+    )
+    with pytest.raises(
+        NormComplianceValidationError, match="10.07.2026 — Сніданок: немає меню-вимоги"
+    ):
+        _validate_complete_requirement_week(
+            requirements, items[:-1], dates[0], dates[-1], dates=dates
+        )
+
+
+@pytest.mark.parametrize(
+    "dates",
+    [
+        [date(2026, 9, n) for n in [28, 29, 30]] + [date(2026, 10, n) for n in [1, 2]],
+        [date(2026, 12, n) for n in [28, 29, 30, 31]] + [date(2027, 1, 1)],
+        [date(2026, 6, n) for n in [29, 30]] + [date(2026, 7, n) for n in [1, 2, 3]],
+    ],
+)
+def test_selected_dates_allow_complete_calendar_weeks_across_months(dates) -> None:
+    from app.modules.norm_compliance.service import _validate_selected_dates
+
+    _validate_selected_dates(dates, dates[0], dates[-1])

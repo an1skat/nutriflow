@@ -1,3 +1,4 @@
+from calendar import monthrange
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date as Date
@@ -137,8 +138,14 @@ async def get_norm_compliance_report(
     *,
     meal_type: MealType | None = None,
     school_group_id: PydanticObjectId | None = None,
+    dates: list[Date] | None = None,
 ) -> NormComplianceReportResponse:
-    _validate_range(date_from, date_to)
+    if dates is None:
+        _validate_range(date_from, date_to)
+    else:
+        _validate_selected_dates(dates, date_from, date_to)
+    selected_dates = set(dates) if dates is not None else None
+    week_count = len(dates) // 5 if dates is not None else 1
     school = await _get_accessible_school(current_user, school_id)
     groups = [
         group
@@ -162,14 +169,33 @@ async def get_norm_compliance_report(
         date_to,
         meal_type=meal_type,
     )
+    if selected_dates is not None:
+        requirements = [item for item in requirements if item.service_date in selected_dates]
+        expected = [item for item in expected if item.service_date in selected_dates]
     expected_days = defaultdict(list)
     for item in expected:
         expected_days[item.service_date].append(item)
+    if selected_dates is not None:
+        not_served = []
+        for service_date in sorted(selected_dates):
+            for current_meal in [meal_type] if meal_type is not None else list(MealType):
+                entries = [
+                    item for item in expected_days[service_date] if item.meal_type == current_meal
+                ]
+                if entries and all(item.day.not_served for item in entries):
+                    label = "Сніданок" if current_meal == MealType.BREAKFAST else "Обід"
+                    not_served.append(f"{service_date:%d.%m.%Y} — {label}: не харчувалися")
+        if not_served:
+            raise NormComplianceValidationError("Не можна обрати: " + "; ".join(not_served))
     requirements = _exclude_not_served_requirements(expected_days, requirements)
     if current_user.role != UserRole.OWNER:
-        _validate_complete_requirement_week(requirements, expected, date_from, date_to)
+        _validate_complete_requirement_week(
+            requirements, expected, date_from, date_to, dates=dates, meal_type=meal_type
+        )
     await _apply_manual_ingredient_rules(requirements)
-    sections_by_group = _build_sections(groups, requirements, expected, meal_type=meal_type)
+    sections_by_group = _build_sections(
+        groups, requirements, expected, meal_type=meal_type, week_count=week_count
+    )
     group_responses = [
         ComplianceGroupResponse(
             school_group_id=group.id,
@@ -188,6 +214,7 @@ async def get_norm_compliance_report(
         date_to=date_to,
         status=_aggregate_status([group.status for group in group_responses]),
         groups=group_responses,
+        selected_dates=sorted(selected_dates) if selected_dates is not None else [],
     )
 
 
@@ -273,6 +300,7 @@ def _build_sections(
     expected: list[ExpectedRequirement],
     *,
     meal_type: MealType | None,
+    week_count: int = 1,
 ) -> dict[PydanticObjectId, list[ComplianceMealSectionResponse]]:
     result: dict[PydanticObjectId, list[ComplianceMealSectionResponse]] = defaultdict(list)
     requested_meals = [meal_type] if meal_type is not None else list(MealType)
@@ -294,7 +322,13 @@ def _build_sections(
             if not group_requirements and not group_expected:
                 continue
             result[group.id].append(
-                _build_section(group.age_group, current_meal, group_requirements, group_expected)
+                _build_section(
+                    group.age_group,
+                    current_meal,
+                    group_requirements,
+                    group_expected,
+                    week_count=week_count,
+                )
             )
     return result
 
@@ -304,7 +338,36 @@ def _validate_complete_requirement_week(
     expected: list[ExpectedRequirement],
     date_from: Date,
     date_to: Date,
+    *,
+    dates: list[Date] | None = None,
+    meal_type: MealType | None = None,
 ) -> None:
+    if dates is not None:
+        requirement_keys = {
+            (item.weekly_menu_id, item.weekday, item.school_group_id) for item in requirements
+        }
+        messages = []
+        for service_date in sorted(dates):
+            for current_meal in [meal_type] if meal_type is not None else list(MealType):
+                entries = [
+                    item
+                    for item in expected
+                    if item.service_date == service_date and item.meal_type == current_meal
+                ]
+                if not entries or any(
+                    not item.day.not_served
+                    and (
+                        item.school_group is None
+                        or (item.weekly_menu_id, item.weekday, item.school_group.id)
+                        not in requirement_keys
+                    )
+                    for item in entries
+                ):
+                    label = "Сніданок" if current_meal == MealType.BREAKFAST else "Обід"
+                    messages.append(f"{service_date:%d.%m.%Y} — {label}: немає меню-вимоги")
+        if messages:
+            raise NormComplianceValidationError("; ".join(messages))
+        return
     week_dates = {
         date_from + timedelta(days=offset) for offset in range((date_to - date_from).days + 1)
     }
@@ -334,6 +397,8 @@ def _build_section(
     meal_type: MealType,
     requirements: list[MenuRequirement],
     expected: list[ExpectedRequirement],
+    *,
+    week_count: int = 1,
 ) -> ComplianceMealSectionResponse:
     requirement_by_key = {
         (item.weekly_menu_id, item.weekday, item.school_group_id): item for item in requirements
@@ -364,6 +429,7 @@ def _build_section(
             missing_dates=missing_dates,
             stale_dates=stale_dates,
             unmapped_items=unmapped_items,
+            week_count=week_count,
         )
         for norm in get_norms(meal_type, age_group)
     ]
@@ -392,6 +458,7 @@ def _build_row(
     missing_dates: set[Date],
     stale_dates: set[Date],
     unmapped_items: list[UnmappedItemResponse],
+    week_count: int = 1,
 ) -> ComplianceRowResponse:
     actual_amount = Decimal("0")
     actual_portions = Decimal("0")
@@ -426,8 +493,8 @@ def _build_row(
                     )
                 )
 
-    required_amount = norm.required_amount_per_week
-    required_portions = norm.weekly_portions
+    required_amount = norm.required_amount_per_week * week_count
+    required_portions = norm.weekly_portions * week_count
     numeric_status, percent = calculate_numeric_status(
         actual_amount,
         required_amount,
@@ -606,6 +673,25 @@ def _service_date(menu: WeeklyMenu, day: DailyMenu) -> Date | None:
     if menu.starts_on is not None:
         return menu.starts_on + timedelta(days=list(Weekday).index(day.weekday))
     return None
+
+
+def _validate_selected_dates(dates: list[Date], date_from: Date, date_to: Date) -> None:
+    if not dates or len(dates) % 5 != 0 or len(set(dates)) != len(dates):
+        raise NormComplianceValidationError("Оберіть різні робочі дні у кількості, кратній 5")
+    if any(day.weekday() >= 5 for day in dates):
+        raise NormComplianceValidationError("Не можна обрати вихідні")
+    if min(dates) != date_from or max(dates) != date_to:
+        raise NormComplianceValidationError("Період не відповідає обраним дням")
+    first_month = date_from.year * 12 + date_from.month - 1
+    for offset in range(3):
+        year, month_index = divmod(first_month + offset, 12)
+        first = Date(year, month_index + 1, 1)
+        last = Date(year, month_index + 1, monthrange(year, month_index + 1)[1])
+        calendar_from = first - timedelta(days=first.weekday())
+        calendar_to = last + timedelta(days=6 - last.weekday())
+        if calendar_from <= date_from <= date_to <= calendar_to:
+            return
+    raise NormComplianceValidationError("Оберіть дні в межах повних тижнів одного місяця")
 
 
 def _validate_range(date_from: Date, date_to: Date) -> None:

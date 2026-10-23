@@ -334,10 +334,7 @@ describe('MenuRequirementCalendarWorkspace', () => {
         fireEvent.click(screen.getByRole('button', { name: meal }));
         expect(screen.getByRole('heading', { name: 'Робочі дні · тиждень 2' })).toBeInTheDocument();
         expect(screen.getByRole('heading', { name: '6 липня' })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: meal })).toHaveAttribute(
-          'aria-pressed',
-          'true'
-        );
+        expect(screen.getByRole('button', { name: meal })).toHaveAttribute('aria-pressed', 'true');
       }
     }
   );
@@ -731,58 +728,22 @@ describe('RequirementPeriodNavigator', () => {
     expect(within(dayCard!).getByText('Обід: не сформовано (0 із 1)')).toBeInTheDocument();
   });
 
-  it('offers norm compliance only for the selected concrete week', () => {
-    const href = buildNormComplianceHref({
-      schoolId: 'school-1',
-      dateFrom: '2026-07-06',
-      dateTo: '2026-07-10',
-      mealType: 'lunch',
-      schoolGroupId: 'group-1',
-    });
-
-    const { rerender } = render(
-      <RequirementPeriodNavigator
-        {...defaultProps}
-        selectedMonth={calendarMonth}
-        selectedWeek={null}
-      />
-    );
+  it('offers day selection at month level and removes the weekly norm button', () => {
+    const props = {
+      ...defaultProps,
+      selectedMonth: calendarMonth,
+      normComplianceHref: '/norm-compliance?school_id=school-1',
+    };
+    const { rerender } = render(<RequirementPeriodNavigator {...props} selectedWeek={null} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Сформувати дотримання норм' }));
+    expect(screen.getByRole('button', { name: 'Сформувати звіт' })).toBeDisabled();
+    rerender(<RequirementPeriodNavigator {...props} selectedWeek={completeCalendarWeek} />);
+    expect(
+      screen.queryByRole('button', { name: 'Сформувати дотримання норм' })
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('link', { name: 'Сформувати дотримання норм' })
     ).not.toBeInTheDocument();
-
-    rerender(
-      <RequirementPeriodNavigator
-        {...defaultProps}
-        selectedMonth={calendarMonth}
-        selectedWeek={calendarWeek}
-        normComplianceHref={href}
-      />
-    );
-
-    expect(
-      screen.queryByRole('link', { name: 'Сформувати дотримання норм' })
-    ).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Сформувати дотримання норм' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Меню-вимога за тиждень' })).toBeDisabled();
-    expect(
-      screen.getByText(/сформуйте або оновіть меню-вимоги за всі 5 робочих днів/)
-    ).toBeInTheDocument();
-
-    rerender(
-      <RequirementPeriodNavigator
-        {...defaultProps}
-        selectedMonth={calendarMonth}
-        selectedWeek={completeCalendarWeek}
-        normComplianceHref={href}
-      />
-    );
-
-    expect(screen.getByRole('link', { name: 'Сформувати дотримання норм' })).toHaveAttribute(
-      'href',
-      '/norm-compliance?school_id=school-1&date_from=2026-07-06&date_to=2026-07-10&source=menu-requirements-calendar&meal_type=lunch&school_group_id=group-1'
-    );
-    expect(screen.getByRole('button', { name: 'Меню-вимога за тиждень' })).toBeEnabled();
   });
 
   it('blocks an incomplete monthly report until every participating day is ready', () => {
@@ -816,7 +777,7 @@ describe('RequirementPeriodNavigator', () => {
     expect(onOpenReport).toHaveBeenCalledWith(expect.objectContaining({ granularity: 'month' }));
   });
 
-  it('allows the owner to open incomplete reports and norm compliance', () => {
+  it('allows the owner to open incomplete reports', () => {
     const onOpenReport = vi.fn();
     const href = buildNormComplianceHref({
       schoolId: 'school-1',
@@ -834,10 +795,9 @@ describe('RequirementPeriodNavigator', () => {
       />
     );
 
-    expect(screen.getByRole('link', { name: 'Сформувати дотримання норм' })).toHaveAttribute(
-      'href',
-      href
-    );
+    expect(
+      screen.queryByRole('link', { name: 'Сформувати дотримання норм' })
+    ).not.toBeInTheDocument();
     const weeklyReportButton = screen.getByRole('button', {
       name: 'Меню-вимога за тиждень',
     });

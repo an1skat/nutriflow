@@ -293,3 +293,21 @@ it('deduplicates the same record but explains separate school groups', () => {
   expect(within(panel).getByText('1-А · 6-11 років · Обід')).toBeInTheDocument();
   expect(within(panel).getByText('2-Б · 11-14 років · Обід')).toBeInTheDocument();
 });
+
+it('transfers noncontiguous selected dates to the report and Excel export', async () => {
+  const dates = ['2026-07-01', '2026-07-03', '2026-07-06', '2026-07-08', '2026-07-10'];
+  searchParamsValue = `school_id=school-1&date_from=${dates[0]}&date_to=${dates[4]}&dates=${dates.join(',')}&source=menu-requirements-calendar`;
+  vi.mocked(useNormComplianceReport).mockReturnValue({
+    data: { ...report, selected_dates: dates },
+    isPending: false,
+    isFetching: false,
+    isError: false,
+    refetch: vi.fn(),
+  } as unknown as ReturnType<typeof useNormComplianceReport>);
+  render(<NormComplianceWorkspace />);
+  expect(useNormComplianceReport).toHaveBeenCalledWith(expect.objectContaining({ dates }));
+  fireEvent.click(screen.getByRole('button', { name: /Excel/ }));
+  await waitFor(() =>
+    expect(downloadNormComplianceReport).toHaveBeenCalledWith(expect.objectContaining({ dates }))
+  );
+});

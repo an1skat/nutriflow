@@ -1,8 +1,6 @@
 'use client';
 
-import Link from 'next/link';
-
-import { ArrowLeft, ChevronRight, Eye, Scale } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Eye } from 'lucide-react';
 
 import type {
   MenuRequirementCalendarDay,
@@ -19,13 +17,14 @@ import {
   monthNameFromDate,
   weekdayName,
 } from './CalendarFormatting';
+import { NormComplianceDatePicker } from './NormComplianceDatePicker';
 import type { SelectedRange } from './RequirementCalendarTypes';
 import { type MealCalendarStatus, RequirementMealStatus } from './RequirementMealStatus';
 import { RequirementRangePicker } from './RequirementRangePicker';
 import { CalendarStatusBadge, EmptyStatusBadge, Metric, StatusBadge } from './RequirementStatus';
 
 const incompleteWeekHint =
-  'Щоб сформувати тижневу меню-вимогу або дотримання норм, спочатку сформуйте або оновіть меню-вимоги за всі 5 робочих днів.';
+  'Щоб сформувати тижневу меню-вимогу, спочатку сформуйте або оновіть меню-вимоги за всі 5 робочих днів.';
 const incompleteMonthHint =
   'Щоб сформувати місячну меню-вимогу, спочатку сформуйте або оновіть меню-вимоги за всі дні, що беруть участь у цьому місяці.';
 
@@ -41,6 +40,7 @@ export function RequirementPeriodNavigator({
   onOpenReport,
   allowIncompleteReports = false,
   normComplianceHref,
+  normMealCalendars,
   mealCalendars,
 }: {
   months: MenuRequirementCalendarMonth[];
@@ -54,6 +54,7 @@ export function RequirementPeriodNavigator({
   onOpenReport: (range: SelectedRange) => void;
   allowIncompleteReports?: boolean;
   normComplianceHref?: string;
+  normMealCalendars?: MealCalendarStatus[];
   mealCalendars?: MealCalendarStatus[];
 }) {
   const selectedPeriodBlockReason = allowIncompleteReports
@@ -148,27 +149,6 @@ export function RequirementPeriodNavigator({
                 <ArrowLeft className="size-4" aria-hidden />
                 Назад
               </button>
-              {selectedWeek && normComplianceHref ? (
-                selectedPeriodBlockReason ? (
-                  <button
-                    type="button"
-                    className="nf-button nf-button-primary min-h-9 w-full px-3 text-sm sm:w-auto"
-                    disabled
-                    title={selectedPeriodBlockReason}
-                  >
-                    <Scale className="size-4" aria-hidden />
-                    Сформувати дотримання норм
-                  </button>
-                ) : (
-                  <Link
-                    href={normComplianceHref}
-                    className="nf-button nf-button-primary min-h-9 w-full px-3 text-sm sm:w-auto"
-                  >
-                    <Scale className="size-4" aria-hidden />
-                    Сформувати дотримання норм
-                  </Link>
-                )
-              ) : null}
               <button
                 type="button"
                 className="nf-button nf-button-secondary min-h-9 w-full px-3 text-sm sm:w-auto"
@@ -205,6 +185,15 @@ export function RequirementPeriodNavigator({
           />
         ) : selectedMonth ? (
           <>
+            {normComplianceHref ? (
+              <NormComplianceDatePicker
+                key={`norm:${selectedMonth.date_from}:${normComplianceHref}`}
+                month={selectedMonth}
+                reportHref={normComplianceHref}
+                mealCalendars={normMealCalendars}
+                allowIncompleteReports={allowIncompleteReports}
+              />
+            ) : null}
             <RequirementRangePicker
               key={`${selectedMonth.date_from}:${selectedMonth.date_to}`}
               month={selectedMonth}

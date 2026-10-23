@@ -1,8 +1,9 @@
 import asyncio
 from datetime import date as Date
+from typing import Annotated
 
 from beanie import PydanticObjectId
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 
 from app.api.responses import xlsx_response
@@ -28,6 +29,7 @@ async def get_report(
     date_to: Date,
     meal_type: MealType | None = None,
     school_group_id: PydanticObjectId | None = None,
+    dates: Annotated[list[Date] | None, Query(max_length=31)] = None,
 ) -> NormComplianceReportResponse:
     try:
         return await get_norm_compliance_report(
@@ -37,6 +39,7 @@ async def get_report(
             current_user,
             meal_type=meal_type,
             school_group_id=school_group_id,
+            dates=dates,
         )
     except NormComplianceNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -54,6 +57,7 @@ async def export_report(
     date_to: Date,
     meal_type: MealType | None = None,
     school_group_id: PydanticObjectId | None = None,
+    dates: Annotated[list[Date] | None, Query(max_length=31)] = None,
 ) -> StreamingResponse:
     report = await get_report(
         current_user,
@@ -62,6 +66,7 @@ async def export_report(
         date_to,
         meal_type=meal_type,
         school_group_id=school_group_id,
+        dates=dates,
     )
     content = await asyncio.to_thread(build_norm_compliance_workbook, report)
     filename = f"norm-compliance-{report.date_from.isoformat()}-{report.date_to.isoformat()}.xlsx"

@@ -87,6 +87,7 @@ export const complianceGroupSchema = z.object({
 export const normComplianceReportSchema = z.object({
   school_id: z.string().min(1),
   school_name: z.string().min(1),
+  selected_dates: z.array(z.iso.date()).optional(),
   date_from: z.iso.date(),
   date_to: z.iso.date(),
   status: complianceStatusSchema,
@@ -107,6 +108,7 @@ export type NormComplianceReportRequest = {
   school_id: string;
   date_from: string;
   date_to: string;
+  dates?: string[];
   meal_type?: 'breakfast' | 'lunch';
   school_group_id?: string;
   enabled?: boolean;

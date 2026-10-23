@@ -75,18 +75,20 @@ export function NormComplianceWorkspace() {
   const schoolId = searchParams.get('school_id') ?? '';
   const dateFrom = searchParams.get('date_from') ?? '';
   const dateTo = searchParams.get('date_to') ?? '';
+  const dates = searchParams.get('dates')?.split(',');
   const mealTypeParam = searchParams.get('meal_type');
   const mealType =
     mealTypeParam === 'breakfast' || mealTypeParam === 'lunch' ? mealTypeParam : undefined;
   const schoolGroupId = searchParams.get('school_group_id') || undefined;
   const openedFromCalendar = searchParams.get('source') === 'menu-requirements-calendar';
-  const hasWeekContext = Boolean(schoolId && dateFrom && dateTo);
-  const canLoadReport = hasWeekContext && openedFromCalendar;
+  const hasPeriodContext = Boolean(schoolId && dateFrom && dateTo);
+  const canLoadReport = hasPeriodContext && openedFromCalendar;
   const [selectedRow, setSelectedRow] = useState<SelectedRow | null>(null);
   const report = useNormComplianceReport({
     school_id: schoolId,
     date_from: dateFrom,
     date_to: dateTo,
+    dates,
     meal_type: mealType,
     school_group_id: schoolGroupId,
     enabled: canLoadReport,
@@ -98,19 +100,19 @@ export function NormComplianceWorkspace() {
         <p className="nf-eyebrow">Контроль харчування</p>
         <h1 className="nf-title">Дотримання норм харчування</h1>
         <p className="nf-description">
-          Звіт формується для конкретного тижня, обраного в календарі меню-вимог. Дані школи, групи
-          та прийому їжі переносяться з календаря.
+          Звіт формується за обрані робочі дні календаря. Норми множаться на кількість днів / 5.
+          Дані школи, групи та прийому їжі переносяться з календаря.
         </p>
       </header>
 
-      {!hasWeekContext ? (
+      {!hasPeriodContext ? (
         <section className="nf-panel">
           <div className="nf-panel-body">
             <div className="nf-empty">
               <CalendarDays className="mx-auto mb-3 size-8 text-slate-400" aria-hidden />
-              <p className="font-bold text-slate-800">Спочатку оберіть тиждень</p>
+              <p className="font-bold text-slate-800">Спочатку оберіть дні</p>
               <p className="mx-auto mt-1 max-w-lg text-sm">
-                Відкрийте календар меню-вимог, перейдіть до потрібного тижня та натисніть
+                Відкрийте календар меню-вимог, перейдіть до потрібного місяця та натисніть
                 «Сформувати дотримання норм».
               </p>
               <Link href="/menu-requirements/calendar" className="nf-button nf-button-primary mt-4">
@@ -121,14 +123,14 @@ export function NormComplianceWorkspace() {
         </section>
       ) : null}
 
-      {hasWeekContext && !openedFromCalendar ? (
+      {hasPeriodContext && !openedFromCalendar ? (
         <section className="nf-panel">
           <div className="nf-panel-body">
             <div className="nf-empty">
               <CalendarDays className="mx-auto mb-3 size-8 text-slate-400" aria-hidden />
               <p className="font-bold text-slate-800">Звіт формується тільки з календаря</p>
               <p className="mx-auto mt-1 max-w-lg text-sm">
-                Поверніться до календаря меню-вимог, оберіть конкретний тиждень і натисніть кнопку
+                Поверніться до календаря меню-вимог, оберіть потрібні дні і натисніть кнопку
                 формування дотримання норм.
               </p>
               <Link href="/menu-requirements/calendar" className="nf-button nf-button-primary mt-4">
@@ -143,7 +145,7 @@ export function NormComplianceWorkspace() {
         <section className="nf-panel mb-4" aria-labelledby="report-source-title">
           <div className="nf-panel-header">
             <div>
-              <p className="nf-eyebrow">Обраний тиждень</p>
+              <p className="nf-eyebrow">Обрані дні</p>
               <h2 id="report-source-title" className="nf-panel-title">
                 {formatDateOnly(report.data.date_from)}–{formatDateOnly(report.data.date_to)}
               </h2>
@@ -154,6 +156,7 @@ export function NormComplianceWorkspace() {
                   school_id: schoolId,
                   date_from: dateFrom,
                   date_to: dateTo,
+                  dates,
                   meal_type: mealType,
                   school_group_id: schoolGroupId,
                 }}
@@ -194,10 +197,17 @@ export function NormComplianceWorkspace() {
             />
             <ContextValue label="Прийом їжі" value={mealType ? mealTypeLabels[mealType] : 'Усі'} />
             <ContextValue
-              label="Тиждень"
+              label="Період"
               value={`${formatDateOnly(report.data.date_from)}–${formatDateOnly(report.data.date_to)}`}
             />
           </dl>
+          {report.data.selected_dates?.length ? (
+            <p className="nf-panel-body text-sm text-slate-600">
+              Обрано {report.data.selected_dates.length} днів · Норми ×
+              {report.data.selected_dates.length / 5}:{' '}
+              {report.data.selected_dates.map(formatDateOnly).join(', ')}
+            </p>
+          ) : null}
         </section>
       ) : null}
 
